@@ -1,0 +1,9 @@
+#!/bin/sh
+# agent-crew 開発リポジトリ用の pre-push フック(多層防御の2層目。docs/safety.md 参照)
+# エージェント(Claude Code のセッション内、または agent-crew が起動したエージェント)からの push を拒否する。
+# 人が自分のターミナルから行う push は止めない。
+if [ -n "${CLAUDECODE:-}" ] || [ -n "${AGENT_CREW_RUN:-}" ]; then
+  echo "agent-crew: エージェントからの push は禁止されています。push は人が手元のターミナルで行ってください。" >&2
+  exit 1
+fi
+exit 0

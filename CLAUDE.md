@@ -30,10 +30,10 @@
 
 ## 実行方式と課金・認証
 
-- ワーカーは `claude -p`(ヘッドレス実行)を第一候補にする。呼び出しは `src/runner/` に閉じ込め、後からAgent SDKに差し替えられるようにする
+- ワーカーは `claude -p`(ヘッドレス実行)に決定。呼び出しは `src/runner/` に閉じ込め、後からAgent SDKに差し替えられるようにする
 - **サブスク(Pro/Max)の範囲で動かす前提。** 追加課金が発生するのは、追加利用(extra usage)をオンにしたときと、`ANTHROPIC_API_KEY` が設定されているとき
 - **`ANTHROPIC_API_KEY` を設定しない。** `doctor` は設定されていたら警告する
-- `--bare` はAPIキー専用でサブスクでは使えない。安全設定は `--bare` に頼らず、ツール側から渡す設定・deny・フックで効かせる
+- `--bare` はAPIキー専用でサブスクでは使えない。安全設定は `--bare` に頼らず、ツール側から渡す設定・deny・フックで効かせる。エージェントの起動の標準形(`--setting-sources ""`、`--strict-mcp-config`、実行ごとの `--settings`)は `docs/safety.md` を参照
 - `--bare` なしの `-p` は、対象リポジトリの `.claude/settings.json` のフックや `.mcp.json` を信頼確認なしで実行する。会社のリポジトリを扱うときは注意する
 - 利用枠はチャットや対話利用と共有される。同時実行数は1〜2から始め、消費ペースを見て調整する
 - 仕様(利用枠、課金)は変わりやすい。実装前に最新の公式ドキュメントを確認する
@@ -49,9 +49,9 @@
 
 ## 技術スタック(初期の想定。確定したら更新する)
 
-- サーバー: Node.js + TypeScript
+- サーバー: Node.js(24 LTS以上)+ TypeScript(Nodeの型除去で直接実行)
 - GUI: React + Vite(フェーズ2以降)
-- DB: SQLite
+- DB: SQLite(Node組み込みの `node:sqlite`)
 - リアルタイム配信: SSE
 - 役割定義: `roles/*.md`(1ファイル1役割)
 
@@ -85,7 +85,9 @@
 
 ## コマンド
 
-(未確定。セットアップ後に追記する)
+- clone後に1回: `sh scripts/install-hooks.sh`(pre-pushフックを有効にする)
+- 安全設定の検査: `sh scripts/verify-safety.sh`
+- (ビルド・テスト・起動はステップ1以降で追記する)
 
 ## 別PCでの運用を壊さないために
 
