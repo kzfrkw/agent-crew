@@ -1,5 +1,9 @@
-import { addEvent, listTaskRepos, type Task } from "../db/store.ts";
-import { commitsSince, headSha, isDirty } from "../git/worktree.ts";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { addApproval, addEvent, getRepo, listTaskRepos, type Task } from "../db/store.ts";
+import { changedFiles, commitsSince, diffFromBase, headSha, isDirty, mergeBase } from "../git/worktree.ts";
+import { detectTestChanges, renderTestChanges } from "./test-changes.ts";
+import { verifyTests } from "./verify.ts";
 import type { AppContext } from "./context.ts";
 import { invokeRole, type InvokeResult } from "./invoke.ts";
 import { taskDir } from "./paths.ts";
@@ -68,5 +72,41 @@ const implementer: Handler = async (ctx, task) => {
   return outcomeOf(r, "implementer", `${dir}/impl-notes.md`);
 };
 
+/** レビュワー: テストを再実行してから、差分・テストの変更の検出結果・人の変更を材料にレビューさせる */
+const reviewer: Handler = async (ctx, task) => {
+  const v = await verifyTests(ctx, task);
+  if (v.status === "error") return { event: { type: "run_error", reason: v.reason }, reason: `verifier: ${v.reason}` };
+  if (v.status === "failed") return { event: { type: "tests_failed" }, reason: `テストの再実行が失敗しました(詳細: ${v.reportPath})` };
+
+  const tr = primaryRepo(ctx, task);
+  const repo = getRepo(ctx.db, tr.repoId)!;
+  const dir = taskDir(ctx.home, task.id);
+  const base = mergeBase(tr.worktreePath, repo.defaultBranch, ctx.gitEnv);
+  const diff = diffFromBase(tr.worktreePath, base, ctx.gitEnv);
+  writeFileSync(join(dir, "diff.patch"), diff);
+  writeFileSync(join(dir, "test-changes.md"), renderTestChanges(detectTestChanges({ nameStatus: changedFiles(tr.worktreePath, base, ctx.gitEnv), diff })));
+  const human = commitsSince(tr.worktreePath, base, ctx.gitEnv).filter((c) => !c.agentRole);
+  const head = headSha(tr.worktreePath, ctx.gitEnv);
+
+  const r = await invokeRole(ctx, {
+    roleName: "reviewer",
+    taskId: task.id,
+    cwd: tr.worktreePath,
+    artifactsDir: dir,
+    prompt: taskPrompt(ctx, task, "reviewer", [
+      `- 差分(ベース ${base.slice(0, 12)} から HEAD ${head.slice(0, 12)}): ${join(dir, "diff.patch")}`,
+      `- テストの変更の検出結果(必ず確認する): ${join(dir, "test-changes.md")}`,
+      `- テストの再実行: ${v.status === "passed" ? `成功(${v.command})` : "テストコマンドが無いため未確認"}`,
+      ...(human.length
+        ? ["- 人の変更が含まれます(同じ基準でレビューする):", ...human.map((c) => `  - ${c.sha.slice(0, 12)} ${c.subject}(${c.author})`)]
+        : []),
+    ]),
+  });
+  if (r.ok && r.verdict === "approve") {
+    addApproval(ctx.db, { taskId: task.id, repoId: tr.repoId, kind: "review", result: "approved", commitSha: head });
+  }
+  return outcomeOf(r, "reviewer", `${dir}/review.md`);
+};
+
 /** 状態ごとの処理。まだ無い役割の状態では、タスクは進まない */
-export const HANDLERS: Partial<Record<Role, Handler>> = { planner, implementer };
+export const HANDLERS: Partial<Record<Role, Handler>> = { planner, implementer, reviewer };

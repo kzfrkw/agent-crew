@@ -66,6 +66,21 @@ export function diffFromBase(worktree: string, baseSha: string, env?: Env): stri
   return git(worktree, ["diff", `${baseSha}..HEAD`], env);
 }
 
+/** HEAD と ref の分岐点(ベース更新で取り込んだ変更を差分に含めないため) */
+export function mergeBase(worktree: string, ref: string, env?: Env): string {
+  return git(worktree, ["merge-base", "HEAD", ref], env);
+}
+
+export function changedFiles(worktree: string, from: string, env?: Env): { status: string; path: string }[] {
+  return git(worktree, ["diff", "--name-status", `${from}..HEAD`], env)
+    .split("\n")
+    .filter(Boolean)
+    .map((l) => {
+      const parts = l.split("\t");
+      return { status: parts[0]!, path: parts.at(-1)! };
+    });
+}
+
 export type CommitInfo = { sha: string; author: string; subject: string; agentRole: string | null };
 
 /** ベース以降のコミット(古い順)。trailer の有無でエージェントと人を区別する */

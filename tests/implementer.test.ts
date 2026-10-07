@@ -40,11 +40,16 @@ async function toImplementing(runner: ScriptedRunner, profile = {}) {
 }
 
 describe("実装者", () => {
-  it("コミットして reviewing へ。コミットは trailer でエージェントのものと分かる", async () => {
-    const runner = new ScriptedRunner({ planner: plannerReady, implementer: implementer() });
+  it("コミットしてレビューへ進む。コミットは trailer でエージェントのものと分かる", async () => {
+    const runner = new ScriptedRunner({
+      planner: plannerReady,
+      implementer: implementer(),
+      verifier: () => ({ structuredOutput: { verdict: "passed", summary: "s" }, bashResults: [{ command: "npm test", isError: false, output: "ok" }] }),
+      reviewer: answer("review.md", "approve"),
+    });
     const { ctx, t } = await toImplementing(runner);
     await runUntilIdle(ctx);
-    expect(getTask(ctx.db, t.id)!.state).toBe("reviewing");
+    expect(getTask(ctx.db, t.id)!.state).toBe("qa");
     const tr = listTaskRepos(ctx.db, t.id)[0]!;
     const commits = commitsSince(tr.worktreePath, tr.baseSha, ctx.gitEnv);
     expect(commits.map((c) => [c.author, c.agentRole])).toEqual([["agent-crew implementer", "implementer"]]);
