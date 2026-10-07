@@ -92,6 +92,7 @@
 - 型チェック: `npm run typecheck`(tsc --noEmit)。まとめて `npm run check`
 - CLI: `npx agent-crew --help`(または `./bin/agent-crew.js`)
 - 前提の検査: `npx agent-crew doctor`(`--json` 可。エラーがあれば終了コード1)。データディレクトリは `~/.agent-team`(`AGENT_CREW_HOME` で変更可)
+- 安全設定の実機検査: `npx agent-crew doctor --probe-sandbox`(claude -p を haiku で1回動かす。利用枠を少し使う。ランナーや安全設定を変えたら必ず実行する)
 - TypeScriptの制約: 型除去で動く構文だけを使う(`enum`・`namespace`・パラメータプロパティは不可。importは `.ts` 拡張子付き)
 
 ## 別PCでの運用を壊さないために

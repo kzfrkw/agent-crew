@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { Command } from "commander";
 import { openAppDb } from "../app.ts";
 import { getTask, listRepos, listTaskRepos } from "../db/store.ts";
-import { doctor, formatResults } from "../doctor/index.ts";
+import { doctor, formatResults, probeSandbox } from "../doctor/index.ts";
 
 const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as {
   version: string;
@@ -18,8 +18,13 @@ export function createProgram(): Command {
     .command("doctor")
     .description("前提ツール・認証・安全設定の状態を検査する")
     .option("--json", "結果をJSONで出力する")
-    .action((opts: { json?: boolean }) => {
+    .option("--probe-sandbox", "claude -p(haiku)を実際に動かして安全設定を検査する(利用枠を少し使う)")
+    .action(async (opts: { json?: boolean; probeSandbox?: boolean }) => {
       const results = doctor();
+      if (opts.probeSandbox) {
+        if (!opts.json) console.error("安全設定の実機検査を実行しています(1〜2分かかります)…");
+        results.push(...(await probeSandbox()));
+      }
       console.log(opts.json ? JSON.stringify(results, null, 2) : formatResults(results));
       if (results.some((r) => r.level === "error")) process.exitCode = 1;
     });

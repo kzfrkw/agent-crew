@@ -153,4 +153,4 @@ claude -p
 | DerivedData・CoreSimulator・`~/.pub-cache` への書き込み | 拒否 | `filesystem.allowWrite` に各パス |
 | `curl https://pub.dev` | 許可リストに無い | `allowedDomains`: `pub.dev`、`storage.googleapis.com` など |
 
-ステップ6で `agent-crew doctor --probe-sandbox` を作り、この実験をいつでも再実行できるようにする。
+`agent-crew doctor --probe-sandbox` で、この実験(push、worktree外への書き込み、`~/.ssh`、環境変数、通信、リポジトリ側のフック、`hooksPath` の書き換え)をいつでも再実行できる。判定はモデルの申告ではなく、ファイル・コミット・remote・拒否の記録で行う。ランナーや安全設定を変えたら必ず実行する。
