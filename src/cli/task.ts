@@ -75,6 +75,12 @@ export function registerTaskCommands(program: Command): void {
         if (t.state === "needs_input") console.log(`理由: ${latestNeedsInputReason(ctx.db, t.id) ?? "不明"}\n→ agent-crew task answer ${t.id} --message "..." で回答してください`);
         if (t.state === "awaiting_plan_approval") console.log(`→ plan.md を確認して agent-crew task approve ${t.id} --kind plan(または reject)`);
         if (t.state === "awaiting_final_approval") console.log(`→ 成果物を確認して agent-crew task approve ${t.id} --kind final(または reject)`);
+        if (t.state === "done") {
+          for (const e of listEvents(ctx.db, t.id, 1000).filter((e) => e.kind === "integrated")) {
+            const p = e.payload as { repo: string; branch: string };
+            console.log(`→ push と PR 作成は人が行います: git -C ${p.repo} push origin ${p.branch}(PR本文の下書き: pr-draft.md)`);
+          }
+        }
         const roles = new Map(listRepos(ctx.db, t.projectId).map((r) => [r.id, r.role]));
         for (const tr of listTaskRepos(ctx.db, t.id)) console.log(`worktree [${roles.get(tr.repoId)}]: ${tr.worktreePath}(${tr.branchName})`);
         const artifacts = new Map(listArtifacts(ctx.db, t.id).map((a) => [a.kind, a]));

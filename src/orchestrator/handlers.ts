@@ -1,9 +1,10 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { addApproval, addEvent, getRepo, listTaskRepos, type Task } from "../db/store.ts";
-import { changedFiles, commitsSince, diffFromBase, hasTrackedChanges, headSha, isDirty, mergeBase } from "../git/worktree.ts";
+import { addApproval, addEvent, getRepo, getRepoProfile, listTaskRepos, listValidApprovals, setProjectProfile, setRepoProfile, type Task } from "../db/store.ts";
+import type { Profile } from "../roles/schemas.ts";
+import { changedFiles, commitsSince, containsRef, diffFromBase, diffStat, hasTrackedChanges, headSha, isDirty, mergeBase } from "../git/worktree.ts";
 import { detectTestChanges, renderTestChanges } from "./test-changes.ts";
-import { verifyTests } from "./verify.ts";
+import { testCommandFor, verifyTests } from "./verify.ts";
 import type { AppContext } from "./context.ts";
 import { invokeRole, type InvokeResult } from "./invoke.ts";
 import { taskDir } from "./paths.ts";
@@ -144,5 +145,50 @@ const qa: Handler = async (ctx, task) => {
   return outcomeOf(r, "qa", `${dir}/qa-report.md`);
 };
 
-/** 状態ごとの処理。まだ無い役割の状態では、タスクは進まない */
-export const HANDLERS: Partial<Record<Role, Handler>> = { planner, implementer, reviewer, qa };
+const stop = (reason: string): HandlerOutcome => ({ event: { type: "run_error", reason }, reason });
+
+/**
+ * 統合: git の確認はコードで行い、LLM は PR 本文と変更履歴の下書きだけを書く。push はしない(人が行う)。
+ * 完了したら、テスト基盤整備タスクならプロジェクトのテスト基盤を「あり」にする。
+ */
+const integrator: Handler = async (ctx, task) => {
+  const tr = primaryRepo(ctx, task);
+  const repo = getRepo(ctx.db, tr.repoId)!;
+  const dir = taskDir(ctx.home, task.id);
+  if (isDirty(tr.worktreePath, ctx.gitEnv)) return stop(`未コミットの変更があります: ${tr.worktreePath}`);
+  const head = headSha(tr.worktreePath, ctx.gitEnv);
+  const final = listValidApprovals(ctx.db, task.id).filter((a) => a.kind === "final" && a.repoId === tr.repoId).at(-1);
+  if (!final || final.commitSha !== head) return stop("最終確認の承認の後にコミットが増えています。レビューからやり直してください(人の変更なら task return を使う)");
+  if (!containsRef(tr.worktreePath, repo.defaultBranch, ctx.gitEnv)) {
+    return stop(`ベース(${repo.defaultBranch})が進んでいます。agent-crew task update-base ${task.id} で追従してください`);
+  }
+
+  const base = mergeBase(tr.worktreePath, repo.defaultBranch, ctx.gitEnv);
+  const commits = commitsSince(tr.worktreePath, base, ctx.gitEnv);
+  writeFileSync(join(dir, "diffstat.txt"), diffStat(tr.worktreePath, base, ctx.gitEnv));
+  const r = await invokeRole(ctx, {
+    roleName: "integrator",
+    taskId: task.id,
+    cwd: tr.worktreePath,
+    artifactsDir: dir,
+    prompt: taskPrompt(ctx, task, "integrator", [
+      `- ブランチ: ${tr.branchName}(ベース: ${repo.defaultBranch}、リポジトリ: ${repo.path})`,
+      `- 変更の概要: ${join(dir, "diffstat.txt")}`,
+      "- コミット:",
+      ...commits.map((c) => `  - ${c.sha.slice(0, 12)} ${c.subject}(${c.agentRole ? `agent-crew ${c.agentRole}` : `人: ${c.author}`})`),
+    ]),
+  });
+  if (r.ok && r.verdict === "done") {
+    addEvent(ctx.db, { taskId: task.id, runId: r.runId, kind: "integrated", payload: { repo: repo.path, branch: tr.branchName, head } });
+    if (task.kind === "test_infra") {
+      const profile = getRepoProfile(ctx.db, repo.id) as Profile | null;
+      const command = testCommandFor(ctx, task, repo.id);
+      if (profile) setRepoProfile(ctx.db, repo.id, { ...profile, testInfra: "present", commands: { ...profile.commands, test: command } });
+      setProjectProfile(ctx.db, task.projectId, { testInfra: "present" });
+    }
+  }
+  return outcomeOf(r, "integrator", `${dir}/pr-draft.md`);
+};
+
+/** 状態ごとの処理 */
+export const HANDLERS: Partial<Record<Role, Handler>> = { planner, implementer, reviewer, qa, integrator };

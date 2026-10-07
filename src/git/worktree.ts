@@ -86,6 +86,20 @@ export function changedFiles(worktree: string, from: string, env?: Env): { statu
     });
 }
 
+/** ref が HEAD に含まれているか(ベースに追従できているか) */
+export function containsRef(worktree: string, ref: string, env?: Env): boolean {
+  try {
+    git(worktree, ["merge-base", "--is-ancestor", ref, "HEAD"], env);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function diffStat(worktree: string, from: string, env?: Env): string {
+  return git(worktree, ["diff", "--stat", `${from}..HEAD`], env);
+}
+
 export type CommitInfo = { sha: string; author: string; subject: string; agentRole: string | null };
 
 /** ベース以降のコミット(古い順)。trailer の有無でエージェントと人を区別する */
