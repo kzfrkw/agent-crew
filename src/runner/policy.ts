@@ -32,7 +32,7 @@ export type RunSettings = {
     failIfUnavailable: true;
     allowUnsandboxedCommands: false;
     filesystem: { allowWrite: string[]; denyWrite: string[] };
-    network: { allowedDomains: string[]; strictAllowlist: true };
+    network: { allowedDomains: string[]; strictAllowlist: true; allowLocalBinding?: true };
     credentials: {
       files: { path: string; mode: "deny" }[];
       envVars: { name: string; mode: "deny" }[];
@@ -48,6 +48,8 @@ export function buildRunSettings(o: {
   artifactsDir: string;
   write: WriteScope;
   bashWritesWorktree?: boolean;
+  /** QA: 127.0.0.1 でアプリを起動し、接続する */
+  localServer?: boolean;
   allowedDomains: string[];
 }): RunSettings {
   for (const p of [o.worktree, o.artifactsDir]) {
@@ -69,7 +71,9 @@ export function buildRunSettings(o: {
         allowWrite: o.write === "none" ? [] : [o.artifactsDir],
         denyWrite: bashCanWriteWorktree ? [] : [o.worktree],
       },
-      network: { allowedDomains: [...o.allowedDomains], strictAllowlist: true },
+      network: o.localServer
+        ? { allowedDomains: [...o.allowedDomains, "localhost", "127.0.0.1"], strictAllowlist: true, allowLocalBinding: true }
+        : { allowedDomains: [...o.allowedDomains], strictAllowlist: true },
       credentials: {
         files: CREDENTIAL_FILES.map((path) => ({ path, mode: "deny" as const })),
         envVars: CREDENTIAL_ENV.map((name) => ({ name, mode: "deny" as const })),

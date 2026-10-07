@@ -123,3 +123,10 @@ describe("agent-crew roles", () => {
     expect(out).toMatch(/implementer\s+sonnet\s+worktree/);
   });
 });
+
+describe("claude の --json-schema が受け付ける形", () => {
+  it("$schema(draft 2020-12 の宣言)を含めない", () => {
+    const roles = loadRoles(defaultRolesDir());
+    for (const r of roles.values()) expect(JSON.stringify(verdictSchemaFor(r))).not.toContain("$schema");
+  });
+});

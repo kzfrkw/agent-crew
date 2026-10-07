@@ -45,9 +45,13 @@ export function createWorktree(o: {
   return { baseSha };
 }
 
-/** worktree を削除する。ブランチは人がpushするために残す。未コミットの変更があれば git が拒否する */
-export function removeWorktree(o: { repoPath: string; worktreePath: string; env?: Env }): void {
-  git(o.repoPath, ["worktree", "remove", o.worktreePath], o.env);
+/**
+ * worktree を削除する。既定ではブランチは人がpushするために残し、未コミットの変更があれば git が拒否する。
+ * force / deleteBranch は、ツールが作った一時的なworktree(調査用など)の片付けにだけ使う。
+ */
+export function removeWorktree(o: { repoPath: string; worktreePath: string; env?: Env; force?: boolean; deleteBranch?: string }): void {
+  git(o.repoPath, ["worktree", "remove", ...(o.force ? ["--force"] : []), o.worktreePath], o.env);
+  if (o.deleteBranch) git(o.repoPath, ["branch", "-D", o.deleteBranch], o.env);
 }
 
 export function isDirty(worktree: string, env?: Env): boolean {

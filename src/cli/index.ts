@@ -3,6 +3,7 @@ import { Command } from "commander";
 import { openAppDb } from "../app.ts";
 import { loadConfig } from "../config/config.ts";
 import { applyRoleOverrides, loadRoles } from "../roles/roles.ts";
+import { registerProjectCommands } from "./project.ts";
 import { getTask, listRepos, listTaskRepos } from "../db/store.ts";
 import { doctor, formatResults, probeSandbox } from "../doctor/index.ts";
 
@@ -40,6 +41,8 @@ export function createProgram(): Command {
         console.log([r.name.padEnd(12), r.model.padEnd(8), r.permissions.write.padEnd(10), r.verdicts.join("/"), r.output ?? "-"].join(" "));
       }
     });
+
+  registerProjectCommands(program);
 
   const task = program.command("task").description("タスクの操作");
 

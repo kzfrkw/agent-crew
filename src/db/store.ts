@@ -44,6 +44,31 @@ export function listProjects(db: Db): Project[] {
   return (db.prepare("SELECT * FROM projects ORDER BY id").all() as Row[]).map(toProject);
 }
 
+export function setProjectProfile(
+  db: Db,
+  id: number,
+  u: { profileStatus?: Project["profileStatus"]; testInfra?: Project["testInfra"]; profile?: unknown },
+): void {
+  const cur = getProject(db, id);
+  if (!cur) throw new Error(`プロジェクト ${id} がありません`);
+  db.prepare("UPDATE projects SET profile_status = ?, test_infra = ?, profile_json = COALESCE(?, profile_json), updated_at = ? WHERE id = ?").run(
+    u.profileStatus ?? cur.profileStatus,
+    u.testInfra ?? cur.testInfra,
+    u.profile === undefined ? null : JSON.stringify(u.profile),
+    now(),
+    id,
+  );
+}
+
+export function setAllowWithoutTests(db: Db, id: number, allow: boolean): void {
+  db.prepare("UPDATE projects SET allow_without_tests = ?, updated_at = ? WHERE id = ?").run(allow ? 1 : 0, now(), id);
+}
+
+export function getProjectProfile(db: Db, id: number): unknown {
+  const r = db.prepare("SELECT profile_json FROM projects WHERE id = ?").get(id) as { profile_json: string | null } | undefined;
+  return r?.profile_json ? JSON.parse(r.profile_json) : null;
+}
+
 export type Repo = { id: number; projectId: number; path: string; role: string; defaultBranch: string };
 
 const toRepo = (r: Row): Repo => ({
@@ -59,6 +84,20 @@ export function addRepo(db: Db, r: Omit<Repo, "id">): Repo {
     .prepare("INSERT INTO repos (project_id, path, role, default_branch, created_at) VALUES (?, ?, ?, ?, ?)")
     .run(r.projectId, r.path, r.role, r.defaultBranch, now());
   return { id: Number(lastInsertRowid), ...r };
+}
+
+export function getRepo(db: Db, id: number): Repo | undefined {
+  const r = db.prepare("SELECT * FROM repos WHERE id = ?").get(id) as Row | undefined;
+  return r && toRepo(r);
+}
+
+export function setRepoProfile(db: Db, id: number, profile: unknown): void {
+  db.prepare("UPDATE repos SET profile_json = ? WHERE id = ?").run(JSON.stringify(profile), id);
+}
+
+export function getRepoProfile(db: Db, id: number): unknown {
+  const r = db.prepare("SELECT profile_json FROM repos WHERE id = ?").get(id) as { profile_json: string | null } | undefined;
+  return r?.profile_json ? JSON.parse(r.profile_json) : null;
 }
 
 export function listRepos(db: Db, projectId: number): Repo[] {

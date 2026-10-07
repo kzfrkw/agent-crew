@@ -1,6 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { configPath, dataHome, loadConfig } from "../config/config.ts";
+import { appDbPath } from "../app.ts";
+import { openDb } from "../db/connection.ts";
+import { listProjects, listRepos } from "../db/store.ts";
 import { runChecks, type CheckResult, type Probe } from "./checks.ts";
 import { runProbe } from "./probe.ts";
 
@@ -33,7 +36,24 @@ export function doctor(): CheckResult[] {
   } catch (e) {
     configResult = { id: "config", level: "error", message: (e as Error).message };
   }
-  return [configResult, ...runChecks(systemProbe(claudePath))];
+  return [configResult, ...runChecks(systemProbe(claudePath)), ...registeredRepos(home)];
+}
+
+/** 登録済みのリポジトリ。worktree を作るときにローカル設定(extensions.worktreeConfig)を1つ変えることを知らせる */
+function registeredRepos(home: string): CheckResult[] {
+  if (!existsSync(appDbPath(home))) return [];
+  const db = openDb(appDbPath(home));
+  try {
+    return listProjects(db).flatMap((p) =>
+      listRepos(db, p.id).map((r) => ({
+        id: `repo:${p.name}/${r.role}`,
+        level: "info" as const,
+        message: `${r.path}: ローカル設定 extensions.worktreeConfig=true を使用(エージェントのworktreeだけに pre-push を効かせるため)`,
+      })),
+    );
+  } finally {
+    db.close();
+  }
 }
 
 /** 実際に claude -p を動かす安全設定の検査(利用枠を少し使う) */

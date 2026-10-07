@@ -120,3 +120,26 @@ describe("buildClaudeArgs", () => {
     expect(buildClaudeArgs(spec).at(-1)).not.toMatch(/\s/);
   });
 });
+
+describe("localServer(QA)", () => {
+  it("127.0.0.1 での待ち受けと接続を許可する", () => {
+    const s = buildRunSettings({ ...base, write: "artifacts", bashWritesWorktree: true, localServer: true });
+    expect(s.sandbox.network.allowedDomains).toEqual(expect.arrayContaining(["registry.npmjs.org", "localhost", "127.0.0.1"]));
+    expect(s.sandbox.network.allowLocalBinding).toBe(true);
+  });
+  it("既定では許可しない", () => {
+    const s = buildRunSettings({ ...base, write: "artifacts" });
+    expect(s.sandbox.network.allowLocalBinding).toBeUndefined();
+    expect(s.sandbox.network.allowedDomains).not.toContain("127.0.0.1");
+  });
+});
+
+describe("--allowedTools", () => {
+  it("settings の allow ルールと同じものを明示する(環境変数の除去で権限モードが default に強制されるため)", () => {
+    const a = buildClaudeArgs({
+      model: "sonnet", tools: ["Read"], settingsPath: "/s.json", jsonSchema: {}, artifactsDir: "/a", maxBudgetUsd: 1,
+      systemPromptAppend: "x", allowedTools: ["Read", "Edit(//a/**)"],
+    });
+    expect(a[a.indexOf("--allowedTools") + 1]).toBe("Read,Edit(//a/**)");
+  });
+});

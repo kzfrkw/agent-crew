@@ -36,11 +36,12 @@ export class ClaudeRunner implements Runner {
       artifactsDir,
       write: spec.write,
       bashWritesWorktree: spec.bashWritesWorktree,
+      localServer: spec.localServer,
       allowedDomains: spec.allowedDomains,
     });
     writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
     writeFileSync(join(spec.runDir, "prompt.md"), spec.prompt);
-    const args = buildClaudeArgs({ ...spec, artifactsDir, settingsPath });
+    const args = buildClaudeArgs({ ...spec, artifactsDir, settingsPath, allowedTools: settings.permissions.allow });
     writeFileSync(
       join(spec.runDir, "command.txt"),
       `cd ${shellQuote(cwd)} && ${[this.claudePath, ...args].map(shellQuote).join(" ")} < ${shellQuote(join(spec.runDir, "prompt.md"))}\n`,
@@ -54,12 +55,12 @@ export class ClaudeRunner implements Runner {
       let timedOut = false;
       let settled = false;
       const timers: NodeJS.Timeout[] = [];
-      const finish = (r: Omit<RunResult, "durationMs" | "models" | "permissionDenials"> & Partial<RunResult>) => {
+      const finish = (r: Omit<RunResult, "durationMs" | "models" | "permissionDenials" | "bashResults"> & Partial<RunResult>) => {
         if (settled) return;
         settled = true;
         timers.forEach(clearTimeout);
         const s = collector.summary();
-        resolve({ models: s.models, permissionDenials: s.permissionDenials, durationMs: Date.now() - started, ...r });
+        resolve({ models: s.models, permissionDenials: s.permissionDenials, bashResults: collector.bashResults(), durationMs: Date.now() - started, ...r });
       };
 
       const child = spawn(this.claudePath, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });

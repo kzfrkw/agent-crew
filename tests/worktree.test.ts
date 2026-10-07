@@ -134,3 +134,13 @@ describe("worktree の状態", () => {
     expect(() => removeWorktree({ repoPath: repo, worktreePath: wt, env })).toThrow();
   });
 });
+
+describe("一時的なworktreeの片付け", () => {
+  it("force と deleteBranch で、未追跡ファイルがあっても消し、ブランチも消す", () => {
+    const { repo, wt } = setup();
+    writeFileSync(join(wt, "build-output.txt"), "x");
+    removeWorktree({ repoPath: repo, worktreePath: wt, env, force: true, deleteBranch: "agent-crew/7-add-login" });
+    expect(existsSync(wt)).toBe(false);
+    expect(git(repo, "branch", "--list", "agent-crew/*")).toBe("");
+  });
+});

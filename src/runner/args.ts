@@ -14,6 +14,8 @@ export function buildClaudeArgs(o: {
   maxBudgetUsd: number;
   systemPromptAppend: string;
   resumeSessionId?: string;
+  /** settings の allow ルールと同じもの。CLAUDE_CODE_SUBPROCESS_ENV_SCRUB を設定すると権限モードが default に強制されるため、明示する */
+  allowedTools?: string[];
 }): string[] {
   return [
     "-p",
@@ -27,6 +29,7 @@ export function buildClaudeArgs(o: {
     "--model", o.model,
     ...(o.effort ? ["--effort", o.effort] : []),
     "--tools", o.tools.join(","),
+    ...(o.allowedTools?.length ? ["--allowedTools", o.allowedTools.join(",")] : []),
     "--json-schema", JSON.stringify(o.jsonSchema),
     "--max-budget-usd", String(o.maxBudgetUsd),
     "--append-system-prompt", o.systemPromptAppend,

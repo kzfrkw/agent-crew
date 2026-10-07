@@ -67,7 +67,9 @@ export function verdictSchemaFor(role: RoleDef): object {
     summary: z.string().describe("結果の要約(3文以内)。詳細は成果物に書く"),
   });
   const extra = EXTRA_SCHEMAS[role.name];
-  return z.toJSONSchema(extra ? base.extend(extra.shape) : base);
+  // claude の検証器は draft 2020-12 の $schema 宣言を解釈できないため外す
+  const { $schema: _, ...schema } = z.toJSONSchema(extra ? base.extend(extra.shape) : base) as Record<string, unknown>;
+  return schema;
 }
 
 /** 構造化出力を検証して取り出す */

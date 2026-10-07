@@ -7,6 +7,8 @@
 export type WriteScope = "none" | "artifacts" | "worktree";
 
 export type RunSpec = {
+  /** 役割名(記録用) */
+  role: string;
   /** 作業ディレクトリ(タスクのworktree) */
   cwd: string;
   /** settings.json・プロンプト・生のストリームを残す場所 */
@@ -23,6 +25,8 @@ export type RunSpec = {
   write: WriteScope;
   /** write が artifacts でも、Bash からのビルド・テストのために worktree への書き込みを許す(QA・プロジェクト把握担当) */
   bashWritesWorktree?: boolean;
+  /** QA: 127.0.0.1 でアプリを起動し、接続する */
+  localServer?: boolean;
   /** 判定のJSONスキーマ(--json-schema) */
   jsonSchema: object;
   timeoutSec: number;
@@ -45,6 +49,7 @@ export type RunResult = {
   costUsd?: number;
   models: string[];
   permissionDenials: PermissionDenial[];
+  bashResults: { command: string; isError: boolean; output: string }[];
   error?: string;
   durationMs: number;
 };

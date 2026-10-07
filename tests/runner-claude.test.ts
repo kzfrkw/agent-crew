@@ -10,6 +10,7 @@ const fake = new URL("./fixtures/fake-claude.mjs", import.meta.url).pathname;
 function spec(scenario: string, over: Partial<RunSpec> = {}): RunSpec {
   const root = tempDir("agent-crew-run-");
   return {
+    role: "implementer",
     cwd: root,
     runDir: join(root, "run"),
     artifactsDir: join(root, "artifacts"),

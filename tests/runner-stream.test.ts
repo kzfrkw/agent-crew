@@ -43,3 +43,18 @@ describe("StreamCollector", () => {
     expect(c.summary().hasResult).toBe(false);
   });
 });
+
+describe("Bash の実行結果の収集(verifier の判定用)", () => {
+  it("tool_use の command と tool_result の is_error を対応づける", () => {
+    const c = new StreamCollector();
+    c.push(JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", id: "a", name: "Bash", input: { command: "npm test" } }] } }));
+    c.push(JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "a", is_error: true, content: "Exit code 1" }] } }));
+    c.push(JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", id: "b", name: "Bash", input: { command: "echo ok" } }] } }));
+    c.push(JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "b", content: "ok" }] } }));
+    c.push(JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", id: "c", name: "Read", input: { file_path: "/x" } }] } }));
+    expect(c.bashResults()).toEqual([
+      { command: "npm test", isError: true, output: "Exit code 1" },
+      { command: "echo ok", isError: false, output: "ok" },
+    ]);
+  });
+});

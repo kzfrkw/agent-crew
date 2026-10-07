@@ -110,6 +110,7 @@ export async function runProbe(o: { home: string; claudePath: string; allowedDom
   const runner = new ClaudeRunner({ claudePath: o.claudePath, parentEnv: { ...process.env, GITHUB_TOKEN: PROBE_SECRET } });
   const result = await runner.run(
     {
+      role: "probe",
       cwd: wt,
       runDir: join(probeRoot, "run"),
       artifactsDir: join(probeRoot, "artifacts"),

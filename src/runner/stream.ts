@@ -33,6 +33,14 @@ export type StreamSummary = {
 export class StreamCollector {
   private init: Json | undefined;
   private result: Json | undefined;
+  private readonly bashCalls = new Map<string, { command: string; isError?: boolean; output?: string }>();
+
+  /** Bash の実行結果(コマンドと終了状態)。verifier の合否はモデルの申告ではなくこれで判定する */
+  bashResults(): { command: string; isError: boolean; output: string }[] {
+    return [...this.bashCalls.values()]
+      .filter((c) => c.isError !== undefined)
+      .map((c) => ({ command: c.command, isError: c.isError!, output: c.output ?? "" }));
+  }
 
   push(line: string): RunEvent[] {
     let m: Json;
@@ -52,16 +60,24 @@ export class StreamCollector {
       case "assistant":
         return ((m.message?.content ?? []) as Json[]).flatMap((c): RunEvent[] => {
           if (c.type === "text") return [{ kind: "assistant_text", payload: { text: truncate(c.text) } }];
-          if (c.type === "tool_use") return [{ kind: "tool_use", payload: { name: c.name, input: truncate(c.input) } }];
+          if (c.type === "tool_use") {
+            if (c.name === "Bash" && typeof c.id === "string") this.bashCalls.set(c.id, { command: String(c.input?.command ?? "") });
+            return [{ kind: "tool_use", payload: { name: c.name, input: truncate(c.input) } }];
+          }
           return [];
         });
       case "user":
         return ((Array.isArray(m.message?.content) ? m.message.content : []) as Json[])
           .filter((c) => c.type === "tool_result")
-          .map((c) => ({
+          .map((c) => {
+            const call = this.bashCalls.get(c.tool_use_id);
+            const text = typeof c.content === "string" ? c.content : JSON.stringify(c.content);
+            if (call) Object.assign(call, { isError: c.is_error === true, output: String(truncate(text)) });
+            return {
             kind: "tool_result",
-            payload: { isError: c.is_error === true, content: truncate(typeof c.content === "string" ? c.content : JSON.stringify(c.content)) },
-          }));
+            payload: { isError: c.is_error === true, content: truncate(text) },
+            };
+          });
       case "rate_limit_event":
         return [{ kind: "rate_limit", payload: m.rate_limit_info ?? {} }];
       case "result":

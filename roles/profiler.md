@@ -6,6 +6,7 @@ tools: [Read, Grep, Glob, Bash, Write]
 permissions:
   write: artifacts
   bashWritesWorktree: true
+  localServer: true
 verdicts: [ready, need_human]
 output: profile.md
 timeoutSec: 1800
