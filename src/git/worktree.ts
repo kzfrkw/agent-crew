@@ -58,6 +58,11 @@ export function isDirty(worktree: string, env?: Env): boolean {
   return git(worktree, ["status", "--porcelain"], env) !== "";
 }
 
+/** 追跡しているファイルの変更(未追跡のファイルは含めない) */
+export function hasTrackedChanges(worktree: string, env?: Env): boolean {
+  return git(worktree, ["status", "--porcelain", "--untracked-files=no"], env) !== "";
+}
+
 export function headSha(worktree: string, env?: Env): string {
   return git(worktree, ["rev-parse", "HEAD"], env);
 }

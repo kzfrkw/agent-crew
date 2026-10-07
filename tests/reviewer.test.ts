@@ -27,7 +27,7 @@ const verifier = (pass: boolean): Script => () => ({
 });
 
 async function implemented(scripts: Record<string, Script>) {
-  const runner = new ScriptedRunner({ planner, implementer, verifier: verifier(true), ...scripts });
+  const runner = new ScriptedRunner({ planner, implementer, verifier: verifier(true), qa: answer("qa-report.md", "passed"), ...scripts });
   const ctx = testContext(runner);
   const { project } = await approvedProject(ctx);
   const t = newTask(ctx, project.id);
@@ -38,10 +38,10 @@ async function implemented(scripts: Record<string, Script>) {
 }
 
 describe("レビュワー", () => {
-  it("テストの再実行が通ったらレビューし、approve で qa へ。承認は HEAD に紐づく", async () => {
+  it("テストの再実行が通ったらレビューし、approve で QA へ進む。承認は HEAD に紐づく", async () => {
     const { ctx, t, runner } = await implemented({ reviewer: answer("review.md", "approve") });
-    expect(getTask(ctx.db, t.id)!.state).toBe("qa");
-    expect(runner.rolesCalled()).toEqual(["planner", "implementer", "verifier", "reviewer"]);
+    expect(getTask(ctx.db, t.id)!.state).toBe("awaiting_final_approval");
+    expect(runner.rolesCalled()).toEqual(["planner", "implementer", "verifier", "reviewer", "qa"]);
     const tr = listTaskRepos(ctx.db, t.id)[0]!;
     const review = listValidApprovals(ctx.db, t.id).find((a) => a.kind === "review")!;
     expect(review).toMatchObject({ result: "approved", commitSha: headSha(tr.worktreePath, ctx.gitEnv), repoId: tr.repoId });
@@ -67,7 +67,7 @@ describe("レビュワー", () => {
     const { ctx, t, runner } = await implemented({
       reviewer: (spec, n) => answer("review.md", n === 0 ? "changes_requested" : "approve")(spec, n),
     });
-    expect(getTask(ctx.db, t.id)).toMatchObject({ state: "qa", reviewRounds: 1 });
+    expect(getTask(ctx.db, t.id)).toMatchObject({ state: "awaiting_final_approval", reviewRounds: 1 });
     const second = runner.calls.filter((c) => c.role === "implementer")[1]!;
     expect(second.prompt).toContain("review.md");
     expect(second.prompt).toContain("差し戻しの回数: 1");
@@ -89,6 +89,6 @@ describe("レビュワー", () => {
     });
     const secondReview = runner.calls.filter((c) => c.role === "reviewer")[1]!;
     expect(secondReview.prompt).toContain("fix by human");
-    expect(getTask(ctx.db, t.id)!.state).toBe("qa");
+    expect(getTask(ctx.db, t.id)!.state).toBe("awaiting_final_approval");
   });
 });

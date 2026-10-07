@@ -1,7 +1,7 @@
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { addApproval, addEvent, getRepo, listTaskRepos, type Task } from "../db/store.ts";
-import { changedFiles, commitsSince, diffFromBase, headSha, isDirty, mergeBase } from "../git/worktree.ts";
+import { changedFiles, commitsSince, diffFromBase, hasTrackedChanges, headSha, isDirty, mergeBase } from "../git/worktree.ts";
 import { detectTestChanges, renderTestChanges } from "./test-changes.ts";
 import { verifyTests } from "./verify.ts";
 import type { AppContext } from "./context.ts";
@@ -108,5 +108,41 @@ const reviewer: Handler = async (ctx, task) => {
   return outcomeOf(r, "reviewer", `${dir}/review.md`);
 };
 
+/** QAでアプリを起動するポート。並行するタスク同士でぶつからないよう、タスクごとに変える */
+export function qaPortFor(taskId: number): number {
+  return 4100 + (taskId % 800);
+}
+
+/** QA: 動くアプリで受け入れ条件を確かめる(フェーズ1はコマンドとHTTP)。コードを変えていないことはツール側で確かめる */
+const qa: Handler = async (ctx, task) => {
+  const tr = primaryRepo(ctx, task);
+  const dir = taskDir(ctx.home, task.id);
+  const evidence = join(dir, "qa-evidence");
+  mkdirSync(evidence, { recursive: true });
+  const before = headSha(tr.worktreePath, ctx.gitEnv);
+  const port = qaPortFor(task.id);
+  const r = await invokeRole(ctx, {
+    roleName: "qa",
+    taskId: task.id,
+    cwd: tr.worktreePath,
+    artifactsDir: dir,
+    prompt: taskPrompt(ctx, task, "qa", [
+      `- アプリは 127.0.0.1 で起動し、ポートは可能なら環境変数で PORT=${port} を使ってください(ほかのタスクとぶつからないように)。プロファイルの確認URLのポートは読み替えてください`,
+      `- 証拠(HTTPの応答、ログ)は ${evidence} に保存し、qa-report.md から参照してください`,
+      "- 確認が終わったら、起動したプロセスを必ず止めてください。コードは変更しないでください",
+    ]),
+  });
+  if (headSha(tr.worktreePath, ctx.gitEnv) !== before || hasTrackedChanges(tr.worktreePath, ctx.gitEnv)) {
+    return { event: { type: "run_error", reason: "QA がコードを変更しました" }, reason: `QA がコードを変更しました(コミット、または追跡しているファイルの変更)。worktree を確認してください: ${tr.worktreePath}` };
+  }
+  if (isDirty(tr.worktreePath, ctx.gitEnv)) {
+    addEvent(ctx.db, { taskId: task.id, kind: "warning", payload: { message: "QA の後に未追跡のファイルが残っています(ビルド結果やログなど)" } });
+  }
+  if (r.ok && r.verdict === "passed") {
+    addApproval(ctx.db, { taskId: task.id, repoId: tr.repoId, kind: "qa", result: "approved", commitSha: before });
+  }
+  return outcomeOf(r, "qa", `${dir}/qa-report.md`);
+};
+
 /** 状態ごとの処理。まだ無い役割の状態では、タスクは進まない */
-export const HANDLERS: Partial<Record<Role, Handler>> = { planner, implementer, reviewer };
+export const HANDLERS: Partial<Record<Role, Handler>> = { planner, implementer, reviewer, qa };

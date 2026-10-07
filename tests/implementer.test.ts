@@ -46,10 +46,11 @@ describe("実装者", () => {
       implementer: implementer(),
       verifier: () => ({ structuredOutput: { verdict: "passed", summary: "s" }, bashResults: [{ command: "npm test", isError: false, output: "ok" }] }),
       reviewer: answer("review.md", "approve"),
+      qa: answer("qa-report.md", "passed"),
     });
     const { ctx, t } = await toImplementing(runner);
     await runUntilIdle(ctx);
-    expect(getTask(ctx.db, t.id)!.state).toBe("qa");
+    expect(getTask(ctx.db, t.id)!.state).toBe("awaiting_final_approval");
     const tr = listTaskRepos(ctx.db, t.id)[0]!;
     const commits = commitsSince(tr.worktreePath, tr.baseSha, ctx.gitEnv);
     expect(commits.map((c) => [c.author, c.agentRole])).toEqual([["agent-crew implementer", "implementer"]]);
