@@ -45,6 +45,8 @@ export type TaskEvent =
   | { type: "takeover" }
   | { type: "return"; humanChanged: boolean }
   | { type: "limit_exceeded"; reason: string }
+  /** 役割の実行エラー(成果物が無い、判定が不正、コミットが無いなど)。人の判断を待つ */
+  | { type: "run_error"; reason: string }
   | { type: "fail"; reason: string }
   | { type: "retry" }
   | { type: "cancel" };
@@ -149,6 +151,7 @@ export function transition(t: TaskSnapshot, e: TaskEvent, c: TransitionContext):
     }
 
     case "limit_exceeded":
+    case "run_error":
       if (!roleForState(t.state)) fail("エージェントが動く状態ではありません");
       return hold(t.state);
 

@@ -40,6 +40,13 @@ export type RunSettings = {
   };
 };
 
+/** 実体のパスと、それと異なる別名(あれば) */
+function withAlias(real: string, alias?: string): string[] {
+  if (!alias || alias === real) return [real];
+  if (!isAbsolute(alias)) throw new Error(`絶対パスが必要です: ${alias}`);
+  return [real, alias];
+}
+
 /** 絶対パスを権限ルールの形(//abs/path/**)にする */
 const under = (tool: "Edit" | "Write", abs: string) => `${tool}(/${abs.replace(/\/+$/, "")}/**)`;
 
@@ -51,11 +58,19 @@ export function buildRunSettings(o: {
   /** QA: 127.0.0.1 でアプリを起動し、接続する */
   localServer?: boolean;
   allowedDomains: string[];
+  /**
+   * worktree / 成果物ディレクトリの別名(シンボリックリンク経由の表記)。
+   * 権限ルールはパスを文字列で照合するため、エージェントが別名で書いても拒否されないよう同じ許可を出す。
+   * サンドボックスはOSが実体のパスで判定するので、別名は不要。
+   */
+  aliases?: { worktree?: string; artifactsDir?: string };
 }): RunSettings {
   for (const p of [o.worktree, o.artifactsDir]) {
     if (!isAbsolute(p)) throw new Error(`絶対パスが必要です: ${p}`);
   }
-  const writable = o.write === "worktree" ? [o.worktree, o.artifactsDir] : o.write === "artifacts" ? [o.artifactsDir] : [];
+  const wt = withAlias(o.worktree, o.aliases?.worktree);
+  const art = withAlias(o.artifactsDir, o.aliases?.artifactsDir);
+  const writable = o.write === "worktree" ? [...wt, ...art] : o.write === "artifacts" ? art : [];
   const bashCanWriteWorktree = o.write === "worktree" || (o.write === "artifacts" && o.bashWritesWorktree === true);
   return {
     disableAllHooks: true,

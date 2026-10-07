@@ -100,3 +100,15 @@ describe("ClaudeRunner(偽の claude)", () => {
     expect(r.status).toBe("failed");
   });
 });
+
+describe("パスの別名", () => {
+  it("cwd と成果物ディレクトリの、指定どおりの表記と実体の表記の両方に許可を出す", async () => {
+    const { symlinkSync } = await import("node:fs");
+    const s = spec("ok");
+    const link = join(tempDir("agent-crew-link-"), "alias");
+    symlinkSync(s.cwd, link);
+    await new ClaudeRunner({ claudePath: fake, parentEnv: process.env }).run({ ...s, cwd: link }, () => {});
+    const settings = JSON.parse(readFileSync(join(s.runDir, "settings.json"), "utf8"));
+    expect(settings.permissions.allow).toEqual(expect.arrayContaining([`Edit(/${link}/**)`, `Edit(/${s.cwd}/**)`]));
+  });
+});

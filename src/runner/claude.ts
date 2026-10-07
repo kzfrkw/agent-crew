@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { appendFileSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { buildClaudeArgs } from "./args.ts";
 import { buildAgentEnv } from "./env.ts";
@@ -38,6 +38,7 @@ export class ClaudeRunner implements Runner {
       bashWritesWorktree: spec.bashWritesWorktree,
       localServer: spec.localServer,
       allowedDomains: spec.allowedDomains,
+      aliases: { worktree: resolve(spec.cwd), artifactsDir: resolve(spec.artifactsDir) },
     });
     writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
     writeFileSync(join(spec.runDir, "prompt.md"), spec.prompt);

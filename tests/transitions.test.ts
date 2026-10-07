@@ -105,6 +105,13 @@ describe("need_human と blocked", () => {
     });
   });
 
+  it("役割の実行エラー(成果物が無い、判定が不正など)も needs_input", () => {
+    expect(next(snap("reviewing"), { type: "run_error", reason: "成果物がない" })).toMatchObject({
+      state: "needs_input",
+      heldFromState: "reviewing",
+    });
+  });
+
   it("needs_input 以外で answer は拒否", () => {
     expect(() => next(snap("planning"), { type: "answer" })).toThrow(TransitionError);
   });

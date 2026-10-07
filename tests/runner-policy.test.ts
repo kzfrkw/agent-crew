@@ -143,3 +143,23 @@ describe("--allowedTools", () => {
     expect(a[a.indexOf("--allowedTools") + 1]).toBe("Read,Edit(//a/**)");
   });
 });
+
+describe("シンボリックリンク経由のパス", () => {
+  it("権限ルールは文字列で照合されるため、別名のパスにも同じ許可を出す", () => {
+    const s = buildRunSettings({
+      ...base, worktree: "/private/var/h/wt", artifactsDir: "/private/var/h/tasks/1", write: "worktree",
+      aliases: { worktree: "/var/h/wt", artifactsDir: "/var/h/tasks/1" },
+    });
+    expect(s.permissions.allow).toEqual(expect.arrayContaining([
+      "Edit(//private/var/h/wt/**)", "Edit(//var/h/wt/**)", "Write(//var/h/tasks/1/**)", "Write(//private/var/h/tasks/1/**)",
+    ]));
+  });
+  it("書けない場所の別名には許可を出さない", () => {
+    const s = buildRunSettings({
+      ...base, worktree: "/private/var/h/wt", artifactsDir: "/private/var/h/tasks/1", write: "artifacts",
+      aliases: { worktree: "/var/h/wt", artifactsDir: "/var/h/tasks/1" },
+    });
+    expect(s.permissions.allow.some((a) => a.includes("/h/wt"))).toBe(false);
+    expect(s.permissions.allow).toContain("Write(//var/h/tasks/1/**)");
+  });
+});

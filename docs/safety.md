@@ -93,6 +93,9 @@ claude -p
 ```
 
 - **`"Edit"` や `"Write"` を、パスを付けずに allow にしない。** 実験では、worktree外(`../`)への Write が通ってしまった
+- **権限ルールはパスを文字列で照合し、シンボリックリンクを解決しない**(2026-10-08、ステップ9の実機確認で判明)。実体のパスで許可しても、エージェントが別名(macOS の `/var` → `/private/var` など)で書くと拒否される。ランナーは worktree と成果物ディレクトリについて、実体のパスと指定どおりのパスの両方に許可を出す。データディレクトリも起動時に実体のパスへそろえる
+- `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` を設定すると、権限モードが default に強制される(警告が出る)。`--permission-prompts none` なので確認が必要な操作は拒否され、挙動は変わらない。警告に従い、allow ルールを `--allowedTools` でも明示する
+- `--json-schema` には `$schema`(draft 2020-12 の宣言)を含めない。claude の検証器が解釈できずに起動に失敗する
 - 書き込みの範囲は、役割定義の `permissions.write` で決める
 
 | `permissions.write` | 使う役割 | Edit/Write の allow | サンドボックス(Bash) |

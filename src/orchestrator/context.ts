@@ -1,3 +1,4 @@
+import { mkdirSync, realpathSync } from "node:fs";
 import { openAppDb } from "../app.ts";
 import { dataHome, loadConfig, type Config } from "../config/config.ts";
 import type { Db } from "../db/connection.ts";
@@ -16,7 +17,10 @@ export type AppContext = {
   gitEnv: NodeJS.ProcessEnv;
 };
 
-export function createAppContext(home: string = dataHome()): AppContext {
+export function createAppContext(dataDir: string = dataHome()): AppContext {
+  // 実体のパスにそろえる(権限ルールはシンボリックリンクを解決せずに照合するため)
+  mkdirSync(dataDir, { recursive: true });
+  const home = realpathSync(dataDir);
   const config = loadConfig(home);
   return {
     db: openAppDb(home),
