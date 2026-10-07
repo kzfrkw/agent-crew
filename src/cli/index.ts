@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
 import { Command } from "commander";
+import { openAppDb } from "../app.ts";
+import { getTask, listRepos, listTaskRepos } from "../db/store.ts";
 import { doctor, formatResults } from "../doctor/index.ts";
 
 const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as {
@@ -22,9 +24,33 @@ export function createProgram(): Command {
       if (results.some((r) => r.level === "error")) process.exitCode = 1;
     });
 
+  const task = program.command("task").description("タスクの操作");
+
+  task
+    .command("worktree <id>")
+    .description("タスクのworktreeのパスを表示する(役目、パス、ブランチ)")
+    .action((id: string) => {
+      const db = openAppDb();
+      try {
+        const t = getTask(db, Number(id));
+        if (!t) throw new Error(`タスク ${id} がありません`);
+        const roles = new Map(listRepos(db, t.projectId).map((r) => [r.id, r.role]));
+        for (const tr of listTaskRepos(db, t.id)) {
+          console.log([roles.get(tr.repoId), tr.worktreePath, tr.branchName].join("\t"));
+        }
+      } finally {
+        db.close();
+      }
+    });
+
   return program;
 }
 
 export async function main(argv: string[]): Promise<void> {
-  await createProgram().parseAsync(argv);
+  try {
+    await createProgram().parseAsync(argv);
+  } catch (e) {
+    console.error(`エラー: ${(e as Error).message}`);
+    process.exitCode = 1;
+  }
 }

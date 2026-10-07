@@ -119,9 +119,13 @@ claude -p
   - worktreeごとに `git config --worktree core.hooksPath ~/.agent-team/hooks`
   - `~/.agent-team/hooks/pre-push` は常に失敗する。それ以外のフック(pre-commit など)は、元のフックの場所に中継する
 - `.git` 内の `hooks` と `config` は、サンドボックスの中から書き換えられない(保護されたパス)。フックの設置はツール側(サンドボックスの外)で行う
-- 要検証(ステップ5): worktreeごとの設定ファイル(`config.worktree`)が、サンドボックスで書き込みから保護されるか。保護されない場合でも、deny の `Bash(git config *)` と通信の遮断で止まる
+- 検証済み(2026-10-08、ステップ5): deny ルールを外した状態でも、サンドボックスの中から次の操作はすべて拒否された。`git config --worktree core.hooksPath ...`(`config.worktree` をロックできない)、`config.worktree` への直接の追記、`git config core.hooksPath ...`(本体の `.git/config`)、データディレクトリの `hooks/pre-push` の上書き。deny の `Bash(git config *)` は、これに重ねる防御として残す
+- 中継先の決め方: リポジトリ本体の設定(`<git-common-dir>/config`)の `core.hooksPath`(husky など)があればそこ、無ければ `<git-common-dir>/hooks`。ユーザーのグローバル設定の `core.hooksPath` は中継しない
 
 ## 6. 実験の記録(2026-10-08)
+
+補足: `claude -p` は標準入力が閉じていないと、3秒待ってから警告を出して進む。ランナーは標準入力を閉じて起動する。
+
 
 一時ディレクトリにgitリポジトリとworktreeを作り、3.2の設定で `claude -p --model haiku` を実行した。
 
