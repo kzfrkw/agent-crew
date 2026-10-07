@@ -6,6 +6,7 @@ tools: [Bash]
 permissions:
   write: artifacts
   bashWritesWorktree: true
+  localServer: true
 verdicts: [passed, failed]
 timeoutSec: 900
 maxBudgetUsd: 0.5

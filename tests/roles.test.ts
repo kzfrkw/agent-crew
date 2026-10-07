@@ -82,6 +82,13 @@ describe("同梱の役割定義", () => {
     expect(writers).toEqual(["implementer"]);
   });
 
+  it("テストでサーバーを起動するため、テストを実行する役割は 127.0.0.1 で待ち受けられる", () => {
+    for (const name of ["implementer", "verifier", "reviewer", "qa", "profiler"]) {
+      expect(roles.get(name)!.permissions.localServer).toBe(true);
+    }
+    expect(roles.get("planner")!.permissions.localServer).toBe(false);
+  });
+
   it("全役割の本文に共通ルールが入っている", () => {
     for (const r of roles.values()) expect(r.prompt).toContain("要約");
   });

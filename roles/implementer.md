@@ -5,6 +5,7 @@ model: sonnet
 tools: [Read, Grep, Glob, Edit, Write, Bash]
 permissions:
   write: worktree
+  localServer: true
 verdicts: [done, blocked, need_human]
 output: impl-notes.md
 timeoutSec: 2400

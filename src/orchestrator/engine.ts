@@ -12,6 +12,7 @@ import {
   updateTaskState,
   type Task,
 } from "../db/store.ts";
+import { installAgentHooks } from "../git/hooks.ts";
 import { branchNameFor, createWorktree, worktreePathFor } from "../git/worktree.ts";
 import type { AppContext } from "./context.ts";
 import { HANDLERS } from "./handlers.ts";
@@ -115,6 +116,8 @@ export async function stepTask(ctx: AppContext, taskId: number): Promise<void> {
 
 /** 進められるタスクが無くなるまで、同時実行数の上限を守って進める */
 export async function runUntilIdle(ctx: AppContext, o: { maxSteps?: number; onStep?: (taskId: number) => void } = {}): Promise<{ steps: number }> {
+  // フックは全worktreeで共有するので、ツールの更新が既存のworktreeにも効くよう毎回書き直す
+  installAgentHooks(ctx.home);
   const active = new Map<number, Promise<void>>();
   let steps = 0;
   const maxSteps = o.maxSteps ?? 500;

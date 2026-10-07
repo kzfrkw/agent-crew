@@ -1,4 +1,5 @@
 import { addEvent, listTaskRepos, type Task } from "../db/store.ts";
+import { commitsSince, headSha, isDirty } from "../git/worktree.ts";
 import type { AppContext } from "./context.ts";
 import { invokeRole, type InvokeResult } from "./invoke.ts";
 import { taskDir } from "./paths.ts";
@@ -32,5 +33,40 @@ const planner: Handler = async (ctx, task) => {
   return outcomeOf(r, "planner", `${dir}/plan.md`);
 };
 
+/** エージェントのコミットを人のコミットと区別するための作者と目印(trailer はフックが付ける) */
+export function agentGitEnv(role: string): Record<string, string> {
+  const name = `agent-crew ${role}`;
+  const email = "agent-crew@localhost";
+  return { GIT_AUTHOR_NAME: name, GIT_AUTHOR_EMAIL: email, GIT_COMMITTER_NAME: name, GIT_COMMITTER_EMAIL: email, AGENT_CREW_ROLE: role };
+}
+
+const implementer: Handler = async (ctx, task) => {
+  const tr = primaryRepo(ctx, task);
+  const dir = taskDir(ctx.home, task.id);
+  const before = headSha(tr.worktreePath, ctx.gitEnv);
+  const r = await invokeRole(ctx, {
+    roleName: "implementer",
+    taskId: task.id,
+    cwd: tr.worktreePath,
+    artifactsDir: dir,
+    prompt: taskPrompt(ctx, task, "implementer"),
+    extraEnv: agentGitEnv("implementer"),
+  });
+  if (r.ok && r.verdict === "done") {
+    // 実装者の申告ではなく、worktree の実際の状態で確かめる
+    if (isDirty(tr.worktreePath, ctx.gitEnv)) {
+      return { event: { type: "run_error", reason: "未コミットの変更が残っています" }, reason: `implementer: 未コミットの変更が残っています(${tr.worktreePath})` };
+    }
+    const commits = commitsSince(tr.worktreePath, before, ctx.gitEnv);
+    if (commits.length === 0) return { event: { type: "run_error", reason: "コミットがありません" }, reason: "implementer: done と判定しましたが、コミットがありません" };
+    addEvent(ctx.db, { taskId: task.id, runId: r.runId, kind: "implemented", payload: { commits: commits.map((c) => ({ sha: c.sha, subject: c.subject })) } });
+    const testCommand = r.extra.testCommand;
+    if (typeof testCommand === "string" && testCommand.trim()) {
+      addEvent(ctx.db, { taskId: task.id, runId: r.runId, kind: "test_command", payload: { command: testCommand.trim() } });
+    }
+  }
+  return outcomeOf(r, "implementer", `${dir}/impl-notes.md`);
+};
+
 /** 状態ごとの処理。まだ無い役割の状態では、タスクは進まない */
-export const HANDLERS: Partial<Record<Role, Handler>> = { planner };
+export const HANDLERS: Partial<Record<Role, Handler>> = { planner, implementer };

@@ -168,3 +168,14 @@ describe("applyEvent", () => {
     expect(existsSync(join(ctx.home, "worktrees", "shop", String(t.id)))).toBe(false);
   });
 });
+
+describe("エージェント用フックの更新", () => {
+  it("実行を始めるたびに、フックを最新の内容に書き直す(古いworktreeにも効く)", async () => {
+    const { writeFileSync: w, readFileSync: r } = await import("node:fs");
+    const ctx = testContext(new ScriptedRunner({}));
+    await approvedProject(ctx);
+    w(join(ctx.home, "hooks", "prepare-commit-msg"), "#!/bin/sh\n# 古い\n");
+    await runUntilIdle(ctx);
+    expect(r(join(ctx.home, "hooks", "prepare-commit-msg"), "utf8")).toContain("Agent-Crew-Role");
+  });
+});

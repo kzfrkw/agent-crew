@@ -26,7 +26,15 @@ const PlannerExtra = z.object({
   testFirstException: z.boolean().describe("テスト先行の例外にするか(理由は plan.md に書く)"),
 });
 
+const ImplementerExtra = z.object({
+  testCommand: z
+    .string()
+    .nullable()
+    .describe("全テストを実行するコマンドを新しく用意・変更した場合だけ書く(テスト基盤整備など)。変えていなければ null"),
+});
+
 export const EXTRA_SCHEMAS: Record<string, z.ZodObject> = {
+  implementer: ImplementerExtra,
   profiler: z.object({ profile: ProfileSchema }),
   planner: PlannerExtra,
 };

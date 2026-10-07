@@ -144,3 +144,19 @@ describe("一時的なworktreeの片付け", () => {
     expect(git(repo, "branch", "--list", "agent-crew/*")).toBe("");
   });
 });
+
+describe("エージェントのコミットへの trailer", () => {
+  it("AGENT_CREW_ROLE があるときだけ、prepare-commit-msg が trailer を付ける(--no-verify でも)", () => {
+    const { wt, created } = setup();
+    writeFileSync(join(wt, "a.txt"), "a");
+    git(wt, "add", ".");
+    sh(wt, "git", ["commit", "-q", "--no-verify", "-m", "by agent"], { ...env, AGENT_CREW_ROLE: "implementer" });
+    writeFileSync(join(wt, "b.txt"), "b");
+    git(wt, "add", ".");
+    git(wt, "commit", "-q", "-m", "by human");
+    expect(commitsSince(wt, created.baseSha, env).map((c) => [c.subject, c.agentRole])).toEqual([
+      ["by agent", "implementer"],
+      ["by human", null],
+    ]);
+  });
+});

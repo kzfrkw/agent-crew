@@ -28,9 +28,15 @@ echo "agent-crew: エージェントのworktreeからの push は禁止されて
 exit 1
 `;
 
+/** エージェントの実行中(AGENT_CREW_ROLE あり)のコミットに trailer を付ける。--no-verify でも動く */
+const ROLE_TRAILER_PRELUDE = `if [ -n "\${AGENT_CREW_ROLE:-}" ] && [ -n "$1" ]; then
+  git interpret-trailers --in-place --if-exists replace --trailer "Agent-Crew-Role: $AGENT_CREW_ROLE" "$1" || true
+fi
+`;
+
 const delegate = (name: string, hooksDir: string) => `#!/bin/sh
 # agent-crew: リポジトリ本来の ${name} フックに中継する
-common=$(git rev-parse --git-common-dir) || exit 0
+${name === "prepare-commit-msg" ? ROLE_TRAILER_PRELUDE : ""}common=$(git rev-parse --git-common-dir) || exit 0
 case "$common" in /*) ;; *) common="$(pwd)/$common" ;; esac
 orig=$(git config --file "$common/config" --get core.hooksPath)
 if [ -z "$orig" ]; then orig="$common/hooks"; fi

@@ -105,6 +105,8 @@ claude -p
 | `worktree` | 実装者 | worktree+成果物ディレクトリ | 作業ディレクトリ(worktree)はそのまま書ける |
 
 - 許可する通信先は、プロファイルと設定ファイルで足す。GitHub のドメインは許可しない
+- `permissions.localServer: true` の役割(実装者、verifier、レビュワー、QA、プロジェクト把握担当)は、`network.allowLocalBinding` と、`localhost` / `127.0.0.1` への接続を許可する。Webアプリのテストはサーバーを 127.0.0.1 で起動して確かめることが多く、許可しないと `listen EPERM` で失敗する(2026-10-08、ステップ10の実機確認で判明)。外部への通信の制限は変わらない
+- エージェント用のフック(`<データ>/hooks`)は全worktreeで共有し、`agent-crew run` を始めるたびに最新の内容に書き直す(ツールを更新したとき、既存のworktreeにも効かせるため)
 
 ## 4. 環境変数(認証情報を渡さない)
 

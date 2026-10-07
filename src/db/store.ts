@@ -293,7 +293,8 @@ export function listArtifacts(db: Db, taskId: number): Artifact[] {
 
 // ---- approvals ----
 
-export type ApprovalKind = "plan" | "design" | "final" | "review" | "qa";
+/** tests はオーケストレーターによるテストの再実行の結果 */
+export type ApprovalKind = "plan" | "design" | "final" | "review" | "qa" | "tests";
 export type Approval = {
   id: number;
   taskId: number;

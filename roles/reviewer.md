@@ -5,6 +5,7 @@ model: opus
 tools: [Read, Grep, Glob, Bash, Write]
 permissions:
   write: artifacts
+  localServer: true
 verdicts: [approve, changes_requested, need_human]
 output: review.md
 timeoutSec: 1200
