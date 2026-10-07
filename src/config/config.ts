@@ -25,6 +25,10 @@ const ConfigSchema = z.object({
       allowedDomains: z.array(z.string()).default(["registry.npmjs.org"]),
     })
     .prefault({}),
+  /** 役割ごとのモデル・effort の上書き(roles/*.md を書き換えずに調整する) */
+  roles: z
+    .record(z.string(), z.object({ model: z.string().optional(), effort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional() }))
+    .default({}),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

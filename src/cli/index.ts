@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { Command } from "commander";
 import { openAppDb } from "../app.ts";
+import { loadConfig } from "../config/config.ts";
+import { applyRoleOverrides, loadRoles } from "../roles/roles.ts";
 import { getTask, listRepos, listTaskRepos } from "../db/store.ts";
 import { doctor, formatResults, probeSandbox } from "../doctor/index.ts";
 
@@ -27,6 +29,16 @@ export function createProgram(): Command {
       }
       console.log(opts.json ? JSON.stringify(results, null, 2) : formatResults(results));
       if (results.some((r) => r.level === "error")) process.exitCode = 1;
+    });
+
+  program
+    .command("roles")
+    .description("役割定義(roles/*.md と設定の上書き)を一覧する")
+    .action(() => {
+      const roles = applyRoleOverrides(loadRoles(), loadConfig().roles);
+      for (const r of roles.values()) {
+        console.log([r.name.padEnd(12), r.model.padEnd(8), r.permissions.write.padEnd(10), r.verdicts.join("/"), r.output ?? "-"].join(" "));
+      }
     });
 
   const task = program.command("task").description("タスクの操作");

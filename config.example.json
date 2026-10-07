@@ -7,6 +7,13 @@
     "maxReviewRounds": 3
   },
   "sandbox": {
-    "allowedDomains": ["registry.npmjs.org"]
+    "allowedDomains": [
+      "registry.npmjs.org"
+    ]
+  },
+  "roles": {
+    "planner": {
+      "model": "opus"
+    }
   }
 }
