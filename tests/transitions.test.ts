@@ -186,6 +186,30 @@ describe("人への引き継ぎ(human_working)", () => {
   });
 });
 
+describe("ベース更新", () => {
+  it("実装以降の段階でベースを取り込んだら、レビューからやり直す(承認を失効)", () => {
+    for (const from of ["reviewing", "qa", "awaiting_final_approval", "integrating"] as TaskState[]) {
+      const r = next(snap(from), { type: "base_updated" });
+      expect(r).toMatchObject({ state: "reviewing" });
+      expect(r.effects).toEqual([{ type: "invalidate_approvals", kinds: ["review", "qa", "final"] }]);
+    }
+  });
+  it("needs_input(実装以降から)でも同じ", () => {
+    expect(next(snap("needs_input", { heldFromState: "integrating" }), { type: "base_updated" }).state).toBe("reviewing");
+  });
+  it("実装前・実装中は状態を変えない", () => {
+    for (const from of ["planning", "awaiting_plan_approval", "implementing"] as TaskState[]) {
+      expect(next(snap(from), { type: "base_updated" })).toMatchObject({ state: from, effects: [] });
+    }
+  });
+  it("衝突したら needs_input", () => {
+    expect(next(snap("awaiting_final_approval"), { type: "base_conflict", reason: "x" })).toMatchObject({ state: "needs_input", heldFromState: "awaiting_final_approval" });
+  });
+  it("人が作業中は受け付けない", () => {
+    expect(() => next(snap("human_working", { heldFromState: "qa" }), { type: "base_updated" })).toThrow(TransitionError);
+  });
+});
+
 describe("テスト基盤のゲート", () => {
   it("テスト基盤が整うまで、通常タスクは開始できない", () => {
     expect(() => next(snap("queued"), { type: "start" }, ctx({ testGateOpen: false }))).toThrow(/テスト基盤/);

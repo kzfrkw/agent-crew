@@ -3,6 +3,7 @@ import type { Command } from "commander";
 import { createTask, getProject, getTask, listArtifacts, listEvents, listRepos, listTaskRepos, listTasks, type Task } from "../db/store.ts";
 import { createAppContext, type AppContext } from "../orchestrator/context.ts";
 import { latestNeedsInputReason, runActive, runUntilIdle } from "../orchestrator/engine.ts";
+import { returnTask, takeoverTask, updateBase } from "../orchestrator/handoff.ts";
 import { answerTask, approveTask, cancelTask, rejectTask } from "../orchestrator/human.ts";
 import { acquireRunLock, recoverStaleRuns } from "../orchestrator/lock.ts";
 import { mustProject } from "../orchestrator/projects.ts";
@@ -135,6 +136,43 @@ export function registerTaskCommands(program: Command): void {
       withContext((ctx) => {
         cancelTask(ctx, mustTask(ctx, id).id);
         console.log(`取り消しました: #${id}`);
+      }),
+    );
+
+  task
+    .command("takeover <id>")
+    .description("人が引き取る(エージェントを止めてロックし、worktree で手作業する)")
+    .action((id: string) =>
+      withContext((ctx) => {
+        const { worktrees } = takeoverTask(ctx, mustTask(ctx, id).id);
+        console.log(`引き取りました: #${id}。エージェントは起動しません。次の worktree で作業し、変更はコミットしてください:`);
+        for (const w of worktrees) console.log(`  code ${w}`);
+        console.log(`終わったら agent-crew task return ${id} でエージェントに戻します`);
+      }),
+    );
+
+  task
+    .command("return <id>")
+    .description("エージェントに戻す(未コミットの変更があれば拒否。人の変更があればレビューからやり直す)")
+    .action((id: string) =>
+      withContext((ctx) => {
+        const r = returnTask(ctx, mustTask(ctx, id).id);
+        console.log(`戻しました: #${id}(${STATE_LABELS[getTask(ctx.db, Number(id))!.state]})`);
+        if (r.humanChanged) {
+          console.log(`人の変更 ${r.commits.length} 件を記録しました(human-changes.md)。レビュー・QA・最終確認をやり直します`);
+          console.log("方針を変えた場合は plan.md を直すか、task reject で計画からやり直してください");
+        }
+      }),
+    );
+
+  task
+    .command("update-base <id>")
+    .description("ベース(既定ブランチ)をタスクのブランチに取り込む")
+    .action((id: string) =>
+      withContext((ctx) => {
+        const r = updateBase(ctx, mustTask(ctx, id).id);
+        console.log(r.message);
+        if (r.conflict) process.exitCode = 1;
       }),
     );
 

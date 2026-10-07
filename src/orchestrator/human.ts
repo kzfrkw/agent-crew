@@ -11,7 +11,7 @@ export function humanNotesPath(home: string, taskId: number): string {
   return join(taskDir(home, taskId), "human-notes.md");
 }
 
-function appendHumanNote(ctx: AppContext, taskId: number, heading: string, text: string): void {
+export function appendHumanNote(ctx: AppContext, taskId: number, heading: string, text: string): void {
   mkdirSync(taskDir(ctx.home, taskId), { recursive: true });
   appendFileSync(humanNotesPath(ctx.home, taskId), `\n## ${new Date().toISOString()} ${heading}\n\n${text.trim()}\n`);
 }

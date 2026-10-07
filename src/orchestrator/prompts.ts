@@ -55,6 +55,7 @@ export function taskPrompt(ctx: AppContext, task: Task, role: Role, extra: strin
     ...ref("テストの再実行結果", join(tdir, "verify-report.md")),
     ...ref("レビュー結果", join(tdir, "review.md")),
     ...ref("QA結果", join(tdir, "qa-report.md")),
+    ...ref("人の変更(人が引き取って直した内容)", join(tdir, "human-changes.md")),
     ...ref("人からのコメント・回答(最優先で従う)", join(tdir, "human-notes.md")),
     "",
     ...(profile

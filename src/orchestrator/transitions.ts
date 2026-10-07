@@ -34,6 +34,9 @@ const VERDICTS: Record<Role, Record<string, Outcome>> = {
 
 /** 人が変更して戻したとき、レビューからやり直す対象になる段階(実装が存在する段階) */
 const AFTER_IMPLEMENTATION: TaskState[] = ["implementing", "reviewing", "qa", "awaiting_final_approval", "integrating"];
+/** ベースを取り込んだとき、レビューからやり直す段階(レビュー済みの内容が変わるため) */
+const REVIEWED: TaskState[] = ["reviewing", "qa", "awaiting_final_approval", "integrating"];
+const RESTART_REVIEW: Effect[] = [{ type: "invalidate_approvals", kinds: ["review", "qa", "final"] }];
 
 export type TaskEvent =
   | { type: "start" }
@@ -49,6 +52,10 @@ export type TaskEvent =
   | { type: "run_error"; reason: string }
   | { type: "fail"; reason: string }
   | { type: "retry" }
+  /** ベース(既定ブランチ)を取り込んだ。実装以降の段階なら、承認が成り立たないのでレビューからやり直す */
+  | { type: "base_updated" }
+  /** ベースの取り込みで衝突した。人が解決する */
+  | { type: "base_conflict"; reason: string }
   | { type: "cancel" };
 
 export type TaskSnapshot = { state: TaskState; heldFromState: TaskState | null; reviewRounds: number };
@@ -142,10 +149,7 @@ export function transition(t: TaskSnapshot, e: TaskEvent, c: TransitionContext):
       if (t.state !== "human_working" || !t.heldFromState) fail("人が作業中ではありません");
       const from = t.heldFromState!;
       if (e.humanChanged && AFTER_IMPLEMENTATION.includes(from)) {
-        return to("reviewing", {
-          reviewRounds: 0,
-          effects: [{ type: "invalidate_approvals", kinds: ["review", "qa", "final"] }],
-        });
+        return to("reviewing", { reviewRounds: 0, effects: RESTART_REVIEW });
       }
       return to(from);
     }
@@ -154,6 +158,15 @@ export function transition(t: TaskSnapshot, e: TaskEvent, c: TransitionContext):
     case "run_error":
       if (!roleForState(t.state)) fail("エージェントが動く状態ではありません");
       return hold(t.state);
+
+    case "base_updated": {
+      const stage = t.state === "needs_input" ? t.heldFromState : t.state;
+      if (stage && REVIEWED.includes(stage)) return to("reviewing", { effects: RESTART_REVIEW });
+      return to(t.state, { heldFromState: t.heldFromState });
+    }
+
+    case "base_conflict":
+      return hold(t.state === "needs_input" ? t.heldFromState ?? t.state : t.state);
 
     case "retry":
       if (t.state !== "failed" || !t.heldFromState) fail("失敗したタスクではありません");
