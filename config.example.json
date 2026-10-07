@@ -1,0 +1,12 @@
+{
+  "concurrency": 1,
+  "claudePath": "claude",
+  "limits": {
+    "runTimeoutSec": 1800,
+    "runMaxBudgetUsd": 5,
+    "maxReviewRounds": 3
+  },
+  "sandbox": {
+    "allowedDomains": ["registry.npmjs.org"]
+  }
+}

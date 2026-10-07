@@ -87,7 +87,11 @@
 
 - clone後に1回: `sh scripts/install-hooks.sh`(pre-pushフックを有効にする)
 - 安全設定の検査: `sh scripts/verify-safety.sh`
-- (ビルド・テスト・起動はステップ1以降で追記する)
+- セットアップ: `npm install`(Node 24 LTS以上。ビルド工程は無く、TypeScriptをNodeの型除去で直接実行する)
+- テスト: `npm test`(vitest)
+- 型チェック: `npm run typecheck`(tsc --noEmit)。まとめて `npm run check`
+- CLI: `npx agent-crew --help`(または `./bin/agent-crew.js`)
+- TypeScriptの制約: 型除去で動く構文だけを使う(`enum`・`namespace`・パラメータプロパティは不可。importは `.ts` 拡張子付き)
 
 ## 別PCでの運用を壊さないために
 

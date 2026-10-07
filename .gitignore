@@ -1,1 +1,5 @@
 .DS_Store
+node_modules/
+*.log
+# 実データ・PC固有の設定はリポジトリ外(~/.agent-team/)に置く
+.agent-team/
