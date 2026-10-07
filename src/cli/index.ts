@@ -1,10 +1,12 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { Command } from "commander";
 import { openAppDb } from "../app.ts";
 import { loadConfig } from "../config/config.ts";
 import { applyRoleOverrides, loadRoles } from "../roles/roles.ts";
 import { registerProjectCommands } from "./project.ts";
 import { registerTaskCommands } from "./task.ts";
+import { startServer } from "../server/server.ts";
+import { dataHome } from "../config/config.ts";
 import { getTask, listRepos, listTaskRepos } from "../db/store.ts";
 import { doctor, formatResults, probeSandbox } from "../doctor/index.ts";
 
@@ -65,6 +67,17 @@ export function createProgram(): Command {
     });
 
   registerTaskCommands(program);
+
+  program
+    .command("serve")
+    .description("状況を見る読み取り専用のページを 127.0.0.1 で開く")
+    .option("--port <port>", "ポート", "4300")
+    .action(async (o: { port: string }) => {
+      // DB のパスは実体のパスで記録しているので、そろえる
+      const home = existsSync(dataHome()) ? realpathSync(dataHome()) : dataHome();
+      const s = await startServer({ home, port: Number(o.port) });
+      console.log(`${s.url} で表示しています(127.0.0.1 のみ。Ctrl-C で終了)`);
+    });
 
   return program;
 }

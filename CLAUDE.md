@@ -93,6 +93,10 @@
 - CLI: `npx agent-crew --help`(または `./bin/agent-crew.js`)
 - 前提の検査: `npx agent-crew doctor`(`--json` 可。エラーがあれば終了コード1)。データディレクトリは `~/.agent-team`(`AGENT_CREW_HOME` で変更可)
 - 安全設定の実機検査: `npx agent-crew doctor --probe-sandbox`(claude -p を haiku で1回動かす。利用枠を少し使う。ランナーや安全設定を変えたら必ず実行する)
+- 基本の流れ: `project add <path> --name <n>` → `project approve <n>` → `task create --project <n> --title ... --body-file ...` → `run` → `task approve <id> --kind plan` → `run` → `task approve <id> --kind final` → `run`。人の対応待ちは `task list`(★)と `task show <id>`
+- 人への引き継ぎ: `task takeover <id>` → worktree で作業してコミット → `task return <id>`。ベースへの追従: `task update-base <id>`
+- 見える化ページ: `npx agent-crew serve`(http://127.0.0.1:4300/ 、読み取り専用)
+- 一周の通し確認: `npm run e2e`(実機の claude を使う。利用枠を消費する。結果は docs/e2e-log.md)
 - TypeScriptの制約: 型除去で動く構文だけを使う(`enum`・`namespace`・パラメータプロパティは不可。importは `.ts` 拡張子付き)
 
 ## 別PCでの運用を壊さないために
