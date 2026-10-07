@@ -10,7 +10,14 @@
     "verbatimModuleSyntax": true,
     "noUncheckedIndexedAccess": true,
     "skipLibCheck": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["src", "tests", "bin"]
+  "include": [
+    "src",
+    "tests",
+    "bin",
+    "scripts"
+  ]
 }

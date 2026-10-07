@@ -13,7 +13,8 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm test"
+    "check": "npm run typecheck && npm test",
+    "e2e": "node scripts/e2e.ts"
   },
   "dependencies": {
     "commander": "^15.0.0",
