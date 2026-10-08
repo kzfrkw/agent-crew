@@ -60,10 +60,15 @@ function describeEvent(e: TaskEvent): string {
   }
 }
 
+/** 直近の needs_input / failed の理由 */
+export function latestReason(db: Db, taskId: number, kind: "needs_input" | "failed"): string | undefined {
+  const ev = listEvents(db, taskId, 1000).filter((e) => e.kind === kind).at(-1);
+  return (ev?.payload as { reason?: string } | undefined)?.reason;
+}
+
 /** 直近の needs_input の理由 */
 export function latestNeedsInputReason(db: Db, taskId: number): string | undefined {
-  const ev = listEvents(db, taskId, 1000).filter((e) => e.kind === "needs_input").at(-1);
-  return (ev?.payload as { reason?: string } | undefined)?.reason;
+  return latestReason(db, taskId, "needs_input");
 }
 
 /** エージェントが進められるタスク */

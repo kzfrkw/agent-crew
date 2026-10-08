@@ -1,10 +1,9 @@
-import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
-import { extname, join, normalize, sep } from "node:path";
-import { DatabaseSync } from "node:sqlite";
-import { appDbPath } from "../app.ts";
+import { sep } from "node:path";
 import type { Db } from "../db/connection.ts";
+import { handleApi, HttpError, openReadOnly } from "./api.ts";
+import { send, serveFile } from "./files.ts";
 import { getTask, listArtifacts, listEvents, listProjects, listRepos, listTaskRepos, listTasks } from "../db/store.ts";
 import { latestNeedsInputReason, runActive } from "../orchestrator/engine.ts";
 import { NEEDS_HUMAN, STATE_LABELS } from "../orchestrator/states.ts";
@@ -15,31 +14,11 @@ import { NEEDS_HUMAN, STATE_LABELS } from "../orchestrator/states.ts";
  */
 
 const HOST = "127.0.0.1";
-/** 配信してよいのは成果物の置き場所だけ(DB・設定・worktree は配信しない) */
-const SERVABLE_DIRS = ["tasks", "projects", "runs"];
-const TYPES: Record<string, string> = {
-  ".md": "text/plain; charset=utf-8",
-  ".txt": "text/plain; charset=utf-8",
-  ".log": "text/plain; charset=utf-8",
-  ".patch": "text/plain; charset=utf-8",
-  ".jsonl": "text/plain; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".gif": "image/gif",
-  ".mp4": "video/mp4",
-};
 
 export type RunningServer = { url: string; address: string; port: number; close: () => Promise<void> };
 
 const esc = (v: unknown) =>
   String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
-
-function openReadOnly(home: string): Db | undefined {
-  const path = appDbPath(home);
-  return existsSync(path) ? new DatabaseSync(path, { readOnly: true }) : undefined;
-}
 
 function page(title: string, body: string, refresh = true): string {
   return `<!doctype html>
@@ -134,39 +113,29 @@ ${t.state === "human_working" ? `<div class="box human">人が作業中です。
   }
 }
 
-/** /files/<相対パス> を配信する。データディレクトリの成果物の置き場所の外には出さない */
-function serveFile(home: string, rawPath: string, res: ServerResponse): void {
-  let rel: string;
-  try {
-    rel = decodeURIComponent(rawPath);
-  } catch {
-    return send(res, 400, "不正なパスです");
-  }
-  const normalized = normalize(rel);
-  if (rel.includes("\0") || normalized.startsWith("..") || normalized.split(sep).includes("..") || !SERVABLE_DIRS.includes(normalized.split(sep)[0]!)) {
-    return send(res, 403, "配信できない場所です");
-  }
-  const target = join(home, normalized);
-  if (!existsSync(target) || !statSync(target).isFile()) return send(res, 404, "ありません");
-  const real = realpathSync(target);
-  const allowed = SERVABLE_DIRS.map((d) => join(realpathSync(home), d) + sep);
-  if (!allowed.some((dir) => real.startsWith(dir))) return send(res, 403, "配信できない場所です");
-  res.writeHead(200, { "content-type": TYPES[extname(real).toLowerCase()] ?? "application/octet-stream", "x-content-type-options": "nosniff" });
-  res.end(readFileSync(real));
-}
-
-function send(res: ServerResponse, status: number, text: string, type = "text/plain; charset=utf-8"): void {
-  res.writeHead(status, { "content-type": type, "x-content-type-options": "nosniff" });
-  res.end(text);
+/** DNS リバインディング対策: 127.0.0.1 / localhost 宛ての要求だけを受け付ける */
+function hostAllowed(host: string | undefined, port: number): boolean {
+  return host === `${HOST}:${port}` || host === `localhost:${port}`;
 }
 
 function handle(home: string, req: IncomingMessage, res: ServerResponse): void {
+  const port = (req.socket.localPort ?? 0);
+  if (!hostAllowed(req.headers.host, port)) return send(res, 403, "127.0.0.1 または localhost で開いてください");
   if (req.method !== "GET" && req.method !== "HEAD") {
     res.setHeader("allow", "GET, HEAD");
     return send(res, 405, "読み取り専用です(操作は CLI で行います)");
   }
-  const path = (req.url ?? "/").split("?")[0]!;
+  const url = new URL(req.url ?? "/", "http://localhost");
+  const path = url.pathname;
   try {
+    if (path.startsWith("/api/")) {
+      try {
+        return send(res, 200, JSON.stringify(handleApi(home, path.slice("/api/".length), url.searchParams)), "application/json; charset=utf-8");
+      } catch (e) {
+        if (e instanceof HttpError) return send(res, e.status, JSON.stringify({ error: e.message }), "application/json; charset=utf-8");
+        throw e;
+      }
+    }
     if (path === "/") return send(res, 200, indexPage(home), "text/html; charset=utf-8");
     const task = /^\/tasks\/(\d+)$/.exec(path);
     if (task) {

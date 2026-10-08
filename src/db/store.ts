@@ -241,6 +241,46 @@ export function finishRun(
   );
 }
 
+export type RunRow = Run & {
+  verdict: string | null;
+  summary: string | null;
+  error: string | null;
+  costUsd: number | null;
+  startedAt: string;
+  endedAt: string | null;
+};
+
+const toRun = (r: Row): RunRow => ({
+  id: r.id as number,
+  taskId: (r.task_id as number | null) ?? null,
+  projectId: (r.project_id as number | null) ?? null,
+  role: r.role as string,
+  model: (r.model as string | null) ?? null,
+  state: r.state as RunState,
+  verdict: (r.verdict as string | null) ?? null,
+  summary: (r.summary as string | null) ?? null,
+  error: (r.error as string | null) ?? null,
+  costUsd: (r.cost_usd as number | null) ?? null,
+  startedAt: r.started_at as string,
+  endedAt: (r.ended_at as string | null) ?? null,
+});
+
+export function getRun(db: Db, id: number): RunRow | undefined {
+  const r = db.prepare("SELECT * FROM runs WHERE id = ?").get(id) as Row | undefined;
+  return r && toRun(r);
+}
+
+/** 実行の一覧(id 昇順)。projectId はタスクに属さない実行(プロジェクト把握担当)の絞り込み */
+export function listRuns(db: Db, f: { taskId?: number; projectId?: number; state?: RunState }): RunRow[] {
+  const where: string[] = [];
+  const args: (number | string)[] = [];
+  if (f.taskId !== undefined) (where.push("task_id = ?"), args.push(f.taskId));
+  if (f.projectId !== undefined) (where.push("project_id = ?"), args.push(f.projectId));
+  if (f.state !== undefined) (where.push("state = ?"), args.push(f.state));
+  const sql = `SELECT * FROM runs ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY id`;
+  return (db.prepare(sql).all(...args) as Row[]).map(toRun);
+}
+
 export type Event = { id: number; taskId: number | null; runId: number | null; kind: string; payload: unknown; createdAt: string };
 
 export function addEvent(db: Db, e: { taskId?: number; runId?: number; kind: string; payload: unknown }): void {
@@ -253,21 +293,61 @@ export function addEvent(db: Db, e: { taskId?: number; runId?: number; kind: str
   );
 }
 
+const toEvent = (r: Row): Event => ({
+  id: r.id as number,
+  taskId: (r.task_id as number | null) ?? null,
+  runId: (r.run_id as number | null) ?? null,
+  kind: r.kind as string,
+  payload: JSON.parse(r.payload as string),
+  createdAt: r.created_at as string,
+});
+
 export function listEvents(db: Db, taskId: number, limit = 200): Event[] {
-  const rows = db
-    .prepare("SELECT * FROM (SELECT * FROM events WHERE task_id = ? ORDER BY id DESC LIMIT ?) ORDER BY id")
-    .all(taskId, limit) as Row[];
-  return rows.map((r) => ({
-    id: r.id as number,
-    taskId: (r.task_id as number | null) ?? null,
-    runId: (r.run_id as number | null) ?? null,
-    kind: r.kind as string,
-    payload: JSON.parse(r.payload as string),
-    createdAt: r.created_at as string,
-  }));
+  return queryEvents(db, { taskId, limit });
 }
 
-export type Artifact = { id: number; taskId: number | null; runId: number | null; kind: string; path: string; verdict: string | null };
+/**
+ * イベントを id 昇順で返す。after を指定すればそれより後を先頭から limit 件、
+ * 指定しなければ最新の limit 件。
+ */
+export function queryEvents(db: Db, f: { after?: number; taskId?: number; runId?: number; limit?: number }): Event[] {
+  const where: string[] = [];
+  const args: number[] = [];
+  if (f.after !== undefined) (where.push("id > ?"), args.push(f.after));
+  if (f.taskId !== undefined) (where.push("task_id = ?"), args.push(f.taskId));
+  if (f.runId !== undefined) (where.push("run_id = ?"), args.push(f.runId));
+  const cond = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  const limit = f.limit ?? 200;
+  const sql =
+    f.after !== undefined
+      ? `SELECT * FROM events ${cond} ORDER BY id LIMIT ?`
+      : `SELECT * FROM (SELECT * FROM events ${cond} ORDER BY id DESC LIMIT ?) ORDER BY id`;
+  return (db.prepare(sql).all(...args, limit) as Row[]).map(toEvent);
+}
+
+export function lastEventId(db: Db): number {
+  return (db.prepare("SELECT COALESCE(MAX(id), 0) AS id FROM events").get() as { id: number }).id;
+}
+
+export type Artifact = {
+  id: number;
+  taskId: number | null;
+  runId: number | null;
+  kind: string;
+  path: string;
+  verdict: string | null;
+  createdAt: string;
+};
+
+const toArtifact = (r: Row): Artifact => ({
+  id: r.id as number,
+  taskId: (r.task_id as number | null) ?? null,
+  runId: (r.run_id as number | null) ?? null,
+  kind: r.kind as string,
+  path: r.path as string,
+  verdict: (r.verdict as string | null) ?? null,
+  createdAt: r.created_at as string,
+});
 
 export function addArtifact(db: Db, a: { taskId?: number; runId?: number; kind: string; path: string; verdict?: string }): void {
   db.prepare("INSERT INTO artifacts (task_id, run_id, kind, path, verdict, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(
@@ -281,14 +361,16 @@ export function addArtifact(db: Db, a: { taskId?: number; runId?: number; kind: 
 }
 
 export function listArtifacts(db: Db, taskId: number): Artifact[] {
-  return (db.prepare("SELECT * FROM artifacts WHERE task_id = ? ORDER BY id").all(taskId) as Row[]).map((r) => ({
-    id: r.id as number,
-    taskId: (r.task_id as number | null) ?? null,
-    runId: (r.run_id as number | null) ?? null,
-    kind: r.kind as string,
-    path: r.path as string,
-    verdict: (r.verdict as string | null) ?? null,
-  }));
+  return (db.prepare("SELECT * FROM artifacts WHERE task_id = ? ORDER BY id").all(taskId) as Row[]).map(toArtifact);
+}
+
+export function getArtifact(db: Db, id: number): Artifact | undefined {
+  const r = db.prepare("SELECT * FROM artifacts WHERE id = ?").get(id) as Row | undefined;
+  return r && toArtifact(r);
+}
+
+export function listRunArtifacts(db: Db, runId: number): Artifact[] {
+  return (db.prepare("SELECT * FROM artifacts WHERE run_id = ? ORDER BY id").all(runId) as Row[]).map(toArtifact);
 }
 
 // ---- approvals ----
@@ -312,6 +394,22 @@ export function addApproval(
   db.prepare(
     "INSERT INTO approvals (task_id, repo_id, kind, result, commit_sha, comment, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
   ).run(a.taskId, a.repoId ?? null, a.kind, a.result, a.commitSha ?? null, a.comment ?? null, now());
+}
+
+/** 失効したものも含めたすべての承認(表示用) */
+export function listAllApprovals(db: Db, taskId: number): (Approval & { createdAt: string; invalidatedAt: string | null })[] {
+  const rows = db.prepare("SELECT * FROM approvals WHERE task_id = ? ORDER BY id").all(taskId) as Row[];
+  return rows.map((r) => ({
+    id: r.id as number,
+    taskId: r.task_id as number,
+    repoId: (r.repo_id as number | null) ?? null,
+    kind: r.kind as ApprovalKind,
+    result: r.result as Approval["result"],
+    commitSha: (r.commit_sha as string | null) ?? null,
+    comment: (r.comment as string | null) ?? null,
+    createdAt: r.created_at as string,
+    invalidatedAt: (r.invalidated_at as string | null) ?? null,
+  }));
 }
 
 /** 失効していない承認(人の変更やコミットの追加で失効したものを除く) */
