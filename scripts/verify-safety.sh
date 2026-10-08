@@ -30,6 +30,6 @@ else
 fi
 
 [ -f docs/safety.md ] && ok "docs/safety.md がある" || ng "docs/safety.md が無い"
-grep -q '^# AI開発チーム基盤 設計メモ (v0.7)' docs/design-memo.md && ok "設計メモ v0.7" || ng "設計メモが v0.7 になっていない"
+grep -Eq '^# AI開発チーム基盤 設計メモ \(v0\.([7-9]|[1-9][0-9])\)' docs/design-memo.md && ok "設計メモ v0.7 以降" || ng "設計メモが v0.7 以降になっていない"
 
 exit $fail
