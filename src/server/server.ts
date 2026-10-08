@@ -4,6 +4,7 @@ import { sep } from "node:path";
 import type { Db } from "../db/connection.ts";
 import { handleApi, HttpError, openReadOnly } from "./api.ts";
 import { send, serveFile } from "./files.ts";
+import { StreamHub } from "./stream.ts";
 import { getTask, listArtifacts, listEvents, listProjects, listRepos, listTaskRepos, listTasks } from "../db/store.ts";
 import { latestNeedsInputReason, runActive } from "../orchestrator/engine.ts";
 import { NEEDS_HUMAN, STATE_LABELS } from "../orchestrator/states.ts";
@@ -118,7 +119,7 @@ function hostAllowed(host: string | undefined, port: number): boolean {
   return host === `${HOST}:${port}` || host === `localhost:${port}`;
 }
 
-function handle(home: string, req: IncomingMessage, res: ServerResponse): void {
+function handle(home: string, hub: StreamHub, req: IncomingMessage, res: ServerResponse): void {
   const port = (req.socket.localPort ?? 0);
   if (!hostAllowed(req.headers.host, port)) return send(res, 403, "127.0.0.1 または localhost で開いてください");
   if (req.method !== "GET" && req.method !== "HEAD") {
@@ -128,6 +129,7 @@ function handle(home: string, req: IncomingMessage, res: ServerResponse): void {
   const url = new URL(req.url ?? "/", "http://localhost");
   const path = url.pathname;
   try {
+    if (path === "/api/stream") return hub.add(req, res);
     if (path.startsWith("/api/")) {
       try {
         return send(res, 200, JSON.stringify(handleApi(home, path.slice("/api/".length), url.searchParams)), "application/json; charset=utf-8");
@@ -149,8 +151,10 @@ function handle(home: string, req: IncomingMessage, res: ServerResponse): void {
   }
 }
 
-export function startServer(o: { home: string; port: number }): Promise<RunningServer> {
-  const server = createServer((req, res) => handle(o.home, req, res));
+/** pollMs は SSE が DB の変化を調べる間隔(既定1秒) */
+export function startServer(o: { home: string; port: number; pollMs?: number }): Promise<RunningServer> {
+  const hub = new StreamHub(o.home, o.pollMs ?? 1000);
+  const server = createServer((req, res) => handle(o.home, hub, req, res));
   return new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(o.port, HOST, () => {
@@ -159,7 +163,12 @@ export function startServer(o: { home: string; port: number }): Promise<RunningS
         url: `http://${HOST}:${addr.port}/`,
         address: addr.address,
         port: addr.port,
-        close: () => new Promise((r) => server.close(() => r())),
+        close: () =>
+          new Promise((r) => {
+            hub.close();
+            server.close(() => r());
+            server.closeAllConnections();
+          }),
       });
     });
   });
