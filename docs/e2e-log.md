@@ -32,3 +32,35 @@
 
 観察(2026-10-08): reviewer の合計時間が 608 秒と長かった(2回分)。作業ディレクトリを消したため原因は未調査。次回は `E2E_KEEP=1` で残し、`runs/<id>/stream.jsonl` で、終わらないコマンドや待機が無かったかを確認する。
 
+## 2026-10-08T22:55:58.797Z(モデル: sonnet、引き継ぎあり)
+
+- 所要時間: 3分
+- 費用(見積もり)の合計: $0.825
+
+| 役割 | モデル | 回数 | 費用 | 秒 |
+|---|---|---|---|---|
+| profiler | sonnet | 1 | $0.078 | 15 |
+| planner | sonnet | 1 | $0.118 | 28 |
+| implementer | sonnet | 1 | $0.122 | 27 |
+| verifier | haiku | 2 | $0.063 | 26 |
+| reviewer | sonnet | 2 | $0.148 | 22 |
+| qa | sonnet | 2 | $0.163 | 38 |
+| integrator | sonnet | 1 | $0.133 | 18 |
+
+- ✓ タスクが完了
+- ✓ 成果物 plan
+- ✓ 成果物 impl-notes
+- ✓ 成果物 review
+- ✓ 成果物 qa-report
+- ✓ 成果物 pr-draft
+- ✓ ローカルブランチ
+- ✓ remote に push されていない
+- ✓ エージェントのコミットに trailer
+- ✓ 人のコミットを区別
+
+コミット:
+- 一覧APIから在庫0のアイテムを除外する(agent-crew implementer)
+- docs: 一覧の仕様を README に追記(E2E Human)
+
+
+観察(2026-10-09): GUI(`agent-crew serve`)を並べて確認した。reviewer は2回で合計22秒で、前回のような長時間化は再現しなかった。
