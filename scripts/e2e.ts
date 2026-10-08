@@ -7,6 +7,9 @@
  *   E2E_MODEL    全役割のモデルを上書きする(既定 sonnet。"roles" なら roles/*.md の値をそのまま使う)
  *   E2E_HANDOFF  0 にすると、人への引き継ぎ(takeover → 人のコミット → return)を省く
  *   E2E_KEEP     1 にすると、成功しても作業ディレクトリを残す
+ *
+ * プロジェクト把握担当がテスト基盤を「不十分」と判断すると整備タスクが自動で作られるが、
+ * 通し確認ではチケットの一周に絞るため、例外を許可して整備タスクは取り消す。
  */
 import { execFileSync } from "node:child_process";
 import { appendFileSync, cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
@@ -125,15 +128,17 @@ async function main(): Promise<void> {
   log(`作業ディレクトリ: ${work}`);
   setup();
   cli("project", "add", repo, "--name", "sample");
-  cli("project", "approve", "sample");
+  const approved = cli("project", "approve", "sample", "--allow-without-tests");
+  const infra = /整備タスクを作りました: #(\d+)/.exec(approved);
+  if (infra) cli("task", "cancel", infra[1]!);
 
   const body = join(work, "ticket.md");
   writeFileSync(
     body,
     "在庫が0のアイテムは、一覧APIに出さないでほしい。\n\n- GET /api/items は stock が 0 のアイテムを含めない\n- GET /api/items/:id は、在庫が0でもこれまでどおり返す\n",
   );
-  cli("task", "create", "--project", "sample", "--title", "在庫0のアイテムを一覧から除外する", "--body-file", body);
-  const id = 1;
+  const created = cli("task", "create", "--project", "sample", "--title", "在庫0のアイテムを一覧から除外する", "--body-file", body);
+  const id = Number(/#(\d+)/.exec(created)![1]);
 
   cli("run");
   expectState(id, "awaiting_plan_approval");
