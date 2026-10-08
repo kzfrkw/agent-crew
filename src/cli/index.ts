@@ -5,6 +5,7 @@ import { loadConfig } from "../config/config.ts";
 import { applyRoleOverrides, loadRoles } from "../roles/roles.ts";
 import { registerProjectCommands } from "./project.ts";
 import { registerTaskCommands } from "./task.ts";
+import { buildGui, guiBuildState } from "../server/gui-build.ts";
 import { startServer } from "../server/server.ts";
 import { dataHome } from "../config/config.ts";
 import { getTask, listRepos, listTaskRepos } from "../db/store.ts";
@@ -70,9 +71,15 @@ export function createProgram(): Command {
 
   program
     .command("serve")
-    .description("状況を見る読み取り専用のページを 127.0.0.1 で開く")
+    .description("状況を見る読み取り専用の GUI を 127.0.0.1 で開く")
     .option("--port <port>", "ポート", "4300")
-    .action(async (o: { port: string }) => {
+    .option("--no-build", "GUI のビルドが古くてもビルドし直さない")
+    .action(async (o: { port: string; build: boolean }) => {
+      const state = guiBuildState();
+      if (state !== "ok" && o.build) {
+        console.error(state === "missing" ? "GUI をビルドしています…" : "GUI のソースが更新されているので、ビルドし直しています…");
+        if (!buildGui()) console.error("GUI のビルドに失敗しました。npm install を実行してから、もう一度起動してください");
+      }
       // DB のパスは実体のパスで記録しているので、そろえる
       const home = existsSync(dataHome()) ? realpathSync(dataHome()) : dataHome();
       const s = await startServer({ home, port: Number(o.port) });

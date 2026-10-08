@@ -58,6 +58,8 @@ export type TaskSummary = {
   /** 回答待ちの質問や失敗の理由 */
   reason: string | null;
   running: Pick<RunSummary, "id" | "role" | "model" | "startedAt"> | null;
+  /** 人の対応が必要なときの主な操作(nextActions の先頭) */
+  primaryAction: NextAction | null;
 };
 
 export type Overview = {

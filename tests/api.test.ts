@@ -36,6 +36,7 @@ function seed() {
   const repo = addRepo(db, { projectId: p.id, path: "/r/shop", role: "main", defaultBranch: "main" });
   mkdirSync(join(home, "projects", String(p.id)), { recursive: true });
   writeFileSync(join(home, "projects", String(p.id), "decisions.md"), "# 設計判断ログ\n- A を採用\n");
+  writeFileSync(join(home, "projects", String(p.id), "profile.md"), "---\nverdict: ready\n---\n# プロファイル\n");
   const profiler = startRun(db, { projectId: p.id, role: "profiler", model: "sonnet" });
   finishRun(db, profiler.id, { state: "succeeded", verdict: "ready", costUsd: 0.05 });
 
@@ -103,8 +104,12 @@ describe("読み取り API", () => {
     expect(o.projects).toEqual([expect.objectContaining({ name: "shop", profileStatus: "approved", testInfra: "present" })]);
     const byId = new Map(o.tasks.map((t) => [t.id, t]));
     expect(byId.get(s.t1.id)).toMatchObject({ attention: "approve_plan", stateLabel: "計画の承認待ち", running: null });
-    expect(byId.get(s.t2.id)).toMatchObject({ attention: "answer", reason: "APIの形はAとBどちら?" });
-    expect(byId.get(s.t3.id)).toMatchObject({ attention: null, running: { id: s.r3.id, role: "implementer", model: "sonnet" } });
+    expect(byId.get(s.t2.id)).toMatchObject({
+      attention: "answer",
+      reason: "APIの形はAとBどちら?",
+      primaryAction: { kind: "answer", command: `agent-crew task answer ${s.t2.id} --message "..."` },
+    });
+    expect(byId.get(s.t3.id)).toMatchObject({ attention: null, primaryAction: null, running: { id: s.r3.id, role: "implementer", model: "sonnet" } });
     expect(byId.get(s.t4.id)?.state).toBe("cancelled");
     expect(o.running).toEqual([expect.objectContaining({ id: s.r3.id, taskTitle: "一覧を速く" })]);
     expect(o.stateLabels.needs_input).toBe("人の回答待ち");
@@ -157,6 +162,7 @@ describe("読み取り API", () => {
     const p = await json<ProjectDetail>(`api/projects/${s.p.id}`);
     expect(p.profile).toEqual({ build: "npm run build" });
     expect(p.decisionsMd).toContain("A を採用");
+    expect(p.profileMd).toBe("# プロファイル\n"); // frontmatter は除く
     expect(p.repos).toEqual([expect.objectContaining({ path: "/r/shop", role: "main" })]);
     expect(p.runs).toEqual([expect.objectContaining({ id: s.profiler.id, role: "profiler" })]);
     expect(p.tasks).toHaveLength(4);

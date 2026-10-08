@@ -1,5 +1,5 @@
 import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
-import { request } from "node:http";
+import { request, type IncomingHttpHeaders } from "node:http";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { appDbPath } from "../src/app.ts";
@@ -34,12 +34,23 @@ function seed() {
   return { home, t1, t2 };
 }
 
-function get(url: string, method = "GET"): Promise<{ status: number; body: string; type?: string }> {
+/** GUI のビルド結果の代わり */
+function fakeGui(): string {
+  const root = tempDir("agent-crew-gui-");
+  const dir = join(root, "gui");
+  mkdirSync(join(dir, "assets"), { recursive: true });
+  writeFileSync(join(dir, "index.html"), '<!doctype html><div id="root"></div><script type="module" src="/assets/app.js"></script>');
+  writeFileSync(join(dir, "assets", "app.js"), "console.log(1)");
+  writeFileSync(join(root, "secret.txt"), "secret");
+  return dir;
+}
+
+function get(url: string, method = "GET"): Promise<{ status: number; body: string; type?: string; headers: IncomingHttpHeaders }> {
   return new Promise((resolve, reject) => {
     const req = request(url, { method }, (res) => {
       let body = "";
       res.on("data", (d) => (body += d));
-      res.on("end", () => resolve({ status: res.statusCode!, body, type: res.headers["content-type"] }));
+      res.on("end", () => resolve({ status: res.statusCode!, body, type: res.headers["content-type"], headers: res.headers }));
     });
     req.on("error", reject);
     req.end();
@@ -54,29 +65,30 @@ describe("agent-crew serve", () => {
     expect(server.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/$/);
   });
 
-  it("一覧: タスクと状態を表示し、人の対応が必要なものを目立たせる。値はエスケープする", async () => {
+  it("GUI: ビルド結果を配信し、画面の URL には index.html を返す(SPA)。CSP を付ける", async () => {
     const { home } = seed();
-    server = await startServer({ home, port: 0 });
-    const r = await get(server.url);
-    expect(r.status).toBe(200);
-    expect(r.type).toContain("text/html");
-    expect(r.body).toContain("shop");
-    expect(r.body).toContain("人の回答待ち");
-    expect(r.body).toMatch(/class="[^"]*attention/);
-    expect(r.body).toContain("&lt;script&gt;");
-    expect(r.body).not.toContain("<script>alert(1)");
-    expect(r.body).toContain("implementer"); // 実行中の役割
-    expect(r.body).toContain('http-equiv="refresh"');
+    const guiDir = fakeGui();
+    server = await startServer({ home, port: 0, guiDir });
+    for (const path of ["", "tasks/1", "runs/3", "projects/1"]) {
+      const r = await get(`${server.url}${path}`);
+      expect(r.status).toBe(200);
+      expect(r.type).toContain("text/html");
+      expect(r.body).toContain('<div id="root">');
+      expect(r.headers["content-security-policy"]).toContain("default-src 'self'");
+    }
+    const js = await get(`${server.url}assets/app.js`);
+    expect(js.type).toContain("text/javascript");
+    expect(js.body).toContain("console.log");
+    expect((await get(`${server.url}assets/nope.js`)).status).toBe(404);
+    expect((await get(`${server.url}assets/%2e%2e/%2e%2e/secret.txt`)).status).not.toBe(200);
   });
 
-  it("詳細: 理由、成果物へのリンク、実行中の警告", async () => {
-    const { home, t1, t2 } = seed();
-    server = await startServer({ home, port: 0 });
-    const d1 = await get(`${server.url}tasks/${t1.id}`);
-    expect(d1.body).toContain("planner の判定: need_human");
-    expect(d1.body).toContain(`/files/tasks/${t1.id}/plan.md`);
-    const d2 = await get(`${server.url}tasks/${t2.id}`);
-    expect(d2.body).toContain("触らないでください");
+  it("GUI がビルドされていなければ、ビルドの方法を案内する", async () => {
+    const { home } = seed();
+    server = await startServer({ home, port: 0, guiDir: join(tempDir("agent-crew-nogui-"), "none") });
+    const r = await get(server.url);
+    expect(r.status).toBe(503);
+    expect(r.body).toContain("npm run build:gui");
   });
 
   it("成果物を配信する", async () => {

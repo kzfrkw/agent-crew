@@ -18,6 +18,8 @@
     "src",
     "tests",
     "bin",
-    "scripts"
+    "scripts",
+    "gui/vite.config.ts",
+    "vitest.config.ts"
   ]
 }

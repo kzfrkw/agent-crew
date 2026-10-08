@@ -1,0 +1,63 @@
+/* 表層のトークン(docs/surface.md)。コンポーネントはここで定義した値だけを使う */
+:root {
+  --bg: #fafaf9;
+  --surface: #ffffff;
+  --surface-2: #f5f5f4;
+  --line: #e7e5e4;
+  --line-strong: #d6d3d1;
+  --fg: #1c1917;
+  --fg-muted: #78716c;
+  --fg-subtle: #a8a29e;
+  --attn: #b45309;
+  --attn-bg: #fef3c7;
+  --run: #047857;
+  --run-bg: #d1fae5;
+  --human: #1d4ed8;
+  --human-bg: #dbeafe;
+  --danger: #b91c1c;
+  --danger-bg: #fee2e2;
+  --focus: #57534e;
+
+  --font: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 14px;
+  --fs-lg: 15px;
+  --fs-xl: 20px;
+
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+
+  --radius: 6px;
+  --pill: 999px;
+  --header-h: 48px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141312;
+    --surface: #1c1b1a;
+    --surface-2: #242322;
+    --line: #2f2d2b;
+    --line-strong: #44403c;
+    --fg: #f5f5f4;
+    --fg-muted: #a8a29e;
+    --fg-subtle: #78716c;
+    --attn: #fbbf24;
+    --attn-bg: #3a2a0a;
+    --run: #34d399;
+    --run-bg: #0c2e22;
+    --human: #93c5fd;
+    --human-bg: #16213d;
+    --danger: #f87171;
+    --danger-bg: #3b1414;
+    --focus: #d6d3d1;
+    color-scheme: dark;
+  }
+}

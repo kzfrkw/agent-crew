@@ -133,6 +133,7 @@ function taskSummary(db: Db, t: Task, running: Map<number, RunRow>): TaskSummary
     attention,
     reason: attention === "answer" || attention === "failed" ? (latestReason(db, t.id, t.state as "needs_input" | "failed") ?? null) : null,
     running: r ? { id: r.id, role: r.role, model: r.model, startedAt: r.startedAt } : null,
+    primaryAction: attention ? (nextActions(db, t)[0] ?? null) : null,
   };
 }
 
@@ -187,6 +188,8 @@ export function splitFrontmatter(text: string): { frontmatter: Record<string, un
   }
   return { frontmatter: null, body: text };
 }
+
+const markdownBody = (text: string | null) => (text === null ? null : splitFrontmatter(text).body);
 
 // ---- 各 API ----
 
@@ -283,7 +286,7 @@ function projectDetail(home: string, db: Db, id: number): ProjectDetail | undefi
     project: projectSummary(p),
     repos: listRepos(db, id).map((r) => ({ id: r.id, path: r.path, role: r.role, defaultBranch: r.defaultBranch })),
     profile: getProjectProfile(db, id),
-    profileMd: readText(join(projectDir(home, id), "profile.md")),
+    profileMd: markdownBody(readText(join(projectDir(home, id), "profile.md"))),
     decisionsMd: readText(join(projectDir(home, id), "decisions.md")),
     runs: listRuns(db, { projectId: id }).filter((r) => r.taskId === null).map(runSummary),
     tasks: listTasks(db, { projectId: id }).map((t) => taskSummary(db, t, running)),
