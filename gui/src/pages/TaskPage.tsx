@@ -7,6 +7,7 @@ import { RunTable } from "../components/RunTable.tsx";
 import { StateBadge, VerdictBadge } from "../components/StateBadge.tsx";
 import { Async } from "../components/Status.tsx";
 import { useApi, useEvents } from "../lib/api.ts";
+import { isRunDetail } from "../lib/events.ts";
 import { formatCost, formatDateTime, formatDuration } from "../lib/format.ts";
 import { paths } from "../lib/routes.ts";
 import { Link } from "../lib/router.tsx";
@@ -208,7 +209,7 @@ function ArtifactList({ taskId, artifacts }: { taskId: number; artifacts: Artifa
 function Activity({ taskId }: { taskId: number }) {
   // タスクのイベントのうち、実行の中の細かいもの(発言・ツール)は実行ログで見る
   const { events } = useEvents({ task: taskId }, 500);
-  const shown = events.filter((e) => e.runId === null || !["assistant_text", "tool_use", "tool_result", "init", "system", "raw", "other"].includes(e.kind));
+  const shown = events.filter((e) => !isRunDetail(e));
   return (
     <section className="section">
       <div className="section__head">

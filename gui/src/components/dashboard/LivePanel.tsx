@@ -1,5 +1,6 @@
 import type { Overview } from "../../../../src/server/api-types.ts";
 import { useEvents } from "../../lib/api.ts";
+import { isNoise } from "../../lib/events.ts";
 import { elapsedSec, formatDuration } from "../../lib/format.ts";
 import { paths } from "../../lib/routes.ts";
 import { Link } from "../../lib/router.tsx";
@@ -47,7 +48,7 @@ export function LivePanel({ running }: { running: Overview["running"] }) {
         {loading && events.length === 0 ? (
           <div className="panel__empty">読み込み中…</div>
         ) : (
-          <EventList events={events} order="desc" showTask emptyText="まだ何も起きていません" scroll />
+          <EventList events={events.filter((e) => !isNoise(e))} order="desc" showTask emptyText="まだ何も起きていません" scroll />
         )}
       </div>
     </section>

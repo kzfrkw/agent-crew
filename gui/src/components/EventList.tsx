@@ -74,6 +74,10 @@ function EventRow({ event, showTask, isNew }: { event: EventView; showTask: bool
           <Link className="ev__task num" to={event.runId !== null ? paths.run(event.runId) : paths.task(event.taskId)}>
             #{event.taskId}
           </Link>
+        ) : event.runId !== null ? (
+          <Link className="ev__task" to={paths.run(event.runId)} title="プロジェクトの調査">
+            調査
+          </Link>
         ) : (
           <span className="ev__task subtle">-</span>
         ))}
