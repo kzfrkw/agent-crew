@@ -43,8 +43,8 @@ export function Layout({ children, projectId }: { children: ReactNode; projectId
           )}
           <span className="header__spacer" />
           <span className={`conn conn--${status}`} role="status">
-            <span className="conn__dot" aria-hidden />
-            {CONN[status]}
+            <span className="conn__dot" aria-hidden title={CONN[status]} />
+            <span className="conn__label">{CONN[status]}</span>
           </span>
           <span className="readonly" title="操作は CLI(agent-crew)で行います">読み取り専用</span>
         </div>

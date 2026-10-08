@@ -17,10 +17,10 @@ export function RunTable({ runs }: { runs: RunSummary[] }) {
             <th>#</th>
             <th>役割</th>
             <th>状態</th>
-            <th>判定</th>
+            <th className="hide-sm">判定</th>
             <th className="right">費用</th>
             <th className="right">時間</th>
-            <th className="right">開始</th>
+            <th className="right hide-sm">開始</th>
           </tr>
         </thead>
         <tbody>
@@ -38,12 +38,12 @@ export function RunTable({ runs }: { runs: RunSummary[] }) {
               <td>
                 <RunStateBadge state={r.state} />
               </td>
-              <td>
+              <td className="hide-sm">
                 <VerdictBadge verdict={r.verdict} />
               </td>
               <td className="right num sm">{formatCost(r.costUsd)}</td>
               <td className="right num sm">{formatDuration(r.state === "running" ? elapsedSec(r.startedAt, now) : r.durationSec)}</td>
-              <td className="right num sm muted nowrap">{formatDateTime(r.startedAt)}</td>
+              <td className="right num sm muted nowrap hide-sm">{formatDateTime(r.startedAt)}</td>
             </tr>
           ))}
         </tbody>

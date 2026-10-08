@@ -245,3 +245,24 @@ code, pre, .mono { font-family: var(--mono); font-size: 12.5px; }
 .footer { margin-top: var(--s6); font-size: var(--fs-xs); color: var(--fg-subtle); text-align: center; }
 details > summary { cursor: pointer; color: var(--fg-muted); font-size: var(--fs-sm); }
 details[open] > summary { margin-bottom: var(--s2); }
+
+/* ---- 狭い画面(スマホ幅) ---- */
+.logo { white-space: nowrap; }
+.conn, .readonly { white-space: nowrap; }
+@media (max-width: 600px) {
+  .header__inner { gap: var(--s3); padding: 0 var(--s3); }
+  .header .select { min-width: 0; flex: 1; max-width: none; }
+  .header__spacer, .readonly, .conn__label { display: none; }
+  .main { padding: var(--s4) var(--s3) var(--s5); }
+  /* コマンドはラベルの下に全幅で */
+  .cmd { flex-direction: column; align-items: stretch; gap: 2px; }
+  .cmd__label { white-space: normal; }
+  .cmd__code code { white-space: pre-wrap; word-break: break-all; }
+  .hide-sm { display: none; }
+  .table th, .table td { padding: var(--s2); }
+  .table .title { min-width: 10em; }
+  .page-title { font-size: 18px; }
+  .ev, .ev--with-task { padding: 3px var(--s3); grid-template-columns: 58px 30px 16px minmax(0, 1fr); }
+  .ev:not(.ev--with-task) { grid-template-columns: 58px 16px minmax(0, 1fr); }
+  .project-head, .panel__head, .attn-item { padding-left: var(--s3); padding-right: var(--s3); }
+}

@@ -12,18 +12,18 @@ export function TaskTable({ tasks, empty = "タスクはありません" }: { ta
       <table className="table">
         <thead>
           <tr>
-            <th>ID</th>
+            <th className="hide-sm">ID</th>
             <th>状態</th>
             <th>タイトル</th>
-            <th>実行中</th>
-            <th className="right">差し戻し</th>
+            <th className="hide-sm">実行中</th>
+            <th className="right hide-sm">差し戻し</th>
             <th className="right">更新</th>
           </tr>
         </thead>
         <tbody>
           {tasks.map((t) => (
             <tr key={t.id} onClick={(e) => !(e.target as HTMLElement).closest("a") && navigate(paths.task(t.id))}>
-              <td className="id num">#{t.id}</td>
+              <td className="id num hide-sm">#{t.id}</td>
               <td>
                 <StateBadge task={t} />
               </td>
@@ -31,7 +31,7 @@ export function TaskTable({ tasks, empty = "タスクはありません" }: { ta
                 <Link to={paths.task(t.id)}>{t.title}</Link>
                 {t.kind === "test_infra" && <span className="muted sm"> (テスト基盤整備)</span>}
               </td>
-              <td className="sm">
+              <td className="sm hide-sm">
                 {t.running ? (
                   <Link to={paths.run(t.running.id)} className="nowrap">
                     {t.running.role}
@@ -41,7 +41,7 @@ export function TaskTable({ tasks, empty = "タスクはありません" }: { ta
                   <span className="subtle">-</span>
                 )}
               </td>
-              <td className="right num sm">{t.reviewRounds}</td>
+              <td className="right num sm hide-sm">{t.reviewRounds}</td>
               <td className="right num sm muted nowrap">{formatDateTime(t.updatedAt)}</td>
             </tr>
           ))}
