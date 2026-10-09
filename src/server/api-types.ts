@@ -98,6 +98,8 @@ export type TaskSummary = {
   running: Pick<RunSummary, "id" | "role" | "model" | "startedAt"> | null;
   /** 人の対応が必要なときの主な操作(nextActions の先頭) */
   primaryAction: NextAction | null;
+  /** 費用が記録された実行の合計。1つも無ければ null */
+  costUsd: number | null;
 };
 
 export type Overview = {
@@ -139,7 +141,8 @@ export type TaskDetail = {
   approvals: ApprovalView[];
   artifacts: ArtifactSummary[];
   runs: RunSummary[];
-  totals: { costUsd: number; durationSec: number };
+  /** costUsd は一覧の TaskSummary.costUsd と同じ(費用が記録された実行の合計。無ければ null) */
+  totals: { costUsd: number | null; durationSec: number };
   nextActions: NextAction[];
   runActive: boolean;
   /** このサーバーで操作できるか(serve --no-worker の読み取り専用なら false。GUI はボタンの代わりに CLI のコマンドを出す) */

@@ -1,5 +1,5 @@
 import type { TaskSummary } from "../../../src/server/api-types.ts";
-import { formatDateTime } from "../lib/format.ts";
+import { formatCost, formatDateTime } from "../lib/format.ts";
 import { paths } from "../lib/routes.ts";
 import { Link, navigate } from "../lib/router.tsx";
 import { StateBadge } from "./StateBadge.tsx";
@@ -18,6 +18,7 @@ export function TaskTable({ tasks, empty = "タスクはありません" }: { ta
           <TableHead>タイトル</TableHead>
           <TableHead className="max-sm:hidden">実行中</TableHead>
           <TableHead className="text-right max-sm:hidden">差し戻し</TableHead>
+          <TableHead className="text-right max-sm:hidden">費用</TableHead>
           <TableHead className="text-right">更新</TableHead>
         </TableRow>
       </TableHeader>
@@ -45,6 +46,9 @@ export function TaskTable({ tasks, empty = "タスクはありません" }: { ta
               )}
             </TableCell>
             <TableCell className="text-right text-xs tabular-nums max-sm:hidden">{t.reviewRounds}</TableCell>
+            <TableCell className="text-right text-xs whitespace-nowrap tabular-nums max-sm:hidden">
+              {t.costUsd === null ? <span className="text-subtle-foreground">{formatCost(null)}</span> : formatCost(t.costUsd)}
+            </TableCell>
             <TableCell className="text-right text-xs whitespace-nowrap text-muted-foreground tabular-nums">{formatDateTime(t.updatedAt)}</TableCell>
           </TableRow>
         ))}
