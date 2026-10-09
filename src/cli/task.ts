@@ -76,7 +76,7 @@ export function registerTaskCommands(program: Command): void {
         if (runActive(ctx.db, t.id)) console.log("⚠ エージェントが実行中です。worktree を触らないでください");
         const reason = t.state === "needs_input" || t.state === "failed" ? latestReason(ctx.db, t.id, t.state) : undefined;
         if (reason) console.log(`理由: ${reason}`);
-        for (const a of nextActions(ctx.db, t)) console.log(`→ ${a.label}: ${a.command}`);
+        for (const a of nextActions(ctx.db, t)) if (a.command) console.log(`→ ${a.label}: ${a.command}`);
         const roles = new Map(listRepos(ctx.db, t.projectId).map((r) => [r.id, r.role]));
         for (const tr of listTaskRepos(ctx.db, t.id)) console.log(`worktree [${roles.get(tr.repoId)}]: ${tr.worktreePath}(${tr.branchName})`);
         const artifacts = new Map(listArtifacts(ctx.db, t.id).map((a) => [a.kind, a]));

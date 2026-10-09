@@ -2,6 +2,8 @@
  * GUI の開発・確認用の見本データを作る(実機の claude は使わない)。
  *   AGENT_CREW_HOME=/tmp/demo node scripts/seed-demo.ts && AGENT_CREW_HOME=/tmp/demo npx agent-crew serve
  * 既存のデータディレクトリには書かない(DB があれば中止する)。
+ * serve の常駐ワーカーが見本のタスクを本物の claude で進めないよう、config.json の claudePath を
+ * 何もせずに失敗するコマンドにする(操作を試すと、役割は失敗して人の判断待ちになる)。
  */
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -28,6 +30,7 @@ if (!home) throw new Error("AGENT_CREW_HOME を指定してください(見本�
 if (existsSync(appDbPath(home))) throw new Error(`${appDbPath(home)} がすでにあります。空のディレクトリを指定してください`);
 
 const db = openDb(appDbPath(home));
+writeFileSync(join(home, "config.json"), JSON.stringify({ claudePath: "/usr/bin/false" }, null, 2));
 
 const p = createProject(db, { name: "sample-shop" });
 setProjectProfile(db, p.id, { profileStatus: "approved", testInfra: "present", profile: { build: "npm run build", test: "npm test" } });

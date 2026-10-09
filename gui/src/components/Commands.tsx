@@ -6,7 +6,7 @@ export function Commands({ actions, showLabel = true }: { actions: NextAction[];
   if (actions.length === 0) return null;
   return (
     <div className="cmds">
-      {actions.map((a) => (
+      {actions.flatMap((a) => (a.command === null ? [] : [{ ...a, command: a.command }])).map((a) => (
         <div className="cmd" key={a.command}>
           {showLabel && <span className="cmd__label">{a.label}</span>}
           <span className="cmd__code">

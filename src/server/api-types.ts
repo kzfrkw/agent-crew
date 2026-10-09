@@ -10,12 +10,41 @@ export type { TaskState };
 /** 人の対応が必要な理由の種類 */
 export type Attention = "approve_plan" | "approve_final" | "answer" | "failed" | "human_working";
 
-/** 状態ごとに人が次にすること。フェーズ2は CLI コマンドを示し、フェーズ3でボタンにする */
+/** 人の操作(POST /api/tasks/:id/actions の本文)。CLI と同じ関数を通す */
+export type ActionRequest =
+  | { action: "approve"; kind: "plan" | "final"; comment?: string }
+  | { action: "reject"; kind: "plan" | "final"; comment: string }
+  | { action: "answer"; message: string }
+  | { action: "stop" }
+  | { action: "takeover" }
+  | { action: "return" }
+  | { action: "cancel" }
+  | { action: "update_base" }
+  | { action: "open_editor" };
+
+/**
+ * 状態ごとに人が次にすること。GUI はこれをボタンにし、request を送る(状態とボタンの対応を GUI に持たせない)。
+ * input があれば、送る前にその欄(comment / message)を入力させる。
+ */
 export type NextAction = {
-  kind: "approve" | "reject" | "answer" | "takeover" | "return" | "cancel" | "push";
+  kind: ActionRequest["action"] | "push";
   label: string;
-  command: string;
+  /** CLI での同じ操作(CLI に無い操作は null) */
+  command: string | null;
+  /** GUI のボタンが送る要求(push のように人が手元で行うものは null) */
+  request: ActionRequest | null;
+  input?: { field: "comment" | "message"; required: boolean; placeholder: string };
+  /** 主な操作(塗りつぶしのボタン)か */
+  primary?: boolean;
+  /** 押す前に確認する文(停止・取り消しなど) */
+  confirm?: string;
 };
+
+export type WorkerView = { state: "running" | "paused" | "locked" | "disabled"; active: number[] };
+
+export type CreateTaskRequest = { projectId: number; title: string; body: string; sourceUrl?: string };
+
+export type ActionResult = { message: string; task: TaskSummary };
 
 export type ProjectSummary = {
   id: number;
@@ -63,6 +92,7 @@ export type TaskSummary = {
 };
 
 export type Overview = {
+  worker: WorkerView;
   projects: ProjectSummary[];
   tasks: TaskSummary[];
   running: (RunSummary & { taskTitle: string | null })[];

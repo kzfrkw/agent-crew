@@ -36,7 +36,7 @@ describe("AttentionPanel", () => {
       <AttentionPanel
         tasks={[
           task({ id: 1, title: "実装中のもの" }),
-          task({ id: 2, title: "計画を見て", state: "awaiting_plan_approval", stateLabel: "計画の承認待ち", attention: "approve_plan", primaryAction: { kind: "approve", label: "承認する", command: "agent-crew task approve 2 --kind plan" } }),
+          task({ id: 2, title: "計画を見て", state: "awaiting_plan_approval", stateLabel: "計画の承認待ち", attention: "approve_plan", primaryAction: { kind: "approve", label: "承認する", command: "agent-crew task approve 2 --kind plan", request: { action: "approve", kind: "plan" } } }),
           task({ id: 3, title: "質問あり", state: "needs_input", stateLabel: "人の回答待ち", attention: "answer", reason: "AとBどちら?" }),
           task({ id: 4, title: "手作業", state: "human_working", stateLabel: "人が作業中", attention: "human_working" }),
         ]}
@@ -76,6 +76,7 @@ describe("EventList", () => {
 
 describe("App(ダッシュボード)", () => {
   const overview: Overview = {
+    worker: { state: "disabled", active: [] },
     projects: [{ id: 1, name: "shop", profileStatus: "approved", testInfra: "present", allowWithoutTests: false }],
     tasks: [
       task({ id: 7, title: "検索を追加", running: { id: 9, role: "implementer", model: "sonnet", startedAt: "2026-10-09T00:00:00.000Z" } }),

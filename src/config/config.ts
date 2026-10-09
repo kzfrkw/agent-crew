@@ -13,6 +13,8 @@ const ConfigSchema = z.object({
   concurrency: z.number().int().min(1).max(2).default(1),
   /** claude コマンドのパス(テストでは偽のスクリプトに差し替える) */
   claudePath: z.string().min(1).default("claude"),
+  /** GUI の「エディタで開く」で起動するコマンド。引数には worktree のパスだけを渡す */
+  editor: z.string().min(1).default("code"),
   limits: z
     .object({
       runTimeoutSec: z.number().int().positive().default(1800),

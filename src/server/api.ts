@@ -39,6 +39,7 @@ import type {
   RunSummary,
   TaskDetail,
   TaskSummary,
+  WorkerView,
 } from "./api-types.ts";
 import { fileUrl } from "./files.ts";
 
@@ -62,16 +63,16 @@ export function openReadOnly(home: string): Db | undefined {
   return existsSync(path) ? new DatabaseSync(path, { readOnly: true }) : undefined;
 }
 
-/** /api/ 以下の要求に答える。見つからなければ HttpError を投げる */
-export function handleApi(home: string, path: string, query: URLSearchParams): unknown {
+/** /api/ 以下の要求に答える。見つからなければ HttpError を投げる。worker は常駐ワーカーの状態 */
+export function handleApi(home: string, path: string, query: URLSearchParams, worker: WorkerView = { state: "disabled", active: [] }): unknown {
   const db = openReadOnly(home);
   if (!db) {
-    if (path === "overview") return emptyOverview();
+    if (path === "overview") return { ...emptyOverview(), worker };
     if (path === "events") return { events: [], lastId: 0 } satisfies EventsPage;
     throw new HttpError(404, "まだデータがありません");
   }
   try {
-    if (path === "overview") return overview(db);
+    if (path === "overview") return { ...overview(db), worker };
     if (path === "events") return events(db, query);
     const m = /^(tasks|runs|artifacts|projects)\/(\d+)$/.exec(path);
     if (m) {
@@ -193,11 +194,17 @@ const markdownBody = (text: string | null) => (text === null ? null : splitFront
 
 // ---- 各 API ----
 
-function emptyOverview(): Overview {
+/** タスクの要約(書き込み API の結果にも使う) */
+export function taskSummaryOf(db: Db, id: number): TaskSummary | undefined {
+  const t = getTask(db, id);
+  return t && taskSummary(db, t, runningByTask(db));
+}
+
+function emptyOverview(): Omit<Overview, "worker"> {
   return { projects: [], tasks: [], running: [], stateLabels: STATE_LABELS };
 }
 
-function overview(db: Db): Overview {
+function overview(db: Db): Omit<Overview, "worker"> {
   const running = runningByTask(db);
   const tasks = listTasks(db);
   const titles = new Map(tasks.map((t) => [t.id, t.title]));

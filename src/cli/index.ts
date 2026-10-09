@@ -7,6 +7,8 @@ import { registerProjectCommands } from "./project.ts";
 import { registerTaskCommands } from "./task.ts";
 import { buildGui, guiBuildState } from "../server/gui-build.ts";
 import { startServer } from "../server/server.ts";
+import { createAppContext, type AppContext } from "../orchestrator/context.ts";
+import { Worker } from "../orchestrator/worker.ts";
 import { dataHome } from "../config/config.ts";
 import { getTask, listRepos, listTaskRepos } from "../db/store.ts";
 import { doctor, formatResults, probeSandbox } from "../doctor/index.ts";
@@ -71,19 +73,38 @@ export function createProgram(): Command {
 
   program
     .command("serve")
-    .description("状況を見る読み取り専用の GUI を 127.0.0.1 で開く")
+    .description("GUI を 127.0.0.1 で開く。エージェントを自動で進める常駐ワーカーも動かす")
     .option("--port <port>", "ポート", "4300")
     .option("--no-build", "GUI のビルドが古くてもビルドし直さない")
-    .action(async (o: { port: string; build: boolean }) => {
+    .option("--no-worker", "常駐ワーカーを動かさず、読み取り専用で開く(操作は CLI)")
+    .action(async (o: { port: string; build: boolean; worker: boolean }) => {
       const state = guiBuildState();
       if (state !== "ok" && o.build) {
         console.error(state === "missing" ? "GUI をビルドしています…" : "GUI のソースが更新されているので、ビルドし直しています…");
         if (!buildGui()) console.error("GUI のビルドに失敗しました。npm install を実行してから、もう一度起動してください");
       }
+      let ctx: AppContext | undefined;
+      let worker: Worker | undefined;
+      if (o.worker) {
+        ctx = createAppContext();
+        worker = new Worker(ctx);
+        worker.start();
+        if (worker.status().state === "locked") console.error("CLI の agent-crew run が実行中です。終わったら自動で引き継ぎます");
+      }
       // DB のパスは実体のパスで記録しているので、そろえる
-      const home = existsSync(dataHome()) ? realpathSync(dataHome()) : dataHome();
-      const s = await startServer({ home, port: Number(o.port) });
-      console.log(`${s.url} で表示しています(127.0.0.1 のみ。Ctrl-C で終了)`);
+      const home = ctx?.home ?? (existsSync(dataHome()) ? realpathSync(dataHome()) : dataHome());
+      const s = await startServer({ home, port: Number(o.port), ops: ctx ? { ctx, worker } : undefined });
+      console.log(`${s.url} で表示しています(127.0.0.1 のみ。${o.worker ? "常駐ワーカーが自動で進めます" : "読み取り専用"}。Ctrl-C で終了)`);
+      let closing = false;
+      process.on("SIGINT", async () => {
+        if (closing) process.exit(130);
+        closing = true;
+        if (worker && worker.status().active.length > 0) console.error("実行中の役割を止めています…(もう一度 Ctrl-C で強制終了)");
+        await worker?.close();
+        await s.close();
+        ctx?.db.close();
+        process.exit(0);
+      });
     });
 
   return program;
