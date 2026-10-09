@@ -65,13 +65,14 @@ describe("同梱の役割定義", () => {
   const roles = loadRoles(defaultRolesDir());
 
   it("フェーズ1の役割がそろっている", () => {
-    expect([...roles.keys()].sort()).toEqual(["implementer", "integrator", "planner", "profiler", "qa", "reviewer", "verifier"]);
+    expect([...roles.keys()].sort()).toEqual(["auditor", "implementer", "integrator", "planner", "profiler", "qa", "reviewer", "verifier"]);
   });
 
   it("判定の列挙値が状態遷移と一致している", () => {
     expect(roles.get("planner")!.verdicts).toEqual(["ready", "need_human"]);
     expect(roles.get("implementer")!.verdicts).toEqual(["done", "blocked", "need_human"]);
     expect(roles.get("reviewer")!.verdicts).toEqual(["approve", "changes_requested", "need_human"]);
+    expect(roles.get("auditor")!.verdicts).toEqual(["upheld", "overturned", "need_human"]);
     expect(roles.get("qa")!.verdicts).toEqual(["passed", "failed", "need_human"]);
     expect(roles.get("integrator")!.verdicts).toEqual(["done", "blocked"]);
     expect(roles.get("profiler")!.verdicts).toEqual(["ready", "need_human"]);
@@ -100,6 +101,20 @@ describe("verdictSchemaFor", () => {
     const s = verdictSchemaFor(roles.get("reviewer")!) as any;
     expect(s.properties.verdict.enum).toEqual(["approve", "changes_requested", "need_human"]);
     expect(s.required).toEqual(expect.arrayContaining(["verdict", "summary"]));
+  });
+
+  it("レビュワーは重大度つきの指摘を返す", () => {
+    const roles = loadRoles(defaultRolesDir());
+    const s = verdictSchemaFor(roles.get("reviewer")!) as any;
+    expect(s.required).toContain("findings");
+    expect(s.properties.findings.items.properties.severity.enum).toEqual(["must", "should", "nit"]);
+  });
+
+  it("監査担当は指摘ごとの判定を返す", () => {
+    const roles = loadRoles(defaultRolesDir());
+    const s = verdictSchemaFor(roles.get("auditor")!) as any;
+    expect(s.required).toContain("judgments");
+    expect(s.properties.judgments.items.properties.result.enum).toEqual(["valid", "invalid", "unverifiable"]);
   });
 
   it("プロジェクト把握担当はプロファイルも返す", () => {

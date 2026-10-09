@@ -26,7 +26,7 @@ const scripts = (over: Record<string, Script> = {}): Record<string, Script> => (
     const command = /```sh\n(.*)\n```/.exec(spec.prompt)![1]!;
     return { structuredOutput: { verdict: "passed", summary: "s" }, bashResults: [{ command, isError: false, output: "ok" }] };
   },
-  reviewer: answer("review.md", "approve"),
+  reviewer: answer("review.md", "approve", { findings: [] }),
   qa: answer("qa-report.md", "passed"),
   integrator: answer("pr-draft.md", "done"),
   ...over,

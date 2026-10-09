@@ -6,6 +6,9 @@
     "runMaxBudgetUsd": 5,
     "maxReviewRounds": 3
   },
+  "review": {
+    "audit": true
+  },
   "sandbox": {
     "allowedDomains": [
       "registry.npmjs.org"

@@ -24,7 +24,7 @@ const scripts: Record<string, Script> = {
     return { structuredOutput: { verdict: "done", summary: "s", testCommand: null } };
   },
   verifier: () => ({ structuredOutput: { verdict: "passed", summary: "s" }, bashResults: [{ command: "npm test", isError: false, output: "ok" }] }),
-  reviewer: answer("review.md", "approve"),
+  reviewer: answer("review.md", "approve", { findings: [] }),
 };
 
 async function untilQa(qa: Script) {

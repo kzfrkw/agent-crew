@@ -20,6 +20,12 @@ const ConfigSchema = z.object({
       maxReviewRounds: z.number().int().positive().default(3),
     })
     .prefault({}),
+  review: z
+    .object({
+      /** レビュワーの Must 指摘を、別のエージェント(auditor)が事実確認する。誤検知による差し戻しを減らす代わりに、Must があるときだけ1回余分に動く */
+      audit: z.boolean().default(true),
+    })
+    .prefault({}),
   sandbox: z
     .object({
       allowedDomains: z.array(z.string()).default(["registry.npmjs.org"]),

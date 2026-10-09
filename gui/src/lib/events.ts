@@ -93,6 +93,21 @@ export function describeEvent(e: EventView): EventLine {
         title: "実装のコミット",
         text: Array.isArray(p.commits) ? p.commits.map((c: P) => c.subject).join(" / ") : "",
       };
+    case "review_findings": {
+      const findings: P[] = Array.isArray(p.findings) ? p.findings : [];
+      const count = (sev: string) => findings.filter((f) => f.severity === sev).length;
+      return {
+        tone: count("must") > 0 ? "attention" : "neutral",
+        icon: "🔎",
+        title: "レビューの指摘",
+        text: `must ${count("must")} / should ${count("should")} / nit ${count("nit")}`,
+        detail: findings.map((f) => `[${f.severity}] ${f.file}${f.line ? `:${f.line}` : ""} — ${f.title}`).join("\n") || undefined,
+      };
+    }
+    case "audit": {
+      const n = (v: unknown) => (Array.isArray(v) ? v.length : 0);
+      return { tone: "neutral", icon: "⚖", title: "Must 指摘の監査", text: `維持 ${n(p.standing)} / 却下 ${n(p.dismissed)}`, detail: stringify(p.judgments ?? []) };
+    }
     case "test_command":
       return { tone: "neutral", icon: "▸", title: "テストのコマンド", text: String(p.command ?? "") };
     case "integrated":

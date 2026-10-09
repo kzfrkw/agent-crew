@@ -30,6 +30,13 @@ describe("loadConfig", () => {
     expect(c.limits.maxReviewRounds).toBe(DEFAULT_CONFIG.limits.maxReviewRounds);
   });
 
+  it("Must 指摘の監査は既定でオン。設定で止められる", () => {
+    expect(DEFAULT_CONFIG.review.audit).toBe(true);
+    const home = tmp();
+    writeFileSync(join(home, "config.json"), JSON.stringify({ review: { audit: false } }));
+    expect(loadConfig(home).review.audit).toBe(false);
+  });
+
   it("同時実行数は2まで", () => {
     const home = tmp();
     writeFileSync(join(home, "config.json"), JSON.stringify({ concurrency: 3 }));

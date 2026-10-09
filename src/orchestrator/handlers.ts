@@ -1,13 +1,14 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { addApproval, addEvent, getRepo, getRepoProfile, listTaskRepos, listValidApprovals, setProjectProfile, setRepoProfile, type Task } from "../db/store.ts";
-import type { Profile } from "../roles/schemas.ts";
+import type { Judgment, Profile } from "../roles/schemas.ts";
 import { changedFiles, commitsSince, containsRef, diffFromBase, diffStat, hasTrackedChanges, headSha, isDirty, mergeBase } from "../git/worktree.ts";
 import { detectTestChanges, renderTestChanges } from "./test-changes.ts";
 import { testCommandFor, verifyTests } from "./verify.ts";
 import type { AppContext } from "./context.ts";
 import { invokeRole, type InvokeResult } from "./invoke.ts";
 import { taskDir } from "./paths.ts";
+import { applyAudit, checkReviewConsistency, mustIndexes, type Finding } from "./review-findings.ts";
 import { taskPrompt } from "./prompts.ts";
 import type { Role, TaskEvent } from "./transitions.ts";
 
@@ -73,7 +74,54 @@ const implementer: Handler = async (ctx, task) => {
   return outcomeOf(r, "implementer", `${dir}/impl-notes.md`);
 };
 
-/** レビュワー: テストを再実行してから、差分・テストの変更の検出結果・人の変更を材料にレビューさせる */
+/** 監査担当に渡す、Must 指摘の一覧(番号は findings 全体の中での位置) */
+function mustList(findings: Finding[]): string[] {
+  return mustIndexes(findings).flatMap((i) => {
+    const f = findings[i]!;
+    return [`- [${i}] ${f.title}(${f.file}${f.line ? `:${f.line}` : ""})`, `  - 問題: ${f.detail}`, `  - 直し方(レビュワー案): ${f.suggestion}`];
+  });
+}
+
+/**
+ * レビュワーの内部で、Must 指摘を別のエージェント(auditor)に事実確認させる。却下できるのは、
+ * auditor が overturned を返し、かつ判定がすべての Must を invalid としているときだけ(それ以外は reviewer の判定のまま)。
+ * 監査が動かなかったとき(失敗)は、reviewer の判定を変えずに警告を残す。
+ */
+async function auditMusts(
+  ctx: AppContext,
+  task: Task,
+  o: { cwd: string; dir: string; findings: Finding[]; reviewRunId: number },
+): Promise<"upheld" | "overturned" | "need_human" | "skipped"> {
+  const warn = (message: string) => addEvent(ctx.db, { taskId: task.id, kind: "warning", payload: { message } });
+  const r = await invokeRole(ctx, {
+    roleName: "auditor",
+    taskId: task.id,
+    cwd: o.cwd,
+    artifactsDir: o.dir,
+    prompt: taskPrompt(ctx, task, "auditor", [
+      `- 差分: ${join(o.dir, "diff.patch")}`,
+      `- レビュー結果(全指摘): ${join(o.dir, "review.md")}`,
+      "- 監査する Must 指摘(番号は `judgments` の `finding` にそのまま使う):",
+      ...mustList(o.findings),
+    ]),
+  });
+  if (!r.ok) {
+    warn(`Must 指摘の監査が動きませんでした。レビュワーの判定のまま進めます: ${r.reason}`);
+    return "skipped";
+  }
+  const judgments = (r.extra.judgments ?? []) as Judgment[];
+  const { standing, dismissed } = applyAudit(o.findings, judgments);
+  addEvent(ctx.db, { taskId: task.id, runId: r.runId, kind: "audit", payload: { reviewRunId: o.reviewRunId, verdict: r.verdict, standing, dismissed, judgments } });
+  if (r.verdict === "need_human") return "need_human";
+  if (r.verdict === "overturned" && standing.length === 0) return "overturned";
+  if (r.verdict === "overturned") warn(`auditor は overturned を返しましたが、Must ${standing.map((i) => `[${i}]`).join("")} は却下されていません(判定が足りない)。差し戻します`);
+  return "upheld";
+}
+
+/**
+ * レビュワー: テストを再実行してから、差分・テストの変更の検出結果・人の変更を材料にレビューさせる。
+ * 判定と指摘の重大度が食い違えば人に確認する。changes_requested のときは、Must 指摘を auditor に事実確認させる。
+ */
 const reviewer: Handler = async (ctx, task) => {
   const v = await verifyTests(ctx, task);
   if (v.status === "error") return { event: { type: "run_error", reason: v.reason }, reason: `verifier: ${v.reason}` };
@@ -82,6 +130,8 @@ const reviewer: Handler = async (ctx, task) => {
   const tr = primaryRepo(ctx, task);
   const repo = getRepo(ctx.db, tr.repoId)!;
   const dir = taskDir(ctx.home, task.id);
+  // 前の周回の監査結果は、今回のレビューには当てはまらない。残すと実装者が古い「対応不要」を読んでしまう
+  rmSync(join(dir, "audit.md"), { force: true });
   const base = mergeBase(tr.worktreePath, repo.defaultBranch, ctx.gitEnv);
   const diff = diffFromBase(tr.worktreePath, base, ctx.gitEnv);
   writeFileSync(join(dir, "diff.patch"), diff);
@@ -103,8 +153,30 @@ const reviewer: Handler = async (ctx, task) => {
         : []),
     ]),
   });
-  if (r.ok && r.verdict === "approve") {
-    addApproval(ctx.db, { taskId: task.id, repoId: tr.repoId, kind: "review", result: "approved", commitSha: head });
+  if (!r.ok) return outcomeOf(r, "reviewer", `${dir}/review.md`);
+
+  const findings = r.extra.findings as Finding[];
+  addEvent(ctx.db, { taskId: task.id, runId: r.runId, kind: "review_findings", payload: { verdict: r.verdict, findings } });
+  const inconsistent = checkReviewConsistency(r.verdict, findings);
+  if (inconsistent) return { event: { type: "run_error", reason: inconsistent }, reason: `reviewer: ${inconsistent}(詳細: ${dir}/review.md)` };
+
+  const approve = () => addApproval(ctx.db, { taskId: task.id, repoId: tr.repoId, kind: "review", result: "approved", commitSha: head });
+  if (r.verdict === "approve") {
+    approve();
+    return outcomeOf(r, "reviewer", `${dir}/review.md`);
+  }
+  if (r.verdict !== "changes_requested" || !ctx.config.review.audit) return outcomeOf(r, "reviewer", `${dir}/review.md`);
+
+  const audited = await auditMusts(ctx, task, { cwd: tr.worktreePath, dir, findings, reviewRunId: r.runId });
+  if (audited === "overturned") {
+    approve();
+    return {
+      event: { type: "verdict", role: "reviewer", verdict: "approve" },
+      reason: `reviewer は changes_requested でしたが、auditor が Must 指摘をすべて却下したため approve として進めます(詳細: ${dir}/audit.md)`,
+    };
+  }
+  if (audited === "need_human") {
+    return { event: { type: "verdict", role: "reviewer", verdict: "need_human" }, reason: `auditor が人の判断を求めています(詳細: ${dir}/audit.md)` };
   }
   return outcomeOf(r, "reviewer", `${dir}/review.md`);
 };

@@ -33,8 +33,36 @@ const ImplementerExtra = z.object({
     .describe("全テストを実行するコマンドを新しく用意・変更した場合だけ書く(テスト基盤整備など)。変えていなければ null"),
 });
 
+/** レビュワーの指摘。重大度は roles/reviewer.md の基準で決める。Must があるかどうかが、判定(approve / changes_requested)と一致していなければならない */
+export const FindingSchema = z.object({
+  severity: z.enum(["must", "should", "nit"]),
+  file: z.string().describe("指摘の対象のファイル(リポジトリのルートからの相対パス)"),
+  line: z.number().int().positive().nullable().describe("行番号。特定できなければ null"),
+  title: z.string().describe("指摘の見出し(1文)"),
+  detail: z.string().describe("何がなぜ問題か。Must は、具体的な失敗の筋書き(入力 → 結果)を含める"),
+  suggestion: z.string().describe("直し方"),
+});
+
+const ReviewerExtra = z.object({
+  findings: z.array(FindingSchema).describe("指摘の一覧(review.md と同じ順序)。無ければ空配列"),
+});
+
+/** 監査担当の、Must 指摘1件ごとの判定。invalid(却下)には、事実と食い違うコードの箇所を根拠に書く */
+export const JudgmentSchema = z.object({
+  finding: z.number().int().min(0).describe("対象の指摘の番号(入力に示された番号)"),
+  result: z.enum(["valid", "invalid", "unverifiable"]),
+  evidence: z.string().describe("判定の根拠(ファイルと行、確認した内容)"),
+});
+export type Judgment = z.infer<typeof JudgmentSchema>;
+
+const AuditorExtra = z.object({
+  judgments: z.array(JudgmentSchema).describe("監査した Must 指摘ごとの判定"),
+});
+
 export const EXTRA_SCHEMAS: Record<string, z.ZodObject> = {
   implementer: ImplementerExtra,
   profiler: z.object({ profile: ProfileSchema }),
   planner: PlannerExtra,
+  reviewer: ReviewerExtra,
+  auditor: AuditorExtra,
 };

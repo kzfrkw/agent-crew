@@ -92,6 +92,22 @@ describe("describeEvent", () => {
     expect(describeEvent(ev("run_failed", { role: "qa", reason: "時間切れ" })).tone).toBe("danger");
   });
 
+  it("レビューの指摘は重大度ごとの件数で見せ、Must があれば強調する", () => {
+    const findings = [
+      { severity: "must", file: "a.ts", line: 3, title: "落ちる", detail: "d", suggestion: "s" },
+      { severity: "should", file: "b.ts", line: null, title: "重複", detail: "d", suggestion: "s" },
+      { severity: "should", file: "c.ts", line: 1, title: "命名", detail: "d", suggestion: "s" },
+    ];
+    expect(describeEvent(ev("review_findings", { verdict: "changes_requested", findings }))).toMatchObject({ tone: "attention", text: "must 1 / should 2 / nit 0" });
+    const none = describeEvent(ev("review_findings", { verdict: "approve", findings: [findings[1]] }));
+    expect(none).toMatchObject({ tone: "neutral", text: "must 0 / should 1 / nit 0" });
+    expect(none.detail).toContain("[should] b.ts — 重複");
+  });
+
+  it("Must 指摘の監査は、却下と維持の件数で見せる", () => {
+    expect(describeEvent(ev("audit", { verdict: "upheld", standing: [0], dismissed: [2, 3], judgments: [] }))).toMatchObject({ title: "Must 指摘の監査", text: "維持 1 / 却下 2" });
+  });
+
   it("知らない種類も落ちずに表示する", () => {
     expect(describeEvent(ev("mystery", { a: 1 }))).toMatchObject({ title: "mystery", text: '{"a":1}' });
   });
