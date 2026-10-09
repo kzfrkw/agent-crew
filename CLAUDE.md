@@ -51,7 +51,7 @@
 ## 技術スタック(初期の想定。確定したら更新する)
 
 - サーバー: Node.js(24 LTS以上)+ TypeScript(Nodeの型除去で直接実行)
-- GUI: React + Vite(フェーズ2以降)
+- GUI: React + Vite、shadcn/ui + Tailwind CSS v4 + Radix UI(部品と使い分けは `docs/surface.md`)
 - DB: SQLite(Node組み込みの `node:sqlite`)
 - リアルタイム配信: SSE
 - 役割定義: `roles/*.md`(1ファイル1役割)

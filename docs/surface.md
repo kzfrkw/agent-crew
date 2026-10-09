@@ -1,4 +1,4 @@
-# 表層(GUI・フェーズ2)
+# 表層(GUI)
 
 骨格は `docs/skeleton.md`。方向性は「落ち着いた業務ツール」(Linear / GitHub 風)。
 
@@ -11,32 +11,56 @@
 - ライト / ダークの両方に対応する(OS の設定に従う)
 - アニメーションは「実行中」の点の脈動と、新しいイベントの短いハイライトだけ
 
+## 実装の基盤(v0.11)
+
+- **shadcn/ui + Tailwind CSS v4 + Radix UI**。shadcn/ui の部品はソースを `gui/src/components/ui/` に置き(依存ではなくコピー)、このツールの原則に合わせて直してよい。振る舞い(キーボード操作、フォーカス、読み上げ)は Radix に任せる
+- 見た目の値はすべてトークン(CSS 変数)を通す。画面のコードに色の値・px の値を直接書かない。インラインの `style` は使わない(動的な幅など、やむを得ないときだけ)
+- 画面専用の部品は `gui/src/components/`、汎用の部品は `gui/src/components/ui/`(shadcn/ui)
+
 ## トークン
 
-色・余白・角丸は CSS のカスタムプロパティ(`gui/src/styles/tokens.css`)に定義し、コンポーネントはトークンだけを参照する。
+`gui/src/styles/globals.css` に定義する。shadcn/ui の標準の名前(`--background` など)に、このツールの状態の4色を足した形。Tailwind からは `bg-background`、`text-attn`、`bg-run-soft` のように使う。
 
 | トークン | ライト | ダーク | 用途 |
 |----------|--------|--------|------|
-| `--bg` | `#fafaf9` | `#141312` | 画面の背景 |
-| `--surface` | `#ffffff` | `#1c1b1a` | カード |
-| `--surface-2` | `#f5f5f4` | `#242322` | 入れ子・ホバー |
-| `--line` | `#e7e5e4` | `#2f2d2b` | 罫線 |
-| `--fg` | `#1c1917` | `#f5f5f4` | 本文 |
-| `--fg-muted` | `#78716c` | `#a8a29e` | 補足 |
-| `--attn` / `--attn-bg` | `#b45309` / `#fef3c7` | `#fbbf24` / `#3a2a0a` | 人の対応待ち |
-| `--run` / `--run-bg` | `#047857` / `#d1fae5` | `#34d399` / `#0c2e22` | 実行中・成功 |
-| `--human` / `--human-bg` | `#1d4ed8` / `#dbeafe` | `#93c5fd` / `#16213d` | 人が作業中 |
-| `--danger` / `--danger-bg` | `#b91c1c` / `#fee2e2` | `#f87171` / `#3b1414` | 失敗・却下 |
+| `--background` | `#fafaf9` | `#141312` | 画面の背景 |
+| `--card` / `--popover` | `#ffffff` | `#1c1b1a` | カード・浮き出る面 |
+| `--muted` / `--accent` | `#f5f5f4` | `#242322` | 入れ子・ホバー |
+| `--border` / `--input` | `#e7e5e4` / `#d6d3d1` | `#2f2d2b` / `#44403c` | 罫線・入力欄の枠 |
+| `--foreground` | `#1c1917` | `#f5f5f4` | 本文 |
+| `--muted-foreground` | `#78716c` | `#a8a29e` | 補足 |
+| `--subtle-foreground` | `#a8a29e` | `#78716c` | さらに弱い補足(時刻、ID) |
+| `--primary` | `#1c1917` | `#f5f5f4` | 主な操作のボタン(無彩色) |
+| `--ring` | `#57534e` | `#d6d3d1` | フォーカスの輪 |
+| `--attn` / `--attn-soft` | `#b45309` / `#fef3c7` | `#fbbf24` / `#3a2a0a` | 人の対応待ち |
+| `--run` / `--run-soft` | `#047857` / `#d1fae5` | `#34d399` / `#0c2e22` | 実行中・成功 |
+| `--human` / `--human-soft` | `#1d4ed8` / `#dbeafe` | `#93c5fd` / `#16213d` | 人が作業中 |
+| `--destructive` / `--destructive-soft` | `#b91c1c` / `#fee2e2` | `#f87171` / `#3b1414` | 失敗・却下・破壊的な操作 |
 
-- 文字: `-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif`。本文 14px、補足 12px、見出し 15px / 20px
-- 等幅: `ui-monospace, "SF Mono", Menlo, monospace` 12.5px
-- 余白: 4px 刻み(4 / 8 / 12 / 16 / 24 / 32)
-- 角丸: 6px(カード)、999px(バッジ)
-- 影は使わず、罫線で区切る
+- 文字: `-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif`。本文 14px(`text-sm`)、補足 12px(`text-xs`)、見出し 15px / 20px
+- 等幅: `ui-monospace, "SF Mono", Menlo, monospace`(`font-mono`)
+- 余白: Tailwind の 4px 刻みの目盛りをそのまま使う(`gap-2` = 8px など)
+- 角丸: `--radius` 6px(カード・ボタン・入力欄)、バッジは丸(`rounded-full`)
+- 影は使わず、罫線で区切る(shadcn/ui の既定の影は外す)
+- ダークモードは OS の設定(`prefers-color-scheme`)に従う
 
-## 主な部品
+## 部品と使い分け
 
-- **状態バッジ**: 背景色つきの丸いラベル。対応待ちは `◆`、実行中は脈動する `●` を前に付ける
+| 部品 | 使うところ | 決まり |
+|------|------------|--------|
+| `Button` | すべてのボタン | 主な操作は `default`(無彩色の塗り)。1つの操作欄に1つだけ。ほかは `outline`。停止・取り消しなど破壊的な操作は `destructive-outline`、確認後の実行は `destructive`。ヘッダーなどの小さなボタンは `size="sm"` |
+| `AlertDialog` | 破壊的な操作(停止・取り消し)の確認 | 押す前に何が起きるかを1文で書く。確定のボタンは `destructive` |
+| `Badge` | 状態・判定 | 状態は色つき(`attention` / `running` / `human` / `danger` / `done`)、判定は `outline`。対応待ちは `◆`、実行中は脈動する点を前に付ける |
+| `Card` | 画面の区画(一覧、パネル、補助情報) | 罫線だけで影なし |
+| `Table` | タスク・実行・成果物の一覧 | 行全体を押せる。数字の列は右寄せ・等幅数字。狭い画面では補助の列を隠す |
+| `Textarea` / `Input` / `Label` | 回答・コメント・チケット投入 | 必須の欄が空なら、送らずに欄の下に理由を出す |
+| `Select` | プロジェクトの選択 | |
+| `Tooltip` | 補足の説明(ボタンの意味、状態の説明) | 操作に必要な情報は Tooltip に隠さない |
+| `Alert` | 対応が必要・実行中・人が作業中・失敗の欄 | 状態の4色の `soft` を背景に使う |
+| `Collapsible` | CLI のコマンド、チケット本文 | 既定は閉じる(短い本文は開く) |
+
+画面専用の部品(`StateBadge`、`Pipeline`、`EventList`、`ActionPanel`、`TaskTable`、`RunTable` など)は、上の部品とトークンを組み合わせて作る。
+
 - **パイプライン表示**: 計画 → 承認 → 実装 → レビュー → QA → 最終確認 → 統合 → 完了 を点と線で表示し、現在地を強調、済んだ段は塗る
 - **コマンド表示**: 等幅のコマンドとコピーボタン。コピーしたら「コピーしました」を1秒表示
 - **イベント行**: 時刻(等幅・補足色)、種類のアイコン、本文1行。クリックで展開
