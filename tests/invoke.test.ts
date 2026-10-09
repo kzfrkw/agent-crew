@@ -21,7 +21,7 @@ const runRow = (ctx: ReturnType<typeof setup>["ctx"], id: number) =>
 
 describe("invokeRole", () => {
   it("成功: 実行を記録し、成果物を登録し、イベントを保存する", async () => {
-    const runner = new ScriptedRunner({ planner: answer("plan.md", "ready", { acceptanceCriteria: ["a"], testFirstException: false }) });
+    const runner = new ScriptedRunner({ planner: answer("plan.md", "ready", { acceptanceCriteria: ["a"], testFirstException: false, design: { architect: false, designer: false, reason: "小さな変更" } }) });
     const { ctx, t, cwd, artifactsDir } = setup(runner);
     const r = await invokeRole(ctx, { roleName: "planner", taskId: t.id, cwd, artifactsDir, prompt: "計画して" });
     expect(r).toMatchObject({ ok: true, verdict: "ready", extra: { acceptanceCriteria: ["a"] } });
@@ -41,7 +41,7 @@ describe("invokeRole", () => {
   });
 
   it("成果物が無ければ失敗", async () => {
-    const runner = new ScriptedRunner({ planner: () => ({ structuredOutput: { verdict: "ready", summary: "s", acceptanceCriteria: [], testFirstException: false } }) });
+    const runner = new ScriptedRunner({ planner: () => ({ structuredOutput: { verdict: "ready", summary: "s", acceptanceCriteria: [], testFirstException: false, design: { architect: false, designer: false, reason: "小さな変更" } } }) });
     const { ctx, t, cwd, artifactsDir } = setup(runner);
     const r = await invokeRole(ctx, { roleName: "planner", taskId: t.id, cwd, artifactsDir, prompt: "x" });
     expect(r).toMatchObject({ ok: false, failure: "error", reason: expect.stringContaining("plan.md") });

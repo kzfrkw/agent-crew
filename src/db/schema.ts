@@ -107,4 +107,9 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX approvals_task ON approvals(task_id);
   `,
+  // v2(フェーズ4): 設計の段で動かす役割。プランナーが判定し、計画の承認時に人が上書きできる
+  `
+  ALTER TABLE tasks ADD COLUMN design_architect INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE tasks ADD COLUMN design_designer INTEGER NOT NULL DEFAULT 0;
+  `,
 ];

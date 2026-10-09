@@ -53,7 +53,10 @@ export function taskPrompt(ctx: AppContext, task: Task, role: PromptRole, extra:
     "## 参照するファイル",
     ...ref("プロジェクトプロファイル", join(pdir, "profile.md")),
     ...ref("設計判断ログ", join(pdir, "decisions.md")),
+    ...ref("デザイン方針(UI の基準)", join(pdir, "design-guide.md")),
     ...ref("計画", join(tdir, "plan.md")),
+    ...ref("設計(設計者)", join(tdir, "design.md")),
+    ...ref("UI 仕様(デザイナー)", join(tdir, "ui-spec.md")),
     ...ref("実装メモ", join(tdir, "impl-notes.md")),
     ...ref("テストの再実行結果", join(tdir, "verify-report.md")),
     ...ref("レビュー結果", join(tdir, "review.md")),
@@ -80,12 +83,20 @@ export function taskPrompt(ctx: AppContext, task: Task, role: PromptRole, extra:
 }
 
 const ROLE_INSTRUCTIONS: Record<PromptRole, string[]> = {
-  planner: ["- 成果物ディレクトリに `plan.md` を書き、判定を返してください。人のコメントがあれば、それを反映して計画を直してください"],
+  planner: [
+    "- 成果物ディレクトリに `plan.md` を書き、判定を返してください。人のコメントがあれば、それを反映して計画を直してください",
+    "- 実装の前に設計者・デザイナーを動かすべきかを `design` で判定してください(構造やインターフェースの判断があれば設計者、画面・見た目・操作の流れが変わるならデザイナー)",
+  ],
+  architect: ["- `plan.md` と既存のコードを読み、成果物ディレクトリに `design.md` を書いてください。コードは変更しないでください"],
+  designer: ["- `plan.md`(と、あれば `design.md`)と既存の UI を読み、成果物ディレクトリに `ui-spec.md` を書いてください。コードは変更しないでください"],
   implementer: [
-    "- `plan.md` に沿って、テスト先行で実装し、worktree にコミットしてください。成果物ディレクトリに `impl-notes.md` を書いてください",
+    "- `plan.md` に沿って(`design.md` / `ui-spec.md` があればそれにも沿って)、テスト先行で実装し、worktree にコミットしてください。成果物ディレクトリに `impl-notes.md` を書いてください",
     "- 差し戻しの場合は、レビュー結果・QA結果・テストの再実行結果・人のコメントの指摘をすべて解消してください。ただし、監査結果(audit.md)で invalid とされたレビューの指摘は対応不要です(理由は audit.md にあります)",
   ],
-  reviewer: ["- ベースからの差分をレビューし、成果物ディレクトリに `review.md` を書いてください。指摘には重大度(must / should / nit)を付けてください"],
+  reviewer: [
+    "- ベースからの差分をレビューし、成果物ディレクトリに `review.md` を書いてください。指摘には重大度(must / should / nit)を付けてください",
+    "- `design.md` / `ui-spec.md` があれば、実装がそれと食い違っていないかも確認してください",
+  ],
   auditor: ["- 下の Must 指摘を、実際のコードを読んで1件ずつ検証し、成果物ディレクトリに `audit.md` を書いてください。コードは変更しないでください"],
   qa: ["- 受け入れ条件を動くアプリで確認し、成果物ディレクトリに `qa-report.md` を書いてください"],
   integrator: ["- 成果物ディレクトリに `pr-draft.md` を書いてください。git の操作は行わないでください"],

@@ -39,7 +39,7 @@ export function applyEvent(ctx: AppContext, taskId: number, event: TaskEvent, re
   for (const effect of next.effects) {
     if (effect.type === "invalidate_approvals") invalidateApprovals(ctx.db, taskId, effect.kinds);
   }
-  updateTaskState(ctx.db, taskId, { state: next.state, heldFromState: next.heldFromState, assignee: next.assignee, reviewRounds: next.reviewRounds });
+  updateTaskState(ctx.db, taskId, { state: next.state, heldFromState: next.heldFromState, assignee: next.assignee, reviewRounds: next.reviewRounds, design: next.design });
   addEvent(ctx.db, { taskId, kind: "state_changed", payload: { from: task.state, to: next.state, event: event.type, ...(reason ? { reason } : {}) } });
   if (next.state === "needs_input" || next.state === "failed") {
     addEvent(ctx.db, { taskId, kind: next.state, payload: { reason: reason ?? describeEvent(event) } });

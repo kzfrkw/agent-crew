@@ -11,7 +11,7 @@ import { testContext } from "./helpers/context.ts";
 import { approvedProject, newTask } from "./helpers/project.ts";
 import { answer, ScriptedRunner } from "./helpers/scripted-runner.ts";
 
-const plannerReady = answer("plan.md", "ready", { acceptanceCriteria: ["在庫0を返さない"], testFirstException: false });
+const plannerReady = answer("plan.md", "ready", { acceptanceCriteria: ["在庫0を返さない"], testFirstException: false, design: { architect: false, designer: false, reason: "小さな変更" } });
 
 describe("開始とプランナー", () => {
   it("queued → worktree を作って planning → 計画承認待ち", async () => {
@@ -85,7 +85,7 @@ describe("開始とプランナー", () => {
 describe("人の判断が必要なとき", () => {
   it("need_human → needs_input(理由を残す)→ 回答すると、回答を入力に加えて再開する", async () => {
     const runner = new ScriptedRunner({
-      planner: (spec, n) => (n === 0 ? answer("plan.md", "need_human", { acceptanceCriteria: [], testFirstException: false })(spec, n) : plannerReady(spec, n)),
+      planner: (spec, n) => (n === 0 ? answer("plan.md", "need_human", { acceptanceCriteria: [], testFirstException: false, design: { architect: false, designer: false, reason: "小さな変更" } })(spec, n) : plannerReady(spec, n)),
     });
     const ctx = testContext(runner);
     const { project } = await approvedProject(ctx);
@@ -103,7 +103,7 @@ describe("人の判断が必要なとき", () => {
   });
 
   it("成果物が無いなどの実行エラーは needs_input になり、理由が分かる", async () => {
-    const runner = new ScriptedRunner({ planner: () => ({ structuredOutput: { verdict: "ready", summary: "s", acceptanceCriteria: [], testFirstException: false } }) });
+    const runner = new ScriptedRunner({ planner: () => ({ structuredOutput: { verdict: "ready", summary: "s", acceptanceCriteria: [], testFirstException: false, design: { architect: false, designer: false, reason: "小さな変更" } } }) });
     const ctx = testContext(runner);
     const { project } = await approvedProject(ctx);
     const t = newTask(ctx, project.id);

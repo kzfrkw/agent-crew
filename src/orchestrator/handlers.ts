@@ -1,13 +1,13 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { addApproval, addEvent, getRepo, getRepoProfile, listTaskRepos, listValidApprovals, setProjectProfile, setRepoProfile, type Task } from "../db/store.ts";
+import { addApproval, addEvent, setTaskDesign, getRepo, getRepoProfile, listTaskRepos, listValidApprovals, setProjectProfile, setRepoProfile, type Task } from "../db/store.ts";
 import type { Judgment, Profile } from "../roles/schemas.ts";
 import { changedFiles, commitsSince, containsRef, diffFromBase, diffStat, hasTrackedChanges, headSha, isDirty, mergeBase } from "../git/worktree.ts";
 import { detectTestChanges, renderTestChanges } from "./test-changes.ts";
 import { testCommandFor, verifyTests } from "./verify.ts";
 import type { AppContext } from "./context.ts";
 import { invokeRole, type InvokeResult } from "./invoke.ts";
-import { taskDir } from "./paths.ts";
+import { projectDir, taskDir } from "./paths.ts";
 import { applyAudit, checkReviewConsistency, mustIndexes, type Finding } from "./review-findings.ts";
 import { taskPrompt } from "./prompts.ts";
 import type { Role, TaskEvent } from "./transitions.ts";
@@ -35,8 +35,47 @@ const planner: Handler = async (ctx, task) => {
   const tr = primaryRepo(ctx, task);
   const dir = taskDir(ctx.home, task.id);
   const r = await invokeRole(ctx, { roleName: "planner", taskId: task.id, cwd: tr.worktreePath, artifactsDir: dir, prompt: taskPrompt(ctx, task, "planner") });
-  if (r.ok) addEvent(ctx.db, { taskId: task.id, runId: r.runId, kind: "plan", payload: r.extra });
+  if (r.ok) {
+    addEvent(ctx.db, { taskId: task.id, runId: r.runId, kind: "plan", payload: r.extra });
+    const d = r.extra.design as { architect: boolean; designer: boolean };
+    setTaskDesign(ctx.db, task.id, { architect: d.architect, designer: d.designer });
+  }
   return outcomeOf(r, "planner", `${dir}/plan.md`);
+};
+
+/** 設計者・デザイナーが返した判断を、プロジェクトの設計判断ログに追記する(エージェントはプロジェクトの領域に書かない) */
+function appendDecisions(ctx: AppContext, task: Task, role: "architect" | "designer", decisions: string[], runId: number): void {
+  const items = decisions.map((d) => d.trim()).filter(Boolean);
+  if (items.length === 0) return;
+  const dir = projectDir(ctx.home, task.projectId);
+  mkdirSync(dir, { recursive: true });
+  const day = new Date().toISOString().slice(0, 10);
+  appendFileSync(join(dir, "decisions.md"), `\n## ${day} #${task.id} ${task.title}(${role === "architect" ? "設計者" : "デザイナー"})\n\n${items.map((d) => `- ${d}`).join("\n")}\n`);
+  addEvent(ctx.db, { taskId: task.id, runId, kind: "decisions", payload: { role, decisions: items } });
+}
+
+/**
+ * 設計の段(designing、設計メモ v0.12)。タスクの design に従い、設計者 → デザイナーの順に必要なものだけ動かす。
+ * デザイナーは設計者の design.md を読む。どちらかが need_human などを返したら、そこで止める
+ */
+const design: Handler = async (ctx, task) => {
+  const tr = primaryRepo(ctx, task);
+  const dir = taskDir(ctx.home, task.id);
+  const run = (role: "architect" | "designer") =>
+    invokeRole(ctx, { roleName: role, taskId: task.id, cwd: tr.worktreePath, artifactsDir: dir, prompt: taskPrompt(ctx, task, role) });
+
+  if (task.design.architect) {
+    const r = await run("architect");
+    if (r.ok && r.verdict === "ready") appendDecisions(ctx, task, "architect", r.extra.decisions as string[], r.runId);
+    if (!r.ok || r.verdict !== "ready" || !task.design.designer) return outcomeOf(r, "architect", `${dir}/design.md`);
+  }
+  if (task.design.designer) {
+    const r = await run("designer");
+    if (r.ok && r.verdict === "ready") appendDecisions(ctx, task, "designer", r.extra.decisions as string[], r.runId);
+    return outcomeOf(r, "designer", `${dir}/ui-spec.md`);
+  }
+  // 人が両方とも外した後に戻ってきた場合など。設計の段は飛ばして実装へ
+  return { event: { type: "verdict", role: "architect", verdict: "ready" }, reason: "設計の段で動かす役割がないため、実装に進みます" };
 };
 
 /** エージェントのコミットを人のコミットと区別するための作者と目印(trailer はフックが付ける) */
@@ -263,4 +302,4 @@ const integrator: Handler = async (ctx, task) => {
 };
 
 /** 状態ごとの処理 */
-export const HANDLERS: Partial<Record<Role, Handler>> = { planner, implementer, reviewer, qa, integrator };
+export const HANDLERS: Partial<Record<Role, Handler>> = { planner, architect: design, implementer, reviewer, qa, integrator };

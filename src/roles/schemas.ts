@@ -24,6 +24,13 @@ export type Profile = z.infer<typeof ProfileSchema>;
 const PlannerExtra = z.object({
   acceptanceCriteria: z.array(z.string()).describe("受け入れ条件(plan.md と同じもの)"),
   testFirstException: z.boolean().describe("テスト先行の例外にするか(理由は plan.md に書く)"),
+  design: z
+    .object({
+      architect: z.boolean().describe("設計者を動かすか(構造の変更、新しいモジュールやインターフェース、複数の選択肢から選ぶ設計判断があるとき)"),
+      designer: z.boolean().describe("デザイナーを動かすか(画面・見た目・操作の流れが変わるとき)"),
+      reason: z.string().describe("判断の理由(1〜2文)"),
+    })
+    .describe("実装の前に、設計の段で動かす役割(人が計画の承認時に上書きできる)"),
 });
 
 const ImplementerExtra = z.object({
@@ -59,7 +66,14 @@ const AuditorExtra = z.object({
   judgments: z.array(JudgmentSchema).describe("監査した Must 指摘ごとの判定"),
 });
 
+/** 設計者・デザイナー: 今後のタスクでも守るべき判断(オーケストレーターが設計判断ログに追記する) */
+const DesignExtra = z.object({
+  decisions: z.array(z.string()).describe("設計判断ログに残す、このプロジェクトの重要な判断(1件1文)。なければ空配列"),
+});
+
 export const EXTRA_SCHEMAS: Record<string, z.ZodObject> = {
+  architect: DesignExtra,
+  designer: DesignExtra,
   implementer: ImplementerExtra,
   profiler: z.object({ profile: ProfileSchema }),
   planner: PlannerExtra,

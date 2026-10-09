@@ -15,7 +15,7 @@ import { answer, ScriptedRunner, writeArtifact, type Script } from "./helpers/sc
 
 const env = (spec: RunSpec) => ({ ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", ...spec.extraEnv });
 const scripts: Record<string, Script> = {
-  planner: answer("plan.md", "ready", { acceptanceCriteria: ["a"], testFirstException: false }),
+  planner: answer("plan.md", "ready", { acceptanceCriteria: ["a"], testFirstException: false, design: { architect: false, designer: false, reason: "小さな変更" } }),
   implementer: (spec, n) => {
     writeFileSync(join(spec.cwd, `f${n}.js`), "x");
     sh(spec.cwd, "git", ["add", "."], env(spec));

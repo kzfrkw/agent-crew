@@ -23,7 +23,7 @@ afterEach(async () => {
   server = worker = undefined;
 });
 
-const plannerReady = answer("plan.md", "ready", { acceptanceCriteria: ["a"], testFirstException: false });
+const plannerReady = answer("plan.md", "ready", { acceptanceCriteria: ["a"], testFirstException: false, design: { architect: false, designer: false, reason: "小さな変更" } });
 const untilAborted = (spec: RunSpec) =>
   new Promise<{ status: "cancelled"; error: string }>((resolve) => spec.signal!.addEventListener("abort", () => resolve({ status: "cancelled", error: "停止" })));
 

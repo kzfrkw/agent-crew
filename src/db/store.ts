@@ -118,6 +118,8 @@ export type Task = {
   heldFromState: TaskState | null;
   assignee: "agent" | "human" | null;
   reviewRounds: number;
+  /** 設計の段で動かす役割(フェーズ4) */
+  design: { architect: boolean; designer: boolean };
   createdAt: string;
   updatedAt: string;
 };
@@ -134,6 +136,7 @@ const toTask = (r: Row): Task => ({
   heldFromState: (r.held_from_state as TaskState | null) ?? null,
   assignee: (r.assignee as Task["assignee"]) ?? null,
   reviewRounds: r.review_rounds as number,
+  design: { architect: r.design_architect === 1, designer: r.design_designer === 1 },
   createdAt: r.created_at as string,
   updatedAt: r.updated_at as string,
 });
@@ -169,18 +172,28 @@ export function listTasks(db: Db, filter: { projectId?: number } = {}): Task[] {
 export function updateTaskState(
   db: Db,
   id: number,
-  u: { state: TaskState; heldFromState?: TaskState | null; assignee?: Task["assignee"]; reviewRounds?: number },
+  u: { state: TaskState; heldFromState?: TaskState | null; assignee?: Task["assignee"]; reviewRounds?: number; design?: Task["design"] },
 ): void {
   const cur = getTask(db, id);
   if (!cur) throw new Error(`タスク ${id} がありません`);
-  db.prepare("UPDATE tasks SET state = ?, held_from_state = ?, assignee = ?, review_rounds = ?, updated_at = ? WHERE id = ?").run(
+  const design = u.design ?? cur.design;
+  db.prepare(
+    "UPDATE tasks SET state = ?, held_from_state = ?, assignee = ?, review_rounds = ?, design_architect = ?, design_designer = ?, updated_at = ? WHERE id = ?",
+  ).run(
     u.state,
     u.heldFromState === undefined ? cur.heldFromState : u.heldFromState,
     u.assignee === undefined ? cur.assignee : u.assignee,
     u.reviewRounds ?? cur.reviewRounds,
+    design.architect ? 1 : 0,
+    design.designer ? 1 : 0,
     now(),
     id,
   );
+}
+
+/** 設計の段で動かす役割を記録する(プランナーの判定)。状態は変えない */
+export function setTaskDesign(db: Db, id: number, design: Task["design"]): void {
+  db.prepare("UPDATE tasks SET design_architect = ?, design_designer = ?, updated_at = ? WHERE id = ?").run(design.architect ? 1 : 0, design.designer ? 1 : 0, now(), id);
 }
 
 export type TaskRepo = { taskId: number; repoId: number; worktreePath: string; branchName: string; baseSha: string };

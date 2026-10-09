@@ -9,7 +9,7 @@ import { testContext } from "./helpers/context.ts";
 import { approvedProject, newTask } from "./helpers/project.ts";
 import { answer, ScriptedRunner } from "./helpers/scripted-runner.ts";
 
-const plannerReady = answer("plan.md", "ready", { acceptanceCriteria: ["在庫0を返さない"], testFirstException: false });
+const plannerReady = answer("plan.md", "ready", { acceptanceCriteria: ["在庫0を返さない"], testFirstException: false, design: { architect: false, designer: false, reason: "小さな変更" } });
 
 /** 中断の合図が来るまで終わらない役割(実行中の claude の代わり) */
 const untilAborted = (spec: RunSpec) =>

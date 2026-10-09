@@ -246,3 +246,47 @@ describe("人による停止(stopped)", () => {
     expect(() => next(snap("awaiting_plan_approval"), { type: "stopped" })).toThrow(TransitionError);
   });
 });
+
+describe("設計の段(designing、フェーズ4)", () => {
+  const both = { architect: true, designer: true };
+  const none = { architect: false, designer: false };
+
+  it("計画の承認: 設計者かデザイナーを動かすなら designing、どちらも動かさないなら implementing", () => {
+    expect(next(snap("awaiting_plan_approval", { design: both }), { type: "approve", kind: "plan" }).state).toBe("designing");
+    expect(next(snap("awaiting_plan_approval", { design: { architect: false, designer: true } }), { type: "approve", kind: "plan" }).state).toBe("designing");
+    expect(next(snap("awaiting_plan_approval", { design: none }), { type: "approve", kind: "plan" }).state).toBe("implementing");
+    expect(next(snap("awaiting_plan_approval"), { type: "approve", kind: "plan" }).state).toBe("implementing");
+  });
+
+  it("計画の承認で、人がプランナーの判定を上書きできる。上書きは結果に残る", () => {
+    const r = next(snap("awaiting_plan_approval", { design: none }), { type: "approve", kind: "plan", design: { architect: true, designer: false } });
+    expect(r).toMatchObject({ state: "designing", design: { architect: true, designer: false } });
+    expect(next(snap("awaiting_plan_approval", { design: both }), { type: "approve", kind: "plan", design: none }).state).toBe("implementing");
+  });
+
+  it("designing の役割は設計者とデザイナー", () => {
+    expect(roleForState("designing")).toBe("architect");
+    expect(roleForState("awaiting_design_approval")).toBeNull();
+  });
+
+  it("設計者の ready は実装へ(デザイナー不要のとき)。デザイナーの ready はデザイン仕様の承認待ちへ", () => {
+    expect(next(snap("designing", { design: { architect: true, designer: false } }), { type: "verdict", role: "architect", verdict: "ready" }).state).toBe("implementing");
+    expect(next(snap("designing", { design: both }), { type: "verdict", role: "designer", verdict: "ready" }).state).toBe("awaiting_design_approval");
+  });
+
+  it("need_human は人の回答待ち(designing に戻れる)", () => {
+    expect(next(snap("designing", { design: both }), { type: "verdict", role: "designer", verdict: "need_human" })).toMatchObject({ state: "needs_input", heldFromState: "designing" });
+  });
+
+  it("デザイン仕様の承認は実装へ、却下は designing へ", () => {
+    expect(next(snap("awaiting_design_approval", { design: both }), { type: "approve", kind: "design" }).state).toBe("implementing");
+    expect(next(snap("awaiting_design_approval", { design: both }), { type: "reject", kind: "design" }).state).toBe("designing");
+    expect(() => next(snap("awaiting_plan_approval"), { type: "approve", kind: "design" })).toThrow(TransitionError);
+    expect(() => next(snap("awaiting_design_approval"), { type: "approve", kind: "plan" })).toThrow(TransitionError);
+  });
+
+  it("ほかの段の判定は designing では受け付けない", () => {
+    expect(() => next(snap("designing", { design: both }), { type: "verdict", role: "planner", verdict: "ready" })).toThrow(TransitionError);
+    expect(() => next(snap("planning"), { type: "verdict", role: "architect", verdict: "ready" })).toThrow(TransitionError);
+  });
+});

@@ -4,6 +4,7 @@ import { addApproval, listTaskRepos } from "../db/store.ts";
 import { headSha } from "../git/worktree.ts";
 import type { AppContext } from "./context.ts";
 import { applyEvent } from "./engine.ts";
+import type { DesignPlan } from "./transitions.ts";
 import { taskDir } from "./paths.ts";
 
 /** 人のコメント・回答。次に起動する役割の入力になる */
@@ -16,8 +17,9 @@ export function appendHumanNote(ctx: AppContext, taskId: number, heading: string
   appendFileSync(humanNotesPath(ctx.home, taskId), `\n## ${new Date().toISOString()} ${heading}\n\n${text.trim()}\n`);
 }
 
-export function approveTask(ctx: AppContext, taskId: number, kind: "plan" | "final", comment?: string): void {
-  applyEvent(ctx, taskId, { type: "approve", kind });
+/** design は計画の承認のときだけ使う(設計の段で動かす役割の、人による上書き) */
+export function approveTask(ctx: AppContext, taskId: number, kind: "plan" | "design" | "final", comment?: string, design?: DesignPlan): void {
+  applyEvent(ctx, taskId, { type: "approve", kind, ...(kind === "plan" && design ? { design } : {}) });
   if (kind === "final") {
     // 最終確認の承認は、承認した時点のコミットに紐づける
     for (const tr of listTaskRepos(ctx.db, taskId)) {
@@ -26,14 +28,16 @@ export function approveTask(ctx: AppContext, taskId: number, kind: "plan" | "fin
   } else {
     addApproval(ctx.db, { taskId, kind, result: "approved", comment });
   }
-  if (comment) appendHumanNote(ctx, taskId, `${kind === "plan" ? "計画" : "最終確認"}の承認コメント`, comment);
+  if (comment) appendHumanNote(ctx, taskId, `${KIND_LABEL[kind]}の承認コメント`, comment);
 }
 
-export function rejectTask(ctx: AppContext, taskId: number, kind: "plan" | "final", comment: string): void {
+const KIND_LABEL = { plan: "計画", design: "デザイン仕様", final: "最終確認" };
+
+export function rejectTask(ctx: AppContext, taskId: number, kind: "plan" | "design" | "final", comment: string): void {
   if (!comment.trim()) throw new Error("却下の理由(コメント)を書いてください");
   applyEvent(ctx, taskId, { type: "reject", kind });
   addApproval(ctx.db, { taskId, kind, result: "rejected", comment });
-  appendHumanNote(ctx, taskId, `${kind === "plan" ? "計画" : "最終確認"}の却下`, comment);
+  appendHumanNote(ctx, taskId, `${KIND_LABEL[kind]}の却下`, comment);
 }
 
 export function answerTask(ctx: AppContext, taskId: number, message: string): void {

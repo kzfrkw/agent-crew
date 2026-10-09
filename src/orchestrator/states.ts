@@ -1,8 +1,10 @@
-/** タスクの状態(設計メモ第5章)。フェーズ1は designing を使わない */
+/** タスクの状態(設計メモ第5章)。designing / awaiting_design_approval はフェーズ4から */
 export const TASK_STATES = [
   "queued",
   "planning",
   "awaiting_plan_approval",
+  "designing",
+  "awaiting_design_approval",
   "implementing",
   "reviewing",
   "qa",
@@ -22,6 +24,8 @@ export const STATE_LABELS: Record<TaskState, string> = {
   queued: "待機",
   planning: "計画中",
   awaiting_plan_approval: "計画の承認待ち",
+  designing: "設計中",
+  awaiting_design_approval: "デザイン仕様の承認待ち",
   implementing: "実装中",
   reviewing: "レビュー中",
   qa: "QA中",
@@ -35,4 +39,4 @@ export const STATE_LABELS: Record<TaskState, string> = {
 };
 
 /** 人の対応が必要な状態(一覧で目立たせる) */
-export const NEEDS_HUMAN: TaskState[] = ["needs_input", "awaiting_plan_approval", "awaiting_final_approval", "failed"];
+export const NEEDS_HUMAN: TaskState[] = ["needs_input", "awaiting_plan_approval", "awaiting_design_approval", "awaiting_final_approval", "failed"];

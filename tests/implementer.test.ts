@@ -13,7 +13,7 @@ import { sh } from "./helpers/gitrepo.ts";
 import { approvedProject, newTask } from "./helpers/project.ts";
 import { answer, ScriptedRunner, writeArtifact, type Script } from "./helpers/scripted-runner.ts";
 
-const plannerReady = answer("plan.md", "ready", { acceptanceCriteria: ["a"], testFirstException: false });
+const plannerReady = answer("plan.md", "ready", { acceptanceCriteria: ["a"], testFirstException: false, design: { architect: false, designer: false, reason: "小さな変更" } });
 
 /** 実装者の台本: ファイルを書いて、渡された環境変数でコミットする(フックが trailer を付ける) */
 const implementer =

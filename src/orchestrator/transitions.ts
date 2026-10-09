@@ -6,10 +6,15 @@ import type { TaskState } from "./states.ts";
  * 状態遷移は役割の「判定の列挙値」と人の操作だけを見て決める。
  */
 
-export type Role = "planner" | "implementer" | "reviewer" | "qa" | "integrator";
+export type Role = "planner" | "architect" | "designer" | "implementer" | "reviewer" | "qa" | "integrator";
 
+/** 設計の段で動かす役割(プランナーが判定し、計画の承認時に人が上書きできる) */
+export type DesignPlan = { architect: boolean; designer: boolean };
+
+/** 状態で起動する役割。designing は設計者とデザイナーを1つのハンドラーで順に動かすため、代表として architect */
 const ROLE_BY_STATE: Partial<Record<TaskState, Role>> = {
   planning: "planner",
+  designing: "architect",
   implementing: "implementer",
   reviewing: "reviewer",
   qa: "qa",
@@ -26,6 +31,9 @@ type Outcome = { to: TaskState } | "bounce" | "hold";
 /** 役割ごとに返せる判定と、その結果 */
 const VERDICTS: Record<Role, Record<string, Outcome>> = {
   planner: { ready: { to: "awaiting_plan_approval" }, need_human: "hold" },
+  // 設計者の ready は、デザイナーを動かさないときだけ返ってくる(動かすならハンドラーが続けてデザイナーを起動する)
+  architect: { ready: { to: "implementing" }, need_human: "hold" },
+  designer: { ready: { to: "awaiting_design_approval" }, need_human: "hold" },
   implementer: { done: { to: "reviewing" }, blocked: "hold", need_human: "hold" },
   reviewer: { approve: { to: "qa" }, changes_requested: "bounce", need_human: "hold" },
   qa: { passed: { to: "awaiting_final_approval" }, failed: "bounce", need_human: "hold" },
@@ -42,8 +50,9 @@ export type TaskEvent =
   | { type: "start" }
   | { type: "verdict"; role: Role; verdict: string }
   | { type: "tests_failed" }
-  | { type: "approve"; kind: "plan" | "final" }
-  | { type: "reject"; kind: "plan" | "final" }
+  /** 計画の承認では、設計の段で動かす役割を人が上書きできる */
+  | { type: "approve"; kind: "plan" | "design" | "final"; design?: DesignPlan }
+  | { type: "reject"; kind: "plan" | "design" | "final" }
   | { type: "answer" }
   | { type: "takeover" }
   | { type: "return"; humanChanged: boolean }
@@ -60,7 +69,9 @@ export type TaskEvent =
   /** 人が実行中の役割を止めた。その段で人の判断を待つ */
   | { type: "stopped" };
 
-export type TaskSnapshot = { state: TaskState; heldFromState: TaskState | null; reviewRounds: number };
+export type TaskSnapshot = { state: TaskState; heldFromState: TaskState | null; reviewRounds: number; design?: DesignPlan };
+
+const NO_DESIGN: DesignPlan = { architect: false, designer: false };
 
 export type TransitionContext = {
   maxReviewRounds: number;
@@ -72,7 +83,7 @@ export type TransitionContext = {
 
 export type Effect = { type: "invalidate_approvals"; kinds: ApprovalKind[] };
 
-export type TransitionResult = TaskSnapshot & { assignee: "agent" | "human" | null; effects: Effect[] };
+export type TransitionResult = Omit<TaskSnapshot, "design"> & { design: DesignPlan; assignee: "agent" | "human" | null; effects: Effect[] };
 
 export class TransitionError extends Error {
   override name = "TransitionError";
@@ -86,6 +97,7 @@ export function transition(t: TaskSnapshot, e: TaskEvent, c: TransitionContext):
     state,
     heldFromState: null,
     reviewRounds: t.reviewRounds,
+    design: t.design ?? NO_DESIGN,
     assignee: state === "human_working" ? "human" : roleForState(state) ? "agent" : null,
     effects: [],
     ...over,
@@ -119,7 +131,8 @@ export function transition(t: TaskSnapshot, e: TaskEvent, c: TransitionContext):
 
     case "verdict": {
       const role = roleForState(t.state);
-      if (role !== e.role) fail(`この状態の役割は ${role ?? "なし"} です(受け取った判定は ${e.role})`);
+      const allowed = t.state === "designing" ? ["architect", "designer"] : [role];
+      if (!allowed.includes(e.role)) fail(`この状態の役割は ${role ?? "なし"} です(受け取った判定は ${e.role})`);
       const outcome = VERDICTS[e.role][e.verdict];
       if (!outcome) fail(`${e.role} は ${e.verdict} を返せません`);
       if (outcome === "bounce") return bounce();
@@ -133,10 +146,14 @@ export function transition(t: TaskSnapshot, e: TaskEvent, c: TransitionContext):
 
     case "approve":
     case "reject": {
-      const waiting = e.kind === "plan" ? "awaiting_plan_approval" : "awaiting_final_approval";
+      const waiting = { plan: "awaiting_plan_approval", design: "awaiting_design_approval", final: "awaiting_final_approval" }[e.kind];
       if (t.state !== waiting) fail(`${e.kind} の承認待ちではありません`);
-      if (e.type === "approve") return to(e.kind === "plan" ? "implementing" : "integrating");
-      return to(e.kind === "plan" ? "planning" : "implementing");
+      if (e.type === "reject") return to({ plan: "planning", design: "designing", final: "implementing" }[e.kind] as TaskState);
+      if (e.kind === "plan") {
+        const design = e.design ?? t.design ?? NO_DESIGN;
+        return to(design.architect || design.designer ? "designing" : "implementing", { design });
+      }
+      return to(e.kind === "design" ? "implementing" : "integrating");
     }
 
     case "answer":

@@ -13,7 +13,7 @@ import { sh } from "./helpers/gitrepo.ts";
 import { approvedProject, newTask } from "./helpers/project.ts";
 import { answer, ScriptedRunner, writeArtifact, type Script } from "./helpers/scripted-runner.ts";
 
-const planner = answer("plan.md", "ready", { acceptanceCriteria: ["a"], testFirstException: false });
+const planner = answer("plan.md", "ready", { acceptanceCriteria: ["a"], testFirstException: false, design: { architect: false, designer: false, reason: "小さな変更" } });
 const implementer: Script = (spec: RunSpec, n) => {
   writeFileSync(join(spec.cwd, `feature${n}.js`), `export const f = ${n};\n`);
   const env = { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", ...spec.extraEnv };
