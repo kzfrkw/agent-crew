@@ -125,6 +125,12 @@ describe("describeEvent", () => {
     expect(d.detail).toContain("- C は使わない");
   });
 
+  it("後片付けは、止めたプロセスの件数で見せる", () => {
+    const d = describeEvent(ev("cleanup", { role: "qa", processes: [{ pid: 1, command: "node serve --port 4310" }] }));
+    expect(d).toMatchObject({ tone: "attention", title: "後片付け(qa)", text: "残っていたプロセスを 1 件止めました" });
+    expect(d.detail).toContain("node serve --port 4310");
+  });
+
   it("知らない種類も落ちずに表示する", () => {
     expect(describeEvent(ev("mystery", { a: 1 }))).toMatchObject({ title: "mystery", text: '{"a":1}' });
   });

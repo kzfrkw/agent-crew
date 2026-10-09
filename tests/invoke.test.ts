@@ -87,3 +87,26 @@ describe("invokeRole", () => {
     expect(await invokeRole(ctx, { roleName: "reviewer", taskId: t.id, cwd, artifactsDir, prompt: "x" })).toMatchObject({ ok: false, failure: "limit" });
   });
 });
+
+describe("invokeRole の後片付け(自己適用で発見)", () => {
+  it("役割が作業ディレクトリに残したプロセスを止め、イベントに残す", async () => {
+    const { spawn } = await import("node:child_process");
+    let pid = 0;
+    const runner = new ScriptedRunner({
+      qa: async (spec) => {
+        await new Promise((r) => setTimeout(r, 1100)); // ps の起動時刻は秒単位
+        const child = spawn("sleep", ["60"], { cwd: spec.cwd, detached: true, stdio: "ignore" });
+        child.unref();
+        pid = child.pid!;
+        writeArtifact(spec, "qa-report.md", "passed");
+        return { structuredOutput: { verdict: "passed", summary: "s" } };
+      },
+    });
+    const { ctx, t, cwd, artifactsDir } = setup(runner);
+    await invokeRole(ctx, { roleName: "qa", taskId: t.id, cwd, artifactsDir, prompt: "x" });
+    await new Promise((r) => setTimeout(r, 300));
+    expect(() => process.kill(pid, 0)).toThrow();
+    const ev = listEvents(ctx.db, t.id).find((e) => e.kind === "cleanup");
+    expect(ev?.payload).toMatchObject({ role: "qa", processes: [expect.objectContaining({ pid, command: expect.stringContaining("sleep") })] });
+  });
+});

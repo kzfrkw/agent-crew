@@ -6,6 +6,7 @@ import { parseVerdict, verdictSchemaFor } from "../roles/roles.ts";
 import type { RunResult } from "../runner/types.ts";
 import type { AppContext } from "./context.ts";
 import { runDir } from "./paths.ts";
+import { cleanupStrayProcesses } from "../runner/cleanup.ts";
 
 export type InvokeResult =
   | { ok: true; runId: number; verdict: string; summary: string; extra: Record<string, unknown>; result: RunResult }
@@ -41,6 +42,7 @@ export async function invokeRole(
   };
 
   let result: RunResult;
+  const startedAt = Date.now();
   try {
     result = await ctx.runner.run(
       {
@@ -66,8 +68,10 @@ export async function invokeRole(
       (e) => addEvent(ctx.db, { taskId: o.taskId, runId: run.id, kind: e.kind, payload: e.payload }),
     );
   } catch (e) {
+    await cleanup(ctx, o, role.name, run.id, startedAt);
     return fail("error", `実行に失敗しました: ${(e as Error).message}`);
   }
+  await cleanup(ctx, o, role.name, run.id, startedAt);
 
   if (result.status === "cancelled") return fail("cancelled", result.error ?? "人が停止しました", result, "cancelled");
   if (result.status === "timeout") return fail("limit", result.error ?? "時間の上限を超えました", result, "timeout");
@@ -105,4 +109,13 @@ export async function invokeRole(
     structuredOutput: result.structuredOutput,
   });
   return { ok: true, runId: run.id, verdict: parsed.verdict, summary: parsed.summary, extra: parsed.extra, result };
+}
+
+/**
+ * 役割が作業ディレクトリに残したプロセス(QA が起動したサーバーなど)を止める。サンドボックスの中からは、
+ * 別の Bash の実行で起動したプロセスを止められないため(自己適用で発見)。止めたものはイベントに残す
+ */
+async function cleanup(ctx: AppContext, o: { taskId?: number; cwd: string }, role: string, runId: number, startedAt: number): Promise<void> {
+  const killed = await cleanupStrayProcesses(o.cwd, startedAt);
+  if (killed.length > 0) addEvent(ctx.db, { taskId: o.taskId, runId, kind: "cleanup", payload: { role, processes: killed } });
 }

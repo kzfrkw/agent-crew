@@ -118,6 +118,16 @@ export function describeEvent(e: EventView): EventLine {
         detail: list.map((x) => `- ${x}`).join("\n"),
       };
     }
+    case "cleanup": {
+      const list: P[] = Array.isArray(p.processes) ? p.processes : [];
+      return {
+        tone: "attention",
+        icon: "🧹",
+        title: `後片付け(${p.role ?? "役割"})`,
+        text: `残っていたプロセスを ${list.length} 件止めました`,
+        detail: list.map((x) => `${x.pid} ${x.command}`).join("\n"),
+      };
+    }
     case "test_command":
       return { tone: "neutral", icon: "▸", title: "テストのコマンド", text: String(p.command ?? "") };
     case "integrated":
