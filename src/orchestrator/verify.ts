@@ -38,8 +38,9 @@ export async function verifyTests(ctx: AppContext, task: Task): Promise<VerifyRe
     write("- テストコマンドが無いため、確認していません(テスト基盤の整備前)");
     return { status: "skipped", reportPath };
   }
-  const install = (getRepoProfile(ctx.db, tr.repoId) as Profile | null)?.commands.install;
-  const command = install ? `${install} && ${test}` : test;
+  // 依存の準備(プロファイルの install)はしない。準備は worktree に書ける実装者の責任で、
+  // node_modules がある状態での入れ直しはサンドボックスに拒否されることがある(フェーズ4b で判明)
+  const command = test;
 
   const cached = listValidApprovals(ctx.db, task.id).filter((a) => a.kind === "tests" && a.commitSha === head && a.repoId === tr.repoId).at(-1);
   if (cached) return { status: cached.result === "approved" ? "passed" : "failed", command, cached: true, reportPath };

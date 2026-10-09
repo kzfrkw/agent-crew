@@ -9,7 +9,7 @@ import { approveTask } from "../src/orchestrator/human.ts";
 import { taskDir } from "../src/orchestrator/paths.ts";
 import type { RunSpec } from "../src/runner/types.ts";
 import { testContext } from "./helpers/context.ts";
-import { sh } from "./helpers/gitrepo.ts";
+import { gitEnv, sh } from "./helpers/gitrepo.ts";
 import { approvedProject, newTask } from "./helpers/project.ts";
 import { answer, ScriptedRunner, writeArtifact, type Script } from "./helpers/scripted-runner.ts";
 
@@ -86,10 +86,11 @@ describe("レビュワー", () => {
       verifier: verifier(true),
       reviewer: (spec, n) => {
         if (n === 0) {
-          // 1回目のレビューの前に、人が同じブランチにコミットした状況を作る
+          // 1回目のレビューの前に、人が同じブランチにコミットした状況を作る(エージェントの環境変数を持たない人のコミット)
+          const human = { ...gitEnv(), GIT_AUTHOR_NAME: "Human", GIT_AUTHOR_EMAIL: "h@x", GIT_COMMITTER_NAME: "Human", GIT_COMMITTER_EMAIL: "h@x" };
           writeFileSync(join(spec.cwd, "by-human.js"), "x");
-          sh(spec.cwd, "git", ["add", "."], { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_AUTHOR_NAME: "Human", GIT_AUTHOR_EMAIL: "h@x", GIT_COMMITTER_NAME: "Human", GIT_COMMITTER_EMAIL: "h@x" });
-          sh(spec.cwd, "git", ["commit", "-q", "-m", "fix by human"], { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_AUTHOR_NAME: "Human", GIT_AUTHOR_EMAIL: "h@x", GIT_COMMITTER_NAME: "Human", GIT_COMMITTER_EMAIL: "h@x" });
+          sh(spec.cwd, "git", ["add", "."], human);
+          sh(spec.cwd, "git", ["commit", "-q", "-m", "fix by human"], human);
           return review("changes_requested", [finding("must")])(spec, n);
         }
         return review("approve")(spec, n);

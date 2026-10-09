@@ -121,12 +121,12 @@ describe("verifyTests(テストの再実行)", () => {
     expect(await verifyTests(ctx, getTask(ctx.db, t.id)!)).toMatchObject({ status: "error" });
   });
 
-  it("依存の準備コマンドがあれば、続けて実行する", async () => {
-    const { ctx, t, runner } = await reviewing(bash("npm ci && npm test", false), {
+  it("依存の準備コマンドは実行しない(準備は worktree に書ける実装者の責任。サンドボックスでの入れ直しは失敗することがある)", async () => {
+    const { ctx, t, runner } = await reviewing(bash("npm test", false), {
       commands: { install: "npm ci", build: null, test: "npm test", start: null },
     });
-    expect(await verifyTests(ctx, getTask(ctx.db, t.id)!)).toMatchObject({ status: "passed" });
-    expect(runner.calls.find((c) => c.role === "verifier")!.prompt).toContain("npm ci && npm test");
+    expect(await verifyTests(ctx, getTask(ctx.db, t.id)!)).toMatchObject({ status: "passed", command: "npm test" });
+    expect(runner.calls.find((c) => c.role === "verifier")!.prompt).not.toContain("npm ci");
   });
 
   it("実装者が記録したテストコマンドを優先する", async () => {

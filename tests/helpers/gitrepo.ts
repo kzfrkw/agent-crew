@@ -6,7 +6,8 @@ import { join } from "node:path";
 /** テスト用の環境変数: 親プロセス(Claude Code)の変数や個人のgit設定の影響を受けないようにする */
 export function gitEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env };
-  for (const k of Object.keys(env)) if (k.startsWith("GIT_") || k === "CLAUDECODE" || k === "AGENT_CREW_RUN") delete env[k];
+  // AGENT_CREW_ROLE: このリポジトリ自身をエージェントが扱うとき、テストの中のコミットにまで trailer が付かないように
+  for (const k of Object.keys(env)) if (k.startsWith("GIT_") || k === "CLAUDECODE" || k === "AGENT_CREW_RUN" || k === "AGENT_CREW_ROLE") delete env[k];
   return {
     ...env,
     GIT_CONFIG_GLOBAL: "/dev/null",
