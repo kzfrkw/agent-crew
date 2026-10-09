@@ -8,12 +8,13 @@ import type { TaskState } from "../orchestrator/states.ts";
 export type { TaskState };
 
 /** 人の対応が必要な理由の種類 */
-export type Attention = "approve_plan" | "approve_final" | "answer" | "failed" | "human_working";
+export type Attention = "approve_plan" | "approve_design" | "approve_final" | "answer" | "failed" | "human_working";
 
 /** 人の操作(POST /api/tasks/:id/actions の本文)。CLI と同じ関数を通す */
 export type ActionRequest =
-  | { action: "approve"; kind: "plan" | "final"; comment?: string }
-  | { action: "reject"; kind: "plan" | "final"; comment: string }
+  /** design は計画の承認だけ。設計の段で動かす役割の、人による上書き */
+  | { action: "approve"; kind: "plan" | "design" | "final"; comment?: string; design?: DesignOptions }
+  | { action: "reject"; kind: "plan" | "design" | "final"; comment: string }
   | { action: "answer"; message: string }
   | { action: "stop" }
   | { action: "takeover" }
@@ -21,6 +22,8 @@ export type ActionRequest =
   | { action: "cancel" }
   | { action: "update_base" }
   | { action: "open_editor" };
+
+export type DesignOptions = { architect: boolean; designer: boolean };
 
 /**
  * 状態ごとに人が次にすること。GUI はこれをボタンにし、request を送る(状態とボタンの対応を GUI に持たせない)。
@@ -38,6 +41,10 @@ export type NextAction = {
   primary?: boolean;
   /** 押す前に確認する文(停止・取り消しなど) */
   confirm?: string;
+  /** 送る前に選べるオン/オフ(計画の承認での設計者・デザイナー)。選んだ値は request.design に入れて送る */
+  options?: { key: keyof DesignOptions; label: string; value: boolean }[];
+  /** options の判断材料(プランナーの理由など) */
+  optionsNote?: string;
 };
 
 export type WorkerView = { state: "running" | "paused" | "locked" | "disabled"; active: number[] };
@@ -81,6 +88,8 @@ export type TaskSummary = {
   heldFromState: TaskState | null;
   assignee: "agent" | "human" | null;
   reviewRounds: number;
+  /** 設計の段で動かす役割(フェーズ4) */
+  design: DesignOptions;
   createdAt: string;
   updatedAt: string;
   attention: Attention | null;
@@ -133,6 +142,8 @@ export type TaskDetail = {
   totals: { costUsd: number; durationSec: number };
   nextActions: NextAction[];
   runActive: boolean;
+  /** このサーバーで操作できるか(serve --no-worker の読み取り専用なら false。GUI はボタンの代わりに CLI のコマンドを出す) */
+  operable: boolean;
 };
 
 export type ArtifactDetail = {

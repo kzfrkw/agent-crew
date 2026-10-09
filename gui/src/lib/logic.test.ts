@@ -45,10 +45,12 @@ describe("pipelineOf", () => {
   const labels = (state: Parameters<typeof pipelineOf>[0], held: Parameters<typeof pipelineOf>[1] = null) =>
     pipelineOf(state, held).map((s) => `${s.label}:${s.status}`);
 
-  it("実装中: 計画と承認は済み、実装が現在地", () => {
+  it("実装中: 計画と承認は済み、実装が現在地(設計の段を動かさないタスクでは、設計の段は飛ばした扱い)", () => {
     expect(labels("implementing")).toEqual([
       "計画:done",
       "計画の承認:done",
+      "設計:skipped",
+      "デザインの承認:skipped",
       "実装:current",
       "レビュー:todo",
       "QA:todo",
@@ -59,19 +61,27 @@ describe("pipelineOf", () => {
   });
 
   it("回答待ち・人が作業中・失敗は、止まる前の段に印を付ける", () => {
-    expect(labels("needs_input", "reviewing")[3]).toBe("レビュー:blocked");
-    expect(labels("human_working", "implementing")[2]).toBe("実装:human");
-    expect(labels("failed", "qa")[4]).toBe("QA:failed");
+    expect(labels("needs_input", "reviewing")[5]).toBe("レビュー:blocked");
+    expect(labels("human_working", "implementing")[4]).toBe("実装:human");
+    expect(labels("failed", "qa")[6]).toBe("QA:failed");
   });
 
   it("承認待ちは、人の対応待ちとして印を付ける", () => {
     expect(labels("awaiting_plan_approval")[1]).toBe("計画の承認:blocked");
-    expect(labels("awaiting_final_approval")[5]).toBe("最終確認:blocked");
+    expect(labels("awaiting_final_approval")[7]).toBe("最終確認:blocked");
   });
 
-  it("完了はすべて済み。待機は何も始まっていない", () => {
-    expect(labels("done").every((l) => l.endsWith(":done"))).toBe(true);
-    expect(labels("queued").every((l) => l.endsWith(":todo"))).toBe(true);
+  it("設計の段: 動かす段は通常どおり、デザイナーを動かさなければデザインの承認は飛ばす", () => {
+    const both = { architect: true, designer: true };
+    expect(pipelineOf("designing", null, both).map((s) => s.status).slice(0, 5)).toEqual(["done", "done", "current", "todo", "todo"]);
+    expect(pipelineOf("awaiting_design_approval", null, both)[3]!.status).toBe("blocked");
+    expect(pipelineOf("implementing", null, { architect: true, designer: false }).map((s) => s.status).slice(2, 5)).toEqual(["done", "skipped", "current"]);
+    expect(pipelineOf("needs_input", "designing", both)[2]!.status).toBe("blocked");
+  });
+
+  it("完了はすべて済み(飛ばした段は飛ばしたまま)。待機は何も始まっていない", () => {
+    expect(labels("done").every((l) => l.endsWith(":done") || l.endsWith(":skipped"))).toBe(true);
+    expect(labels("queued").every((l) => l.endsWith(":todo") || l.endsWith(":skipped"))).toBe(true);
   });
 });
 
@@ -107,6 +117,12 @@ describe("describeEvent", () => {
 
   it("Must 指摘の監査は、却下と維持の件数で見せる", () => {
     expect(describeEvent(ev("audit", { verdict: "upheld", standing: [0], dismissed: [2, 3], judgments: [] }))).toMatchObject({ title: "Must 指摘の監査", text: "維持 1 / 却下 2" });
+  });
+
+  it("設計判断の追記は、件数と最初の判断で見せる", () => {
+    const d = describeEvent(ev("decisions", { role: "architect", decisions: ["A は B に閉じ込める", "C は使わない"] }));
+    expect(d).toMatchObject({ title: "設計判断(設計者)", text: "A は B に閉じ込める ほか1件" });
+    expect(d.detail).toContain("- C は使わない");
   });
 
   it("知らない種類も落ちずに表示する", () => {

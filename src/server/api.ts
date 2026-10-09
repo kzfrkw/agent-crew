@@ -78,7 +78,7 @@ export function handleApi(home: string, path: string, query: URLSearchParams, wo
     if (m) {
       const id = Number(m[2]);
       const found =
-        m[1] === "tasks" ? taskDetail(home, db, id) : m[1] === "runs" ? runDetail(home, db, id) : m[1] === "artifacts" ? artifactDetail(home, db, id) : projectDetail(home, db, id);
+        m[1] === "tasks" ? taskDetail(home, db, id, worker.state !== "disabled") : m[1] === "runs" ? runDetail(home, db, id) : m[1] === "artifacts" ? artifactDetail(home, db, id) : projectDetail(home, db, id);
       if (!found) throw new HttpError(404, "ありません");
       return found;
     }
@@ -129,6 +129,7 @@ function taskSummary(db: Db, t: Task, running: Map<number, RunRow>): TaskSummary
     heldFromState: t.heldFromState,
     assignee: t.assignee,
     reviewRounds: t.reviewRounds,
+    design: t.design,
     createdAt: t.createdAt,
     updatedAt: t.updatedAt,
     attention,
@@ -216,7 +217,7 @@ function overview(db: Db): Omit<Overview, "worker"> {
   };
 }
 
-function taskDetail(home: string, db: Db, id: number): TaskDetail | undefined {
+function taskDetail(home: string, db: Db, id: number, operable: boolean): TaskDetail | undefined {
   const t = getTask(db, id);
   if (!t) return undefined;
   const runs = listRuns(db, { taskId: id }).map(runSummary);
@@ -247,6 +248,7 @@ function taskDetail(home: string, db: Db, id: number): TaskDetail | undefined {
     },
     nextActions: nextActions(db, t),
     runActive: runActive(db, id),
+    operable,
   };
 }
 

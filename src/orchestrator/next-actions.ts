@@ -13,6 +13,8 @@ export function attentionOf(task: Pick<Task, "state">): Attention | null {
   switch (task.state) {
     case "awaiting_plan_approval":
       return "approve_plan";
+    case "awaiting_design_approval":
+      return "approve_design";
     case "awaiting_final_approval":
       return "approve_final";
     case "needs_input":
@@ -26,12 +28,12 @@ export function attentionOf(task: Pick<Task, "state">): Attention | null {
   }
 }
 
-export function nextActions(db: Db, task: Pick<Task, "id" | "state">): NextAction[] {
+export function nextActions(db: Db, task: Pick<Task, "id" | "state"> & { design?: Task["design"] }): NextAction[] {
   const id = task.id;
   if (runActive(db, id)) {
     return [{ kind: "stop", label: "実行中の役割を停止する", command: null, request: { action: "stop" }, confirm: "実行中の claude を止めます。タスクは人の判断待ちになります" }];
   }
-  const approval = (kind: "plan" | "final", what: string): NextAction[] => [
+  const approval = (kind: "plan" | "design" | "final", what: string): NextAction[] => [
     {
       kind: "approve",
       label: `${what}を確認して承認する`,
@@ -62,8 +64,24 @@ export function nextActions(db: Db, task: Pick<Task, "id" | "state">): NextActio
     confirm: "タスクを取り消します(worktree とブランチは残ります)",
   };
   switch (task.state) {
-    case "awaiting_plan_approval":
-      return approval("plan", "plan.md ");
+    case "awaiting_plan_approval": {
+      const [approve, reject] = approval("plan", "plan.md ");
+      const design = task.design ?? { architect: false, designer: false };
+      const reason = (listEvents(db, id, 1000).filter((e) => e.kind === "plan").at(-1)?.payload as { design?: { reason?: string } } | undefined)?.design?.reason;
+      return [
+        {
+          ...approve!,
+          options: [
+            { key: "architect", label: "設計者を動かす(design.md)", value: design.architect },
+            { key: "designer", label: "デザイナーを動かす(ui-spec.md、UI を伴う変更)", value: design.designer },
+          ],
+          optionsNote: reason ? `プランナーの判断: ${reason}` : undefined,
+        },
+        reject!,
+      ];
+    }
+    case "awaiting_design_approval":
+      return approval("design", "ui-spec.md ");
     case "awaiting_final_approval":
       return approval("final", "成果物");
     case "needs_input":

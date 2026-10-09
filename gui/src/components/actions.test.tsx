@@ -58,6 +58,26 @@ describe("ActionPanel", () => {
     expect(screen.getByRole("status").textContent).toContain("承認しました");
   });
 
+  it("計画の承認: 設計者・デザイナーのチェック(初期値はプランナーの判定)を、design として送る", async () => {
+    const withOptions: NextAction = {
+      ...approve,
+      options: [
+        { key: "architect", label: "設計者を動かす", value: true },
+        { key: "designer", label: "デザイナーを動かす", value: false },
+      ],
+      optionsNote: "プランナーの判断: モジュールを分けるため",
+    };
+    render(<ActionPanel taskId={1} actions={[withOptions, reject]} />);
+    expect(screen.getByText("プランナーの判断: モジュールを分けるため")).toBeTruthy();
+    const architect = screen.getByRole("checkbox", { name: "設計者を動かす" }) as HTMLInputElement;
+    expect(architect.checked).toBe(true);
+    fireEvent.click(screen.getByRole("checkbox", { name: "デザイナーを動かす" }));
+    fireEvent.click(screen.getByRole("button", { name: "plan.md を確認して承認する" }));
+    await waitFor(() =>
+      expect(posts()[0]!.body).toEqual({ action: "approve", kind: "plan", comment: "", design: { architect: true, designer: true } }),
+    );
+  });
+
   it("却下: 理由が空なら送らずに知らせる", async () => {
     render(<ActionPanel taskId={1} actions={[approve, reject]} />);
     fireEvent.click(screen.getByRole("button", { name: "却下して差し戻す" }));

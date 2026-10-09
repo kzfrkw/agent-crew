@@ -124,6 +124,24 @@ describe("人の操作", () => {
     expect(readFileSync(humanNotesPath(ctx.home, t.id), "utf8")).toContain("これで進めて");
   });
 
+  it("計画の承認で、設計の段で動かす役割を上書きできる", async () => {
+    const { ctx, project } = await setup();
+    const t = newTask(ctx, project.id);
+    updateTaskState(ctx.db, t.id, { state: "awaiting_plan_approval" });
+    const r = await post(`/api/tasks/${t.id}/actions`, { action: "approve", kind: "plan", design: { architect: false, designer: true } });
+    expect(r.status).toBe(200);
+    expect(getTask(ctx.db, t.id)).toMatchObject({ state: "designing", design: { architect: false, designer: true } });
+    updateTaskState(ctx.db, t.id, { state: "awaiting_plan_approval" });
+    expect((await post(`/api/tasks/${t.id}/actions`, { action: "approve", kind: "plan", design: { architect: "yes" } })).status).toBe(400);
+  });
+
+  it("デザイン仕様の承認", async () => {
+    const { ctx, project } = await setup();
+    const t = newTask(ctx, project.id);
+    updateTaskState(ctx.db, t.id, { state: "awaiting_design_approval" });
+    expect((await post(`/api/tasks/${t.id}/actions`, { action: "approve", kind: "design" })).body.task.state).toBe("implementing");
+  });
+
   it("却下の理由・回答が空なら 400", async () => {
     const { ctx, project } = await setup();
     const t = newTask(ctx, project.id);

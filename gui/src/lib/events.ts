@@ -108,6 +108,16 @@ export function describeEvent(e: EventView): EventLine {
       const n = (v: unknown) => (Array.isArray(v) ? v.length : 0);
       return { tone: "neutral", icon: "⚖", title: "Must 指摘の監査", text: `維持 ${n(p.standing)} / 却下 ${n(p.dismissed)}`, detail: stringify(p.judgments ?? []) };
     }
+    case "decisions": {
+      const list: string[] = Array.isArray(p.decisions) ? p.decisions.map(String) : [];
+      return {
+        tone: "neutral",
+        icon: "📌",
+        title: `設計判断(${p.role === "designer" ? "デザイナー" : "設計者"})`,
+        text: list.length > 1 ? `${list[0]} ほか${list.length - 1}件` : (list[0] ?? ""),
+        detail: list.map((x) => `- ${x}`).join("\n"),
+      };
+    }
     case "test_command":
       return { tone: "neutral", icon: "▸", title: "テストのコマンド", text: String(p.command ?? "") };
     case "integrated":

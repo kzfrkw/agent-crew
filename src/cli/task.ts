@@ -90,22 +90,30 @@ export function registerTaskCommands(program: Command): void {
 
   task
     .command("approve <id>")
-    .description("計画(plan)または最終確認(final)を承認する")
-    .requiredOption("--kind <kind>", "plan | final")
+    .description("計画(plan)・デザイン仕様(design)・最終確認(final)を承認する")
+    .requiredOption("--kind <kind>", "plan | design | final")
     .option("--comment <text>", "コメント")
-    .action((id: string, o: { kind: "plan" | "final"; comment?: string }) =>
+    .option("--design", "計画の承認: 設計者を動かす(プランナーの判定を上書き)")
+    .option("--no-design", "計画の承認: 設計者を動かさない")
+    .option("--ui", "計画の承認: デザイナーを動かす(UI を伴う)")
+    .option("--no-ui", "計画の承認: デザイナーを動かさない")
+    .action((id: string, o: { kind: "plan" | "design" | "final"; comment?: string; design?: boolean; ui?: boolean }) =>
       withContext((ctx) => {
-        approveTask(ctx, mustTask(ctx, id).id, o.kind, o.comment);
+        const t = mustTask(ctx, id);
+        const override = o.kind === "plan" && (o.design !== undefined || o.ui !== undefined)
+          ? { architect: o.design ?? t.design.architect, designer: o.ui ?? t.design.designer }
+          : undefined;
+        approveTask(ctx, t.id, o.kind, o.comment, override);
         console.log(`承認しました: #${id}(${STATE_LABELS[getTask(ctx.db, Number(id))!.state]})`);
       }),
     );
 
   task
     .command("reject <id>")
-    .description("計画(plan)または最終確認(final)を却下して差し戻す")
-    .requiredOption("--kind <kind>", "plan | final")
+    .description("計画(plan)・デザイン仕様(design)・最終確認(final)を却下して差し戻す")
+    .requiredOption("--kind <kind>", "plan | design | final")
     .requiredOption("--comment <text>", "却下の理由(次の役割への入力になる)")
-    .action((id: string, o: { kind: "plan" | "final"; comment: string }) =>
+    .action((id: string, o: { kind: "plan" | "design" | "final"; comment: string }) =>
       withContext((ctx) => {
         rejectTask(ctx, mustTask(ctx, id).id, o.kind, o.comment);
         console.log(`差し戻しました: #${id}(${STATE_LABELS[getTask(ctx.db, Number(id))!.state]})`);

@@ -153,7 +153,31 @@ const t6 = createTask(db, { projectId: p.id, title: "ヘルスチェックのエ
 updateTaskState(db, t6.id, { state: "done" });
 addEvent(db, { taskId: t6.id, kind: "integrated", payload: { repo: "/Users/me/dev/sample-shop", branch: "agent-crew/6-health", head: "9f8e7d6" } });
 
-// 7. テスト基盤整備(下書きプロジェクト)
+// 7. デザイン仕様の承認待ち(設計者 → デザイナー)
+const t8 = createTask(db, { projectId: p.id, title: "在庫一覧の画面に絞り込みを付ける", body: "在庫0を隠すチェックボックスを付けたい" });
+attachRepoToTask(db, { taskId: t8.id, repoId: repo.id, worktreePath: "/Users/me/.agent-team/worktrees/sample-shop/8-filter/main", branchName: "agent-crew/8-filter", baseSha: "a1b2c3d" });
+const r8a = run(t8.id, "planner", "ready", "画面の変更があるのでデザイナーも動かす", 0.08);
+artifact(t8.id, r8a.id, "plan.md", "---\nverdict: ready\n---\n# 計画\n\n在庫一覧にチェックボックスを付ける。\n", "ready");
+r8a.finish();
+addApproval(db, { taskId: t8.id, kind: "plan", result: "approved" });
+updateTaskState(db, t8.id, { state: "designing", design: { architect: true, designer: true } });
+const r8b = run(t8.id, "architect", "ready", "絞り込みは API のクエリで行う", 0.07);
+artifact(t8.id, r8b.id, "design.md", "---\nverdict: ready\n---\n# 設計\n\n- `GET /api/items?inStock=1` を足す\n", "ready");
+r8b.finish();
+addEvent(db, { taskId: t8.id, runId: r8b.id, kind: "decisions", payload: { role: "architect", decisions: ["在庫の絞り込みは API のクエリで行い、画面は表示だけを持つ"] } });
+const r8c = run(t8.id, "designer", "ready", "一覧の上にチェックボックスを置く", 0.09);
+artifact(
+  t8.id,
+  r8c.id,
+  "ui-spec.md",
+  "---\nverdict: ready\n---\n# UI 仕様\n\n```\n在庫一覧          [x] 在庫0を隠す\n─────────────────────────\nりんご   3\nみかん   0  (隠れる)\n```\n\n- チェックの状態は URL のクエリに残す\n",
+  "ready",
+);
+r8c.finish();
+updateTaskState(db, t8.id, { state: "awaiting_design_approval" });
+state(t8.id, "designing", "awaiting_design_approval");
+
+// 8. テスト基盤整備(下書きプロジェクト)
 createTask(db, { projectId: p2.id, title: "テスト基盤を整備する", body: "", kind: "test_infra" });
 
 db.close();

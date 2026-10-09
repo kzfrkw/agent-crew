@@ -28,6 +28,29 @@ describe("next-actions", () => {
     expect(a[1]!.command).toContain("--kind plan --comment");
   });
 
+  it("計画の承認: 設計者・デザイナーを動かすかを、プランナーの判定を初期値に選べる(理由も添える)", () => {
+    const { db, task } = setup("awaiting_plan_approval");
+    updateTaskState(db, task.id, { state: "awaiting_plan_approval", design: { architect: true, designer: false } });
+    addEvent(db, { taskId: task.id, kind: "plan", payload: { design: { architect: true, designer: false, reason: "モジュールを分けるため" } } });
+    const a = nextActions(db, { ...task, design: { architect: true, designer: false } })[0]!;
+    expect(a.options).toEqual([
+      { key: "architect", label: expect.stringContaining("設計者"), value: true },
+      { key: "designer", label: expect.stringContaining("デザイナー"), value: false },
+    ]);
+    expect(a.optionsNote).toContain("モジュールを分けるため");
+  });
+
+  it("デザイン仕様の承認待ち: 承認と却下(kind は design)", () => {
+    const { db, task } = setup("awaiting_design_approval");
+    expect(attentionOf(task)).toBe("approve_design");
+    const a = nextActions(db, task);
+    expect(a.map((x) => x.request)).toEqual([
+      { action: "approve", kind: "design" },
+      { action: "reject", kind: "design", comment: "" },
+    ]);
+    expect(a[0]!.command).toBe(`agent-crew task approve ${task.id} --kind design`);
+  });
+
   it("最終確認待ち", () => {
     const { db, task } = setup("awaiting_final_approval");
     expect(attentionOf(task)).toBe("approve_final");

@@ -38,7 +38,7 @@ function TaskView({ d, onDone }: { d: TaskDetail; onDone: () => void }) {
         <span>作成 {formatDateTime(t.createdAt)}</span>
         <span>更新 {formatDateTime(t.updatedAt)}</span>
       </Meta>
-      <Pipeline state={t.state} heldFrom={t.heldFromState} />
+      <Pipeline state={t.state} heldFrom={t.heldFromState} design={t.design} />
       <Banner d={d} onDone={onDone} />
 
       <div className="mt-6 grid grid-cols-1 items-start gap-6 min-[880px]:grid-cols-[minmax(0,1fr)_320px]">
@@ -133,7 +133,14 @@ const APPROVAL: Record<string, string> = { plan: "計画", design: "デザイン
 
 function Banner({ d, onDone }: { d: TaskDetail; onDone: () => void }) {
   const t = d.task;
-  const actions = <ActionPanel taskId={t.id} actions={d.nextActions} onDone={onDone} />;
+  // 読み取り専用(serve --no-worker)では、ボタンの代わりに CLI のコマンドを出す
+  const actions = d.operable ? (
+    <ActionPanel taskId={t.id} actions={d.nextActions} onDone={onDone} />
+  ) : (
+    <div className="mt-2 w-full">
+      <Commands actions={d.nextActions} />
+    </div>
+  );
   if (d.runActive && t.running) {
     return (
       <Alert variant="running" role="status" className="mt-4">
@@ -152,7 +159,7 @@ function Banner({ d, onDone }: { d: TaskDetail; onDone: () => void }) {
     // 完了後の push のように、GUI から送らない操作はコマンドだけを見せる
     return (
       <Alert variant="muted" role="status" className="mt-4">
-        <AlertDescription className="w-full text-foreground">{d.nextActions.some((a) => a.request) ? actions : <Commands actions={d.nextActions} />}</AlertDescription>
+        <AlertDescription className="w-full text-foreground">{d.operable && d.nextActions.some((a) => a.request) ? actions : <Commands actions={d.nextActions} />}</AlertDescription>
       </Alert>
     );
   }
@@ -160,19 +167,28 @@ function Banner({ d, onDone }: { d: TaskDetail; onDone: () => void }) {
   const title = {
     answer: "人の回答待ちです",
     approve_plan: "計画を確認して承認してください",
+    approve_design: "デザイン仕様を確認して承認してください",
     approve_final: "成果物を確認して最終承認してください",
     failed: "失敗しました",
     human_working: "人が作業中です(エージェントは起動しません)",
   }[t.attention];
-  const plan = t.attention === "approve_plan" ? latestOf(d.artifacts, "plan") : undefined;
+  // 承認の判断に読むもの(計画の承認は plan.md、デザイン仕様の承認は ui-spec.md と design.md)
+  const toRead =
+    t.attention === "approve_plan"
+      ? [latestOf(d.artifacts, "plan")]
+      : t.attention === "approve_design"
+        ? [latestOf(d.artifacts, "ui-spec"), latestOf(d.artifacts, "design")]
+        : [];
   return (
     <Alert variant={variant} role="status" className="mt-4">
       <AlertTitle className="font-semibold">{title}</AlertTitle>
       <AlertDescription className="w-full text-foreground">
         {t.reason && <p className="m-0 break-words whitespace-pre-wrap">{t.reason}</p>}
-        {plan && (
-          <p className="m-0 text-xs">
-            <Link to={paths.artifact(t.id, plan.id)}>plan.md を読む →</Link>
+        {toRead.some(Boolean) && (
+          <p className="m-0 flex flex-wrap gap-x-4 text-xs">
+            {toRead.flatMap((a) =>
+              a ? [<Link key={a.id} to={paths.artifact(t.id, a.id)}>{a.fileName} を読む →</Link>] : [],
+            )}
           </p>
         )}
         <div className="w-full">{actions}</div>

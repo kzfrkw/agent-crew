@@ -5,7 +5,7 @@ import { requestStop } from "../orchestrator/engine.ts";
 import { returnTask, takeoverTask, updateBase } from "../orchestrator/handoff.ts";
 import { answerTask, approveTask, cancelTask, rejectTask } from "../orchestrator/human.ts";
 import type { Worker } from "../orchestrator/worker.ts";
-import type { ActionRequest, ActionResult, CreateTaskRequest, TaskSummary, WorkerView } from "./api-types.ts";
+import type { ActionRequest, ActionResult, CreateTaskRequest, DesignOptions, TaskSummary, WorkerView } from "./api-types.ts";
 import { HttpError, taskSummaryOf } from "./api.ts";
 
 /**
@@ -70,7 +70,7 @@ async function act(ops: Ops, taskId: number, body: unknown): Promise<ActionResul
   const req = body as ActionRequest;
   const kind = () => {
     const k = (req as { kind?: unknown }).kind;
-    if (k !== "plan" && k !== "final") throw new HttpError(400, "kind は plan か final です");
+    if (k !== "plan" && k !== "design" && k !== "final") throw new HttpError(400, "kind は plan / design / final です");
     return k;
   };
   const required = (v: unknown, what: string) => {
@@ -83,7 +83,13 @@ async function act(ops: Ops, taskId: number, body: unknown): Promise<ActionResul
     switch (req.action) {
       case "approve": {
         const comment = typeof req.comment === "string" && req.comment.trim() ? req.comment : undefined;
-        approveTask(ctx, taskId, kind(), comment);
+        let design: DesignOptions | undefined;
+        if (req.design !== undefined) {
+          const d = req.design as Partial<Record<string, unknown>>;
+          if (typeof d?.architect !== "boolean" || typeof d?.designer !== "boolean") throw new HttpError(400, "design は { architect, designer } を true / false で指定してください");
+          design = { architect: d.architect, designer: d.designer };
+        }
+        approveTask(ctx, taskId, kind(), comment, design);
         message = "承認しました";
         break;
       }

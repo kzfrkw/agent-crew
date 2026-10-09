@@ -21,6 +21,7 @@ const task = (o: Partial<TaskSummary>): TaskSummary => ({
   heldFromState: null,
   assignee: null,
   reviewRounds: 0,
+  design: { architect: false, designer: false },
   createdAt: "2026-10-09T00:00:00.000Z",
   updatedAt: "2026-10-09T00:00:00.000Z",
   attention: null,

@@ -130,6 +130,7 @@ describe("読み取り API", () => {
     expect(d.totals.costUsd).toBeCloseTo(0.09);
     expect(d.nextActions[0]).toMatchObject({ kind: "approve", command: `agent-crew task approve ${s.t1.id} --kind plan` });
     expect(d.runActive).toBe(false);
+    expect(d.operable).toBe(false); // ops なし(--no-worker)で起動したサーバーでは操作できない
   });
 
   it("artifact: 実行時点の写しを返し、Markdown の frontmatter を分ける", async () => {

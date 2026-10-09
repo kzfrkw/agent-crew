@@ -39,6 +39,11 @@ export function ActionPanel({
     .flatMap((a) => (a.input && (!compact || a.input.required) ? [a.input] : []))
     .filter((f, i, all) => all.findIndex((g) => g.field === f.field) === i);
   const [values, setValues] = useState<Record<string, string>>({});
+  // 送る前に選べるオン/オフ(計画の承認での設計者・デザイナー)。初期値はサーバーが返した値(プランナーの判定)
+  const optionActions = compact ? [] : shown.filter((a) => a.options?.length);
+  const [choices, setChoices] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(optionActions.flatMap((a) => a.options!.map((o) => [o.key, o.value]))),
+  );
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState<NextAction | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +53,8 @@ export function ActionPanel({
 
   const send = async (a: NextAction) => {
     const text = a.input ? (values[a.input.field] ?? "") : "";
-    const body = { ...a.request, ...(a.input ? { [a.input.field]: text } : {}) } as ActionRequest;
+    const design = a.options?.length && !compact ? Object.fromEntries(a.options.map((o) => [o.key, choices[o.key] ?? o.value])) : undefined;
+    const body = { ...a.request, ...(a.input ? { [a.input.field]: text } : {}), ...(design ? { design } : {}) } as ActionRequest;
     setBusy(true);
     try {
       const r = await postJson<ActionResult>(`/api/tasks/${taskId}/actions`, body);
@@ -90,6 +96,26 @@ export function ActionPanel({
             disabled={busy}
           />
         ))}
+      {optionActions.map((a) => (
+        <fieldset key={a.kind} className="m-0 flex flex-col gap-1 border-0 p-0">
+          <legend className="mb-1 text-xs text-muted-foreground">承認したあと、実装の前に動かす役割</legend>
+          <div className="flex flex-wrap gap-x-5 gap-y-1">
+            {a.options!.map((o) => (
+              <label key={o.key} className="inline-flex cursor-pointer items-center gap-1.5 text-xs">
+                <input
+                  type="checkbox"
+                  className="accent-foreground"
+                  checked={choices[o.key] ?? o.value}
+                  onChange={(e) => setChoices({ ...choices, [o.key]: e.target.checked })}
+                  disabled={busy}
+                />
+                {o.label}
+              </label>
+            ))}
+          </div>
+          {a.optionsNote && <p className="m-0 text-xs text-muted-foreground">{a.optionsNote}</p>}
+        </fieldset>
+      ))}
       <div className="flex flex-wrap items-center gap-2">
         {shown.map((a) => (
           <Button
