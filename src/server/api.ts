@@ -5,6 +5,7 @@ import { parse as parseYaml } from "yaml";
 import { appDbPath } from "../app.ts";
 import type { Db } from "../db/connection.ts";
 import {
+  costByTask,
   getArtifact,
   getProject,
   getProjectProfile,
@@ -116,7 +117,7 @@ function runSummary(r: RunRow): RunSummary {
   };
 }
 
-function taskSummary(db: Db, t: Task, running: Map<number, RunRow>): TaskSummary {
+function taskSummary(db: Db, t: Task, running: Map<number, RunRow>, costs: Map<number, number>): TaskSummary {
   const attention = attentionOf(t);
   const r = running.get(t.id);
   return {
@@ -136,6 +137,7 @@ function taskSummary(db: Db, t: Task, running: Map<number, RunRow>): TaskSummary
     reason: attention === "answer" || attention === "failed" ? (latestReason(db, t.id, t.state as "needs_input" | "failed") ?? null) : null,
     running: r ? { id: r.id, role: r.role, model: r.model, startedAt: r.startedAt } : null,
     primaryAction: attention ? (nextActions(db, t)[0] ?? null) : null,
+    costUsd: costs.get(t.id) ?? null,
   };
 }
 
@@ -198,7 +200,7 @@ const markdownBody = (text: string | null) => (text === null ? null : splitFront
 /** タスクの要約(書き込み API の結果にも使う) */
 export function taskSummaryOf(db: Db, id: number): TaskSummary | undefined {
   const t = getTask(db, id);
-  return t && taskSummary(db, t, runningByTask(db));
+  return t && taskSummary(db, t, runningByTask(db), costByTask(db));
 }
 
 function emptyOverview(): Omit<Overview, "worker"> {
@@ -207,11 +209,12 @@ function emptyOverview(): Omit<Overview, "worker"> {
 
 function overview(db: Db): Omit<Overview, "worker"> {
   const running = runningByTask(db);
+  const costs = costByTask(db);
   const tasks = listTasks(db);
   const titles = new Map(tasks.map((t) => [t.id, t.title]));
   return {
     projects: listProjects(db).map(projectSummary),
-    tasks: tasks.map((t) => taskSummary(db, t, running)),
+    tasks: tasks.map((t) => taskSummary(db, t, running, costs)),
     running: listRuns(db, { state: "running" }).map((r) => ({ ...runSummary(r), taskTitle: r.taskId === null ? null : (titles.get(r.taskId) ?? null) })),
     stateLabels: STATE_LABELS,
   };
@@ -221,9 +224,10 @@ function taskDetail(home: string, db: Db, id: number, operable: boolean): TaskDe
   const t = getTask(db, id);
   if (!t) return undefined;
   const runs = listRuns(db, { taskId: id }).map(runSummary);
+  const task = taskSummary(db, t, runningByTask(db), costByTask(db));
   const roles = new Map(listRepos(db, t.projectId).map((r) => [r.id, r.role]));
   return {
-    task: { ...taskSummary(db, t, runningByTask(db)), body: t.body, sourceKind: t.sourceKind, sourceUrl: t.sourceUrl },
+    task: { ...task, body: t.body, sourceKind: t.sourceKind, sourceUrl: t.sourceUrl },
     project: projectSummary(getProject(db, t.projectId)!),
     worktrees: listTaskRepos(db, id).map((tr) => ({
       repoRole: roles.get(tr.repoId) ?? "",
@@ -243,7 +247,7 @@ function taskDetail(home: string, db: Db, id: number, operable: boolean): TaskDe
     artifacts: listArtifacts(db, id).map((a) => artifactSummary(home, a)),
     runs,
     totals: {
-      costUsd: runs.reduce((s, r) => s + (r.costUsd ?? 0), 0),
+      costUsd: task.costUsd,
       durationSec: runs.reduce((s, r) => s + (r.durationSec ?? 0), 0),
     },
     nextActions: nextActions(db, t),
@@ -291,6 +295,7 @@ function projectDetail(home: string, db: Db, id: number): ProjectDetail | undefi
   const p = getProject(db, id);
   if (!p) return undefined;
   const running = runningByTask(db);
+  const costs = costByTask(db);
   return {
     project: projectSummary(p),
     repos: listRepos(db, id).map((r) => ({ id: r.id, path: r.path, role: r.role, defaultBranch: r.defaultBranch })),
@@ -298,7 +303,7 @@ function projectDetail(home: string, db: Db, id: number): ProjectDetail | undefi
     profileMd: markdownBody(readText(join(projectDir(home, id), "profile.md"))),
     decisionsMd: readText(join(projectDir(home, id), "decisions.md")),
     runs: listRuns(db, { projectId: id }).filter((r) => r.taskId === null).map(runSummary),
-    tasks: listTasks(db, { projectId: id }).map((t) => taskSummary(db, t, running)),
+    tasks: listTasks(db, { projectId: id }).map((t) => taskSummary(db, t, running, costs)),
   };
 }
 

@@ -294,6 +294,12 @@ export function listRuns(db: Db, f: { taskId?: number; projectId?: number; state
   return (db.prepare(sql).all(...args) as Row[]).map(toRun);
 }
 
+/** タスクごとの費用の合計。費用が記録された実行(cost_usd が NULL でないもの)だけを数える。無いタスクは含まれない */
+export function costByTask(db: Db): Map<number, number> {
+  const rows = db.prepare("SELECT task_id, SUM(cost_usd) AS cost FROM runs WHERE task_id IS NOT NULL AND cost_usd IS NOT NULL GROUP BY task_id").all() as Row[];
+  return new Map(rows.map((r) => [r.task_id as number, r.cost as number]));
+}
+
 export type Event = { id: number; taskId: number | null; runId: number | null; kind: string; payload: unknown; createdAt: string };
 
 export function addEvent(db: Db, e: { taskId?: number; runId?: number; kind: string; payload: unknown }): void {

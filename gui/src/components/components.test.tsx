@@ -5,6 +5,7 @@ import type { EventView, Overview, TaskSummary } from "../../../src/server/api-t
 import { App } from "../App.tsx";
 import { AttentionPanel } from "./dashboard/AttentionPanel.tsx";
 import { EventList } from "./EventList.tsx";
+import { TaskTable } from "./TaskTable.tsx";
 
 afterEach(() => {
   cleanup();
@@ -28,6 +29,7 @@ const task = (o: Partial<TaskSummary>): TaskSummary => ({
   reason: null,
   running: null,
   primaryAction: null,
+  costUsd: null,
   ...o,
 });
 
@@ -72,6 +74,31 @@ describe("EventList", () => {
   it("desc なら新しい順", () => {
     render(<EventList order="desc" events={[ev(1, "warning", { message: "古い" }), ev(2, "warning", { message: "新しい" })]} />);
     expect(screen.getAllByText(/古い|新しい/).map((e) => e.textContent)).toEqual(["新しい", "古い"]);
+  });
+});
+
+describe("TaskTable の費用の列", () => {
+  const tasks = [task({ id: 1, title: "あり", costUsd: 0.18 }), task({ id: 2, title: "大きい", costUsd: 1.234 }), task({ id: 3, title: "なし", costUsd: null })];
+
+  it("「差し戻し」と「更新」のあいだに「費用」があり、formatCost で整形する。null は「-」", () => {
+    render(<TaskTable tasks={tasks} />);
+    const heads = screen.getAllByRole("columnheader").map((h) => h.textContent);
+    const i = heads.indexOf("費用");
+    expect(i).toBeGreaterThan(-1);
+    expect(heads[i - 1]).toBe("差し戻し");
+    expect(heads[i + 1]).toBe("更新");
+    const cost = (title: string) => within(screen.getByText(title).closest("tr")!).getAllByRole("cell")[i]!;
+    expect(cost("あり").textContent).toBe("$0.180");
+    expect(cost("大きい").textContent).toBe("$1.23");
+    expect(cost("なし").textContent).toBe("-");
+  });
+
+  it("見出しとセルの両方が狭い画面で隠れる", () => {
+    render(<TaskTable tasks={tasks} />);
+    const heads = screen.getAllByRole("columnheader");
+    const i = heads.findIndex((h) => h.textContent === "費用");
+    expect(heads[i]!.className).toContain("max-sm:hidden");
+    for (const row of screen.getAllByRole("row").slice(1)) expect(within(row).getAllByRole("cell")[i]!.className).toContain("max-sm:hidden");
   });
 });
 

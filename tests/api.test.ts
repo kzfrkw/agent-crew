@@ -115,6 +115,32 @@ describe("読み取り API", () => {
     expect(o.stateLabels.needs_input).toBe("人の回答待ち");
   });
 
+  it("費用の合計: 費用ありの実行の合計、無ければ null。タスクに属さない実行は数えない。一覧と詳細で同じ", async () => {
+    const s = seed();
+    // 費用ありの実行2件と、費用なし(実行中)の実行1件が混ざるタスク
+    const db = openDb(appDbPath(s.home));
+    const t5 = createTask(db, { projectId: s.p.id, title: "混ざる", body: "" });
+    finishRun(db, startRun(db, { taskId: t5.id, role: "planner", model: "sonnet" }).id, { state: "succeeded", verdict: "ready", costUsd: 0.2 });
+    finishRun(db, startRun(db, { taskId: t5.id, role: "implementer", model: "sonnet" }).id, { state: "failed", costUsd: 1.03 });
+    startRun(db, { taskId: t5.id, role: "implementer", model: "sonnet" });
+    db.close();
+    server = await startServer({ home: s.home, port: 0 });
+    const o = await json<Overview>("api/overview");
+    const byId = new Map(o.tasks.map((t) => [t.id, t]));
+    expect(byId.get(s.t1.id)!.costUsd).toBeCloseTo(0.09);
+    expect(byId.get(s.t2.id)!.costUsd).toBeNull(); // 実行なし
+    expect(byId.get(s.t3.id)!.costUsd).toBeNull(); // 費用なしの実行だけ
+    expect(byId.get(s.t4.id)!.costUsd).toBeNull();
+    expect(byId.get(t5.id)!.costUsd).toBeCloseTo(1.23); // 費用なしの実行は足さない。プロファイラーの 0.05 も足さない
+    const pd = await json<ProjectDetail>(`api/projects/${s.p.id}`);
+    for (const t of pd.tasks) expect(t.costUsd).toEqual(byId.get(t.id)!.costUsd);
+    for (const t of o.tasks) {
+      const d = await json<TaskDetail>(`api/tasks/${t.id}`);
+      expect(d.task.costUsd).toEqual(t.costUsd);
+      expect(d.totals.costUsd).toEqual(t.costUsd);
+    }
+  });
+
   it("task: worktree、承認(失効も)、成果物、実行、合計、次の操作", async () => {
     const s = seed();
     server = await startServer({ home: s.home, port: 0 });
