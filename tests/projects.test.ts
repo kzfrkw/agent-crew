@@ -121,3 +121,30 @@ describe("approveProfile とテスト基盤のゲート", () => {
     expect(() => approveProfile(ctx, "shop")).toThrow(/プロファイル/);
   });
 });
+
+describe("プロファイルのコマンドの手直し(自己適用で発見)", () => {
+  it("役割に渡すコマンドを直せる。指定しなかったものは変えず、- で消す。役割の入力に反映される", async () => {
+    const { approvedProject, newTask } = await import("./helpers/project.ts");
+    const { getRepoProfile, getProjectProfile } = await import("../src/db/store.ts");
+    const { setProfileCommands } = await import("../src/orchestrator/projects.ts");
+    const { taskPrompt } = await import("../src/orchestrator/prompts.ts");
+    const ctx = testContext(new ScriptedRunner({}));
+    const { project } = await approvedProject(ctx);
+    const repo = listRepos(ctx.db, project.id)[0]!;
+
+    setProfileCommands(ctx, "shop", { start: "npm start -- --port 4310", startUrl: "http://127.0.0.1:4310/", build: "-" });
+    const prof = getRepoProfile(ctx.db, repo.id) as { commands: Record<string, string | null>; startUrl: string };
+    expect(prof.commands).toMatchObject({ test: "npm test", start: "npm start -- --port 4310", build: null });
+    expect(prof.startUrl).toBe("http://127.0.0.1:4310/");
+    expect((getProjectProfile(ctx.db, project.id) as { startUrl: string }).startUrl).toBe("http://127.0.0.1:4310/");
+    expect(taskPrompt(ctx, newTask(ctx, project.id), "qa")).toContain("npm start -- --port 4310");
+  });
+
+  it("プロファイルが無ければ直せない", async () => {
+    const { setProfileCommands } = await import("../src/orchestrator/projects.ts");
+    const ctx = testContext(new ScriptedRunner({ profiler: () => ({ status: "failed", error: "x" }) }));
+    const { repo } = makeRepo();
+    await registerProject(ctx, { name: "shop", repoPath: repo });
+    expect(() => setProfileCommands(ctx, "shop", { test: "npm test" })).toThrow("プロファイルがありません");
+  });
+});

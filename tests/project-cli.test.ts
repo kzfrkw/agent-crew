@@ -37,5 +37,10 @@ describe("agent-crew project", () => {
     const approve = cli(home, "project", "approve", "shop");
     expect(approve.code).toBe(1);
     expect(approve.out).toContain("プロファイルがありません");
+
+    // プロファイルが無ければ、コマンドの手直しもできない(理由を出す)
+    const set = cli(home, "project", "set", "shop", "--test", "npm test");
+    expect(set.code).toBe(1);
+    expect(set.out).toContain("プロファイルがありません");
   }, 60_000);
 });

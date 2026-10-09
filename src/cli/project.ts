@@ -1,8 +1,21 @@
 import type { Command } from "commander";
-import { getProjectByName, listProjects, listRepos, listTasks } from "../db/store.ts";
+import { getProjectByName, getRepoProfile, listProjects, listRepos, listTasks } from "../db/store.ts";
+import type { Profile } from "../roles/schemas.ts";
 import { createAppContext } from "../orchestrator/context.ts";
 import { projectDir } from "../orchestrator/paths.ts";
-import { approveProfile, mustProject, registerProject, reprofileProject, type ProfileOutcome } from "../orchestrator/projects.ts";
+import { approveProfile, mustProject, registerProject, reprofileProject, setProfileCommands, type ProfileOutcome } from "../orchestrator/projects.ts";
+
+/** 役割に渡すコマンド(正本は DB のプロファイル) */
+function printCommands(p: Profile): void {
+  console.log("  役割に渡すコマンド(agent-crew project set で直す):");
+  for (const [label, v] of [
+    ["依存の準備", p.commands.install],
+    ["ビルド", p.commands.build],
+    ["テスト", p.commands.test],
+    ["起動", p.commands.start],
+    ["確認URL", p.startUrl],
+  ] as const) console.log(`    ${label}: ${v ?? "なし"}`);
+}
 
 function reportProfile(name: string, dir: string, r: ProfileOutcome): void {
   if (!r.ok) {
@@ -71,6 +84,28 @@ export function registerProjectCommands(program: Command): void {
     });
 
   project
+    .command("set <name>")
+    .description("役割に渡すコマンドを直す(正本は DB のプロファイル。profile.md を手で直しても反映されない)。- で「なし」")
+    .option("--install <cmd>", "依存の準備(実装者が worktree で最初に1回実行する)")
+    .option("--build <cmd>", "ビルド")
+    .option("--test <cmd>", "全テスト(テストの再実行に使う)")
+    .option("--start <cmd>", "起動(QA が 127.0.0.1 で起動する)")
+    .option("--start-url <url>", "起動後に確認する URL")
+    .action((name: string, o: { install?: string; build?: string; test?: string; start?: string; startUrl?: string }) => {
+      const ctx = createAppContext();
+      try {
+        const p = setProfileCommands(ctx, name, o);
+        console.log(`直しました: ${name}`);
+        printCommands(p);
+      } catch (e) {
+        console.error((e as Error).message);
+        process.exitCode = 1;
+      } finally {
+        ctx.db.close();
+      }
+    });
+
+  project
     .command("list")
     .description("プロジェクトの一覧(名前、プロファイル、テスト基盤、タスク数)")
     .action(() => {
@@ -93,7 +128,11 @@ export function registerProjectCommands(program: Command): void {
         const p = mustProject(ctx.db, name);
         console.log(`${p.name}  プロファイル: ${p.profileStatus}  テスト基盤: ${p.testInfra}${p.allowWithoutTests ? "(例外を許可済み)" : ""}`);
         console.log(`データ: ${projectDir(ctx.home, p.id)}`);
-        for (const r of listRepos(ctx.db, p.id)) console.log(`  [${r.role}] ${r.path}(既定ブランチ: ${r.defaultBranch})`);
+        for (const r of listRepos(ctx.db, p.id)) {
+          console.log(`  [${r.role}] ${r.path}(既定ブランチ: ${r.defaultBranch})`);
+          const prof = getRepoProfile(ctx.db, r.id) as Profile | null;
+          if (prof) printCommands(prof);
+        }
         for (const t of listTasks(ctx.db, { projectId: p.id })) console.log(`  #${t.id} ${t.state.padEnd(24)} ${t.title}`);
       } finally {
         ctx.db.close();

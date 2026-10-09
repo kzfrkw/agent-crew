@@ -79,6 +79,7 @@ function ProjectView({ d }: { d: ProjectDetail }) {
               </dl>
             ))}
           </div>
+          <ProfileCommands name={p.name} profile={d.profile} />
           <div className="rounded-lg border bg-card">
             <h3 className="mt-0 mb-0 px-4 pt-3 text-xs font-semibold text-muted-foreground">プロジェクト把握担当の実行</h3>
             <RunTable runs={d.runs} compact />
@@ -86,5 +87,36 @@ function ProjectView({ d }: { d: ProjectDetail }) {
         </aside>
       </div>
     </>
+  );
+}
+
+type ProfileJson = { commands?: Record<"install" | "build" | "test" | "start", string | null>; startUrl?: string | null } | null;
+
+/** 役割に渡すコマンド。正本は DB のプロファイル(profile.md を手で直しても反映されない)ので、直し方を添える */
+function ProfileCommands({ name, profile }: { name: string; profile: unknown }) {
+  const p = profile as ProfileJson;
+  if (!p?.commands) return null;
+  const rows: [string, string | null | undefined][] = [
+    ["依存の準備", p.commands.install],
+    ["ビルド", p.commands.build],
+    ["テスト", p.commands.test],
+    ["起動", p.commands.start],
+    ["確認URL", p.startUrl],
+  ];
+  return (
+    <div className="rounded-lg border bg-card px-4 py-3">
+      <h3 className="mt-0 mb-2 text-xs font-semibold text-muted-foreground">役割に渡すコマンド</h3>
+      <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
+        {rows.map(([label, v]) => (
+          <div key={label} className="contents">
+            <dt className="text-muted-foreground">{label}</dt>
+            <dd className="m-0 font-mono break-all">{v ?? <span className="font-sans text-subtle-foreground">なし</span>}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="mt-2 mb-0 text-xs text-muted-foreground">
+        直すとき: <code className="font-mono break-all">agent-crew project set {name} --start "..."</code>(profile.md を直しても反映されません)
+      </p>
+    </div>
   );
 }

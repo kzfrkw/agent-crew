@@ -6,6 +6,7 @@ import {
   createTask,
   getProject,
   getProjectByName,
+  getRepoProfile,
   getTask,
   listRepos,
   listTasks,
@@ -146,4 +147,31 @@ export function mustProject(db: Db, name: string): Project {
   const p = getProjectByName(db, name);
   if (!p) throw new Error(`プロジェクト ${name} がありません`);
   return p;
+}
+
+export type ProfileCommandsPatch = Partial<Record<"install" | "build" | "test" | "start" | "startUrl", string>>;
+
+/**
+ * 役割に渡すコマンド(依存の準備・ビルド・テスト・起動・確認URL)を人が直す。正本は DB のプロファイル(profile.md は説明の文書)。
+ * 指定しなかった項目は変えない。"-" は「なし」(null)。リポジトリ単位とプロジェクト全体の両方を直す(フェーズ1は1リポジトリ)
+ */
+export function setProfileCommands(ctx: AppContext, name: string, patch: ProfileCommandsPatch): Profile {
+  const project = mustProject(ctx.db, name);
+  const repo = listRepos(ctx.db, project.id)[0];
+  const current = repo ? (getRepoProfile(ctx.db, repo.id) as Profile | null) : null;
+  if (!repo || !current) throw new Error(`プロジェクト ${name} のプロファイルがありません。agent-crew project profile ${name} で作ってください`);
+  const value = (v: string | undefined, prev: string | null) => (v === undefined ? prev : v.trim() === "-" ? null : v.trim());
+  const next: Profile = ProfileSchema.parse({
+    ...current,
+    commands: {
+      install: value(patch.install, current.commands.install),
+      build: value(patch.build, current.commands.build),
+      test: value(patch.test, current.commands.test),
+      start: value(patch.start, current.commands.start),
+    },
+    startUrl: value(patch.startUrl, current.startUrl),
+  });
+  setRepoProfile(ctx.db, repo.id, next);
+  setProjectProfile(ctx.db, project.id, { profile: next });
+  return next;
 }

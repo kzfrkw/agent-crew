@@ -95,7 +95,8 @@ shop / #12 / 実行 #45
 ```
 shop                     プロファイル: 承認済み  テスト基盤: あり
 リポジトリ   [main] /path/to/shop (main)
-プロファイル (キーと値を整形表示)
+プロファイル (profile.md を整形表示)
+役割に渡すコマンド(依存の準備・ビルド・テスト・起動・確認URL)と、直し方(agent-crew project set)
 設計判断ログ decisions.md (Markdown)
 プロファイル作成の実行  #3 profiler sonnet 成功 →
 タスク      (S1 の一覧と同じ表)
