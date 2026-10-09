@@ -106,9 +106,10 @@ const implementer: Handler = async (ctx, task) => {
     }
     const commits = commitsSince(tr.worktreePath, before, ctx.gitEnv);
     if (commits.length === 0) {
-      // 差し戻しの後で、ブランチに実装のコミットがすでにあれば、原因が環境(依存の壊れなど)でコードを直す必要が無いこともある。
-      // 警告を残してテストの再実行・レビューに進める(虚偽の done は、そこでもう一度捕まる)。最初の実装でコミットが無いのは止める
-      const already = task.reviewRounds > 0 && commitsSince(tr.worktreePath, tr.baseSha, ctx.gitEnv).length > 0;
+      // 差し戻し・回答での再開の後で、ブランチに実装のコミットがすでにあれば、原因が環境(依存の壊れなど)でコードを直す必要が無いこともある。
+      // 警告を残してテストの再実行・レビューに進める(虚偽の done は、そこでもう一度捕まる)。最初の実装でコミットが無いのは止める。
+      // 差し戻しの回数は回答で0に戻るので、条件にしない(4b で判明)
+      const already = commitsSince(tr.worktreePath, tr.baseSha, ctx.gitEnv).length > 0;
       if (!already) return { event: { type: "run_error", reason: "コミットがありません" }, reason: "implementer: done と判定しましたが、コミットがありません" };
       addEvent(ctx.db, {
         taskId: task.id,
