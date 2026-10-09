@@ -57,3 +57,38 @@ flowchart LR
 - オーケストレーター(`agent-crew run`)は別のプロセスで DB に書く。サーバーは DB を1秒ごとに見て、`events` の最大 id と、`tasks` / `runs` の更新の印が変わったら通知する
 - `events` は `after` 以降を送り、GUI は表示中のリストに追記する。`change` を受けた画面は、自分の API を取り直す
 - 再接続時は `Last-Event-ID` で取りこぼしを補う
+
+---
+
+# 構造(フェーズ3: 操作)
+
+## 画面の追加
+
+| ID | 画面 | URL | 機能 |
+|----|------|-----|------|
+| S6 | チケット投入 | `/tasks/new` | G10 |
+
+- S2 タスク詳細の「対応が必要です」の欄が、コマンドの表示からボタンとフォームに変わる(G3〜G9)。CLI コマンドは折りたたんで残す
+- S1 ダッシュボードの対応待ちの各項目に、主な操作のボタン(承認・回答など)を置く
+- 共通ヘッダーに、自動実行の状態とスイッチ(G1・G2)と「チケットを作る」を置く
+
+## 書き込み API
+
+すべて `POST`、本文は JSON。外部のサイトから送らせないよう、`X-Agent-Crew: 1` ヘッダーと、`Origin` が自分自身であることを必須にする(ヘッダーの付いた要求はブラウザがプリフライトを送るが、CORS を許可しないので外部のサイトからは届かない)。
+
+| API | 本文 | 内容 |
+|-----|------|------|
+| `POST /api/tasks` | `{ projectId, title, body, sourceUrl? }` | チケット投入。作ったタスクを返す |
+| `POST /api/tasks/:id/actions` | `ActionRequest` | 人の操作。`approve`(kind, comment?)/ `reject`(kind, comment)/ `answer`(message)/ `stop` / `takeover` / `return` / `cancel` / `update_base` / `open_editor` |
+| `POST /api/worker` | `{ paused: boolean }` | 自動実行の一時停止・再開 |
+
+- 操作は CLI と同じ関数(`src/orchestrator/human.ts`、`handoff.ts`)を呼ぶ。状態遷移の正しさは `transitions.ts` が決め、不正なら 409 と理由を返す
+- 「次の操作」(`next-actions.ts`)が、ボタンが送る `ActionRequest` も持つ。GUI は状態とボタンの対応を持たない
+- `GET /api/overview` に `worker`(`running` / `paused` / `locked`(CLI の run が実行中)/ `disabled`)を足す
+
+## 常駐ワーカー(G1・G2・G5)
+
+- serve の起動時にロック(`run.lock`)を取り、オーケストレーターを常駐させる。取れなければ(CLI の run が実行中)`locked` として、一定間隔で取り直す
+- 進められるタスクを、同時実行数の上限まで進める。操作の直後と、一定間隔(5秒)で見直す(CLI からのチケット投入なども拾う)
+- 停止: タスクごとに中断の仕組み(AbortSignal)を持ち、ランナーが claude に SIGINT → SIGTERM → SIGKILL を送る。役割の実行は `cancelled`、タスクは出来事 `stopped` で needs_input になる(状態は増やさない)
+- `serve --no-worker` で従来どおり読み取り専用にできる
