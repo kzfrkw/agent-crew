@@ -96,7 +96,7 @@ export function createProgram(): Command {
       const s = await startServer({ home, port: Number(o.port), ops: ctx ? { ctx, worker } : undefined });
       console.log(`${s.url} で表示しています(127.0.0.1 のみ。${o.worker ? "常駐ワーカーが自動で進めます" : "読み取り専用"}。Ctrl-C で終了)`);
       let closing = false;
-      process.on("SIGINT", async () => {
+      const shutdown = async () => {
         if (closing) process.exit(130);
         closing = true;
         if (worker && worker.status().active.length > 0) console.error("実行中の役割を止めています…(もう一度 Ctrl-C で強制終了)");
@@ -104,7 +104,10 @@ export function createProgram(): Command {
         await s.close();
         ctx?.db.close();
         process.exit(0);
-      });
+      };
+      // Ctrl-C と、ほかのプロセスからの終了の合図の両方で、実行中の役割を止めてロックを外してから終わる
+      process.on("SIGINT", shutdown);
+      process.on("SIGTERM", shutdown);
     });
 
   return program;
