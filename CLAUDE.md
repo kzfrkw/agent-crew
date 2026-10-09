@@ -104,6 +104,7 @@
 - shadcn/ui の部品の追加: `node scripts/shadcn-add.ts <名前...>`(公式レジストリから `gui/src/components/ui/` に置く。shadcn の CLI は GUI を `gui/` に分けた構成に合わないため使わない)。追加したら `docs/surface.md` の原則(影なし、状態の4色)に合わせて直す。画面のコードに色や px の値を直接書かない(トークン経由の Tailwind のクラスを使う)
 - GUI のテスト: `gui/src/**/*.test.{ts,tsx}`(vitest。DOM が要るものは先頭に `// @vitest-environment jsdom`)
 - 一周の通し確認: `npm run e2e`(実機の claude を使う。利用枠を消費する。結果は docs/e2e-log.md)
+- **agent-crew のエージェント(このリポジトリを対象に動く役割)は、`npm run e2e` と `doctor --probe-sandbox` を実行しない**(実機の claude を使うため、人が実行する)。テストは `npm test`、型チェックは `npm run typecheck` で確かめる
 - TypeScriptの制約: 型除去で動く構文だけを使う(`enum`・`namespace`・パラメータプロパティは不可。importは `.ts` 拡張子付き)
 
 ## 別PCでの運用を壊さないために
