@@ -159,3 +159,16 @@ claude -p
 | `curl https://pub.dev` | 許可リストに無い | `allowedDomains`: `pub.dev`、`storage.googleapis.com` など |
 
 `agent-crew doctor --probe-sandbox` で、この実験(push、worktree外への書き込み、`~/.ssh`、環境変数、通信、リポジトリ側のフック、`hooksPath` の書き換え)をいつでも再実行できる。判定はモデルの申告ではなく、ファイル・コミット・remote・拒否の記録で行う。ランナーや安全設定を変えたら必ず実行する。
+
+## 7. 実験の記録: サンドボックスの中のヘッドレス Chrome(2026-10-10、4c の前提)
+
+QA と同じ設定(`write: artifacts`、`bashWritesWorktree`、`localServer`)の `claude -p`(Haiku)に、`/Applications/Google Chrome.app` のヘッドレスでスクリーンショットを撮らせた。
+
+| 試したこと | 結果 |
+|---|---|
+| 既定の設定 | `Failed to create headless user data directory container`(ホームの下に書けない) |
+| `--user-data-dir` を作業ディレクトリに | `ProcessSingleton` のソケットのディレクトリを作れない。macOS の Chrome はソケットを OS のユーザー一時ディレクトリ(`/var/folders/…/T/`)に作り、`TMPDIR` や `HOME` を変えても従わない |
+| ユーザー一時ディレクトリへの書き込みを許す | ソケットの `bind()` が拒否される(サンドボックスは Unix ドメインソケットを既定で禁止) |
+| さらに `network.allowAllUnixSockets` を許す | Chrome の起動処理の内部(`base/mac/mac_util.mm`)で OS への問い合わせが拒否され、強制終了(FATAL) |
+
+`--no-sandbox`、GPU・crashpad を切る指定でも変わらない。**結論: エージェントのサンドボックスの中で Chrome を動かす方式は採らない。** 許可を広げるほど別の制限に当たり、広げた許可(ユーザー一時ディレクトリへの書き込み、Unix ドメインソケット)は安全上も望ましくない。画面の確認は、サンドボックスの外の、ツールが管理する仕組みで行う(4c で決める)。
