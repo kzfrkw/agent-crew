@@ -32,7 +32,7 @@ describe("invokeRole", () => {
   });
 
   it("役割定義の値(モデル・道具・書き込み範囲・スキーマ)でランナーを呼ぶ", async () => {
-    const runner = new ScriptedRunner({ reviewer: answer("review.md", "approve") });
+    const runner = new ScriptedRunner({ reviewer: answer("review.md", "approve", { findings: [] }) });
     const { ctx, t, cwd, artifactsDir } = setup(runner);
     await invokeRole(ctx, { roleName: "reviewer", taskId: t.id, cwd, artifactsDir, prompt: "x" });
     expect(runner.calls[0]).toMatchObject({ role: "reviewer", model: "opus", write: "artifacts", cwd, artifactsDir });
@@ -52,7 +52,7 @@ describe("invokeRole", () => {
     const runner = new ScriptedRunner({
       reviewer: (spec) => {
         writeArtifact(spec, "review.md", "changes_requested");
-        return { structuredOutput: { verdict: "approve", summary: "s" } };
+        return { structuredOutput: { verdict: "approve", summary: "s", findings: [] } };
       },
     });
     const { ctx, t, cwd, artifactsDir } = setup(runner);
@@ -61,7 +61,7 @@ describe("invokeRole", () => {
   });
 
   it("前回の成果物が残っていても、今回書かれていなければ失敗(古い成果物を使わない)", async () => {
-    const runner = new ScriptedRunner({ reviewer: () => ({ structuredOutput: { verdict: "approve", summary: "s" } }) });
+    const runner = new ScriptedRunner({ reviewer: () => ({ structuredOutput: { verdict: "approve", summary: "s", findings: [] } }) });
     const { ctx, t, cwd, artifactsDir } = setup(runner);
     const { mkdirSync } = await import("node:fs");
     mkdirSync(artifactsDir, { recursive: true });

@@ -20,8 +20,11 @@ import type { AppContext } from "./context.ts";
 import { projectDir, taskDir } from "./paths.ts";
 import type { Role } from "./transitions.ts";
 
+/** 状態に結びつく役割と、レビュワーの内部で動く監査担当 */
+export type PromptRole = Role | "auditor";
+
 /** タスクの役割に共通の入力(チケット、作業場所、参照するファイル)と、役割ごとの今回やること */
-export function taskPrompt(ctx: AppContext, task: Task, role: Role, extra: string[] = []): string {
+export function taskPrompt(ctx: AppContext, task: Task, role: PromptRole, extra: string[] = []): string {
   const project = getProject(ctx.db, task.projectId)!;
   const pdir = projectDir(ctx.home, project.id);
   const tdir = taskDir(ctx.home, task.id);
@@ -54,6 +57,7 @@ export function taskPrompt(ctx: AppContext, task: Task, role: Role, extra: strin
     ...ref("実装メモ", join(tdir, "impl-notes.md")),
     ...ref("テストの再実行結果", join(tdir, "verify-report.md")),
     ...ref("レビュー結果", join(tdir, "review.md")),
+    ...ref("Must 指摘の監査結果(invalid とされた指摘は対応不要)", join(tdir, "audit.md")),
     ...ref("QA結果", join(tdir, "qa-report.md")),
     ...ref("人の変更(人が引き取って直した内容)", join(tdir, "human-changes.md")),
     ...ref("人からのコメント・回答(最優先で従う)", join(tdir, "human-notes.md")),
@@ -75,13 +79,14 @@ export function taskPrompt(ctx: AppContext, task: Task, role: Role, extra: strin
   ].join("\n");
 }
 
-const ROLE_INSTRUCTIONS: Record<Role, string[]> = {
+const ROLE_INSTRUCTIONS: Record<PromptRole, string[]> = {
   planner: ["- 成果物ディレクトリに `plan.md` を書き、判定を返してください。人のコメントがあれば、それを反映して計画を直してください"],
   implementer: [
     "- `plan.md` に沿って、テスト先行で実装し、worktree にコミットしてください。成果物ディレクトリに `impl-notes.md` を書いてください",
-    "- 差し戻しの場合は、レビュー結果・QA結果・テストの再実行結果・人のコメントの指摘をすべて解消してください",
+    "- 差し戻しの場合は、レビュー結果・QA結果・テストの再実行結果・人のコメントの指摘をすべて解消してください。ただし、監査結果(audit.md)で invalid とされたレビューの指摘は対応不要です(理由は audit.md にあります)",
   ],
-  reviewer: ["- ベースからの差分をレビューし、成果物ディレクトリに `review.md` を書いてください"],
+  reviewer: ["- ベースからの差分をレビューし、成果物ディレクトリに `review.md` を書いてください。指摘には重大度(must / should / nit)を付けてください"],
+  auditor: ["- 下の Must 指摘を、実際のコードを読んで1件ずつ検証し、成果物ディレクトリに `audit.md` を書いてください。コードは変更しないでください"],
   qa: ["- 受け入れ条件を動くアプリで確認し、成果物ディレクトリに `qa-report.md` を書いてください"],
   integrator: ["- 成果物ディレクトリに `pr-draft.md` を書いてください。git の操作は行わないでください"],
 };

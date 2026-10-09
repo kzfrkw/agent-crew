@@ -45,7 +45,7 @@ describe("実装者", () => {
       planner: plannerReady,
       implementer: implementer(),
       verifier: () => ({ structuredOutput: { verdict: "passed", summary: "s" }, bashResults: [{ command: "npm test", isError: false, output: "ok" }] }),
-      reviewer: answer("review.md", "approve"),
+      reviewer: answer("review.md", "approve", { findings: [] }),
       qa: answer("qa-report.md", "passed"),
     });
     const { ctx, t } = await toImplementing(runner);

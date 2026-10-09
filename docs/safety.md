@@ -101,7 +101,7 @@ claude -p
 | `permissions.write` | 使う役割 | Edit/Write の allow | サンドボックス(Bash) |
 |---|---|---|---|
 | `none` | なし(予備) | なし | worktreeを `denyWrite` |
-| `artifacts` | プランナー、レビュワー、QA、統合担当、プロジェクト把握担当 | 成果物ディレクトリだけ | worktreeを `denyWrite`、成果物ディレクトリを `allowWrite`。QAとプロジェクト把握担当は、ビルド・テストのためにworktreeへの書き込みを許す |
+| `artifacts` | プランナー、レビュワー、監査担当、QA、統合担当、プロジェクト把握担当 | 成果物ディレクトリだけ | worktreeを `denyWrite`、成果物ディレクトリを `allowWrite`。QAとプロジェクト把握担当は、ビルド・テストのためにworktreeへの書き込みを許す |
 | `worktree` | 実装者 | worktree+成果物ディレクトリ | 作業ディレクトリ(worktree)はそのまま書ける |
 
 - 許可する通信先は、プロファイルと設定ファイルで足す。GitHub のドメインは許可しない
