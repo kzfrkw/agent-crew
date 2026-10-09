@@ -68,6 +68,41 @@ describe("実装者", () => {
     expect(latestNeedsInputReason(ctx.db, t.id)).toContain("コミット");
   });
 
+  it("最初の実装で、変更もコミットも無いまま done なら needs_input", async () => {
+    const runner = new ScriptedRunner({
+      planner: plannerReady,
+      implementer: (spec) => {
+        writeArtifact(spec, "impl-notes.md", "done");
+        return { structuredOutput: { verdict: "done", summary: "何もしていない", testCommand: null } };
+      },
+    });
+    const { ctx, t } = await toImplementing(runner);
+    await runUntilIdle(ctx);
+    expect(getTask(ctx.db, t.id)!.state).toBe("needs_input");
+    expect(latestNeedsInputReason(ctx.db, t.id)).toContain("コミットがありません");
+  });
+
+  it("差し戻しの後は、原因が環境でコードを直す必要が無ければ、新しいコミットなしの done でも警告を残してテストの再実行に進む(フェーズ4bで判明)", async () => {
+    const runner = new ScriptedRunner({
+      planner: plannerReady,
+      implementer: (spec, n) => {
+        if (n === 0) return implementer()(spec);
+        // 2回目: テストの失敗は環境の問題で、コードの変更は不要と判断した
+        writeArtifact(spec, "impl-notes.md", "done");
+        return { structuredOutput: { verdict: "done", summary: "失敗は依存の壊れで、コードの変更は不要です", testCommand: null } };
+      },
+      verifier: (spec, n) => ({ structuredOutput: { verdict: n === 0 ? "failed" : "passed", summary: "s" }, bashResults: [{ command: "npm test", isError: n === 0, output: n === 0 ? "vitest: command not found" : "ok" }] }),
+      reviewer: answer("review.md", "approve", { findings: [] }),
+      qa: answer("qa-report.md", "passed"),
+    });
+    const { ctx, t } = await toImplementing(runner);
+    // 1回目のテストの再実行の後で、人が依存を直した(worktree のコミットは同じなので、キャッシュを使わず再実行させる)
+    await runUntilIdle(ctx);
+    expect(runner.rolesCalled().filter((r) => r === "verifier")).toHaveLength(2);
+    expect(getTask(ctx.db, t.id)!.state).toBe("awaiting_final_approval");
+    expect(listEvents(ctx.db, t.id).some((e) => e.kind === "warning" && JSON.stringify(e.payload).includes("新しいコミットなし"))).toBe(true);
+  });
+
   it("未コミットの変更が残っていれば needs_input", async () => {
     const runner = new ScriptedRunner({ planner: plannerReady, implementer: implementer({ dirty: true }) });
     const { ctx, t } = await toImplementing(runner);
