@@ -235,3 +235,14 @@ describe("終了・失敗・取り消し", () => {
     }
   });
 });
+
+describe("人による停止(stopped)", () => {
+  it("役割が動く状態なら、その段で人の判断待ちにする", () => {
+    expect(next(snap("implementing"), { type: "stopped" })).toMatchObject({ state: "needs_input", heldFromState: "implementing" });
+    expect(next(snap("reviewing", { reviewRounds: 2 }), { type: "stopped" })).toMatchObject({ state: "needs_input", heldFromState: "reviewing", reviewRounds: 2 });
+  });
+
+  it("役割が動かない状態では受け付けない", () => {
+    expect(() => next(snap("awaiting_plan_approval"), { type: "stopped" })).toThrow(TransitionError);
+  });
+});

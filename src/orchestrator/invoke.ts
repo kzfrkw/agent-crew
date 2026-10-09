@@ -9,7 +9,7 @@ import { runDir } from "./paths.ts";
 
 export type InvokeResult =
   | { ok: true; runId: number; verdict: string; summary: string; extra: Record<string, unknown>; result: RunResult }
-  | { ok: false; runId: number; failure: "limit" | "error"; reason: string; result?: RunResult };
+  | { ok: false; runId: number; failure: "limit" | "error" | "cancelled"; reason: string; result?: RunResult };
 
 /** 成果物の先頭の frontmatter から verdict を読む */
 export function readArtifactVerdict(path: string): string | undefined {
@@ -34,7 +34,7 @@ export async function invokeRole(
   // 前回の成果物は消さずに残す(読み返して追記できるように)。今回の実行で更新されたかは更新時刻の変化で判定する
   const outputPath = role.output ? join(o.artifactsDir, role.output) : undefined;
   const mtimeBefore = outputPath && existsSync(outputPath) ? statSync(outputPath).mtimeMs : undefined;
-  const fail = (failure: "limit" | "error", reason: string, result?: RunResult, state: "failed" | "timeout" = "failed"): InvokeResult => {
+  const fail = (failure: "limit" | "error" | "cancelled", reason: string, result?: RunResult, state: "failed" | "timeout" | "cancelled" = "failed"): InvokeResult => {
     finishRun(ctx.db, run.id, { state, error: reason, sessionId: result?.sessionId, costUsd: result?.costUsd, structuredOutput: result?.structuredOutput });
     addEvent(ctx.db, { taskId: o.taskId, runId: run.id, kind: "run_failed", payload: { role: role.name, failure, reason } });
     return { ok: false, runId: run.id, failure, reason, result };
@@ -61,6 +61,7 @@ export async function invokeRole(
         maxBudgetUsd: Math.min(role.maxBudgetUsd, ctx.config.limits.runMaxBudgetUsd),
         allowedDomains: ctx.config.sandbox.allowedDomains,
         extraEnv: o.extraEnv,
+        signal: o.taskId === undefined ? undefined : ctx.stops?.get(o.taskId)?.signal,
       },
       (e) => addEvent(ctx.db, { taskId: o.taskId, runId: run.id, kind: e.kind, payload: e.payload }),
     );
@@ -68,6 +69,7 @@ export async function invokeRole(
     return fail("error", `実行に失敗しました: ${(e as Error).message}`);
   }
 
+  if (result.status === "cancelled") return fail("cancelled", result.error ?? "人が停止しました", result, "cancelled");
   if (result.status === "timeout") return fail("limit", result.error ?? "時間の上限を超えました", result, "timeout");
   if (result.status !== "succeeded") {
     const reason = result.error ?? "実行に失敗しました";

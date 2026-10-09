@@ -94,9 +94,38 @@ export function ensureWorktrees(ctx: AppContext, task: Task): void {
   }
 }
 
+/**
+ * 実行中の役割を止める(設計メモ14章 v0.10)。このプロセスで進めているタスクだけが対象。
+ * 止めたら、stepTask がタスクを人の判断待ちにする
+ */
+export function requestStop(ctx: AppContext, taskId: number): boolean {
+  const ac = ctx.stops?.get(taskId);
+  if (!ac) return false;
+  ac.abort();
+  return true;
+}
+
+const STOPPED_REASON = "人が停止しました。続けるなら回答して再開するか、引き取って直してください";
+
 /** タスクを1段進める */
 export async function stepTask(ctx: AppContext, taskId: number): Promise<void> {
+  const ac = new AbortController();
+  (ctx.stops ??= new Map()).set(taskId, ac);
+  try {
+    await stepTaskInner(ctx, taskId, ac.signal);
+  } finally {
+    ctx.stops.delete(taskId);
+  }
+}
+
+async function stepTaskInner(ctx: AppContext, taskId: number, signal: AbortSignal): Promise<void> {
   const task = getTask(ctx.db, taskId)!;
+  // 止められたら、役割の結果(失敗として返ってくる)ではなく「人が停止した」として扱う
+  const stoppedIfAborted = () => {
+    if (!signal.aborted) return false;
+    applyEvent(ctx, taskId, { type: "stopped" }, STOPPED_REASON);
+    return true;
+  };
   try {
     if (task.state === "queued") {
       ensureWorktrees(ctx, task);
@@ -107,8 +136,10 @@ export async function stepTask(ctx: AppContext, taskId: number): Promise<void> {
     const handler = role ? HANDLERS[role] : undefined;
     if (!handler) return;
     const { event, reason } = await handler(ctx, task);
+    if (stoppedIfAborted()) return;
     applyEvent(ctx, taskId, event, reason);
   } catch (e) {
+    if (stoppedIfAborted()) return;
     const reason = `オーケストレーターのエラー: ${(e as Error).message}`;
     const current = getTask(ctx.db, taskId)!;
     try {

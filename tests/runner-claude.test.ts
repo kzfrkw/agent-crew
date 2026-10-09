@@ -94,6 +94,25 @@ describe("ClaudeRunner(偽の claude)", () => {
     expect(r.status).toBe("timeout");
   });
 
+  it("中断の合図(signal)で止め、cancelled を返す", async () => {
+    const ac = new AbortController();
+    setTimeout(() => ac.abort(), 300);
+    const started = Date.now();
+    const r = await runner.run(spec("hang", { signal: ac.signal }), () => {});
+    expect(r.status).toBe("cancelled");
+    expect(r.error).toContain("停止");
+    expect(Date.now() - started).toBeLessThan(5000);
+  });
+
+  it("始まる前に中断済みなら claude を起動しない", async () => {
+    const ac = new AbortController();
+    ac.abort();
+    const s = spec("ok", { signal: ac.signal });
+    const r = await runner.run(s, () => {});
+    expect(r.status).toBe("cancelled");
+    expect(existsSync(join(s.cwd, ".fake-claude-record.json"))).toBe(false);
+  });
+
   it("claude が見つからなければ failed", async () => {
     const r2 = new ClaudeRunner({ claudePath: "/no/such/claude", parentEnv: process.env });
     const r = await r2.run(spec("ok"), () => {});

@@ -56,7 +56,9 @@ export type TaskEvent =
   | { type: "base_updated" }
   /** ベースの取り込みで衝突した。人が解決する */
   | { type: "base_conflict"; reason: string }
-  | { type: "cancel" };
+  | { type: "cancel" }
+  /** 人が実行中の役割を止めた。その段で人の判断を待つ */
+  | { type: "stopped" };
 
 export type TaskSnapshot = { state: TaskState; heldFromState: TaskState | null; reviewRounds: number };
 
@@ -153,6 +155,10 @@ export function transition(t: TaskSnapshot, e: TaskEvent, c: TransitionContext):
       }
       return to(from);
     }
+
+    case "stopped":
+      if (!roleForState(t.state)) fail("エージェントが動く状態ではありません");
+      return hold(t.state);
 
     case "limit_exceeded":
     case "run_error":

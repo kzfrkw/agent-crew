@@ -15,6 +15,8 @@ export type AppContext = {
   runner: Runner;
   /** ツール自身が実行する git の環境変数 */
   gitEnv: NodeJS.ProcessEnv;
+  /** 進めている最中のタスクの、停止の合図(stepTask が作る。requestStop で鳴らす) */
+  stops?: Map<number, AbortController>;
 };
 
 export function createAppContext(dataDir: string = dataHome()): AppContext {

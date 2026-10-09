@@ -35,6 +35,8 @@ export type RunSpec = {
   /** 追加で渡す環境変数(認証情報は渡せない) */
   extraEnv?: Record<string, string>;
   resumeSessionId?: string;
+  /** 人による停止の合図。合図が来たら claude を止め、cancelled を返す */
+  signal?: AbortSignal;
 };
 
 export type RunEvent = { kind: string; payload: unknown };
@@ -42,7 +44,7 @@ export type RunEvent = { kind: string; payload: unknown };
 export type PermissionDenial = { tool: string; input: unknown };
 
 export type RunResult = {
-  status: "succeeded" | "failed" | "timeout";
+  status: "succeeded" | "failed" | "timeout" | "cancelled";
   structuredOutput?: unknown;
   resultText?: string;
   sessionId?: string;

@@ -64,6 +64,9 @@ export class ClaudeRunner implements Runner {
         resolve({ models: s.models, permissionDenials: s.permissionDenials, bashResults: collector.bashResults(), durationMs: Date.now() - started, ...r });
       };
 
+      const STOPPED = "人が停止しました";
+      if (spec.signal?.aborted) return finish({ status: "cancelled", error: STOPPED });
+      let cancelled = false;
       const child = spawn(this.claudePath, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
       child.on("error", (e) => finish({ status: "failed", error: `claude を起動できません(${this.claudePath}): ${e.message}` }));
       child.stdin.on("error", () => {}); // 先に終了した場合の EPIPE は無視する
@@ -74,18 +77,29 @@ export class ClaudeRunner implements Runner {
         for (const e of collector.push(line)) onEvent(e);
       });
 
+      // 止めるときは SIGINT(claude が後始末できる)→ SIGTERM → SIGKILL の順に強める
+      const stop = () => {
+        child.kill("SIGINT");
+        timers.push(setTimeout(() => child.kill("SIGTERM"), this.killGraceMs));
+        timers.push(setTimeout(() => child.kill("SIGKILL"), this.killGraceMs * 2));
+      };
       timers.push(
         setTimeout(() => {
           timedOut = true;
-          child.kill("SIGINT");
-          timers.push(setTimeout(() => child.kill("SIGTERM"), this.killGraceMs));
-          timers.push(setTimeout(() => child.kill("SIGKILL"), this.killGraceMs * 2));
+          stop();
         }, spec.timeoutSec * 1000),
       );
+      const onAbort = () => {
+        cancelled = true;
+        stop();
+      };
+      spec.signal?.addEventListener("abort", onAbort, { once: true });
 
       child.on("close", (code) => {
         const s = collector.summary();
         const base = { sessionId: s.sessionId, costUsd: s.costUsd, resultText: s.resultText, structuredOutput: s.structuredOutput };
+        spec.signal?.removeEventListener("abort", onAbort);
+        if (cancelled) return finish({ ...base, status: "cancelled", error: STOPPED });
         if (timedOut) return finish({ ...base, status: "timeout", error: `時間の上限(${spec.timeoutSec}秒)を超えました` });
         if (!s.hasResult) {
           return finish({ ...base, status: "failed", error: `claude が結果を返さずに終了しました(終了コード ${code}): ${stderr.trim()}` });
