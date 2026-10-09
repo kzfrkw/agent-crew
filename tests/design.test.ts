@@ -70,6 +70,10 @@ describe("設計の段のハンドラー", () => {
     expect(getTask(ctx.db, t.id)!.state).toBe("implementing");
     const log = readFileSync(join(projectDir(ctx.home, project.id), "decisions.md"), "utf8");
     expect(log).toContain(`#${t.id}`);
+    // 日付はこの PC の日付(UTC ではない)
+    const d = new Date();
+    const local = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    expect(log).toContain(`## ${local} #${t.id}`);
     expect(log).toContain("一覧のフィルタは items.js に閉じ込める");
   });
 

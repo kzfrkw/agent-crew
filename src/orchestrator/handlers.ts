@@ -49,7 +49,9 @@ function appendDecisions(ctx: AppContext, task: Task, role: "architect" | "desig
   if (items.length === 0) return;
   const dir = projectDir(ctx.home, task.projectId);
   mkdirSync(dir, { recursive: true });
-  const day = new Date().toISOString().slice(0, 10);
+  // 人が読むログなので、この PC の日付で書く(UTC だと日本の朝は前日になる)
+  const now = new Date();
+  const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   appendFileSync(join(dir, "decisions.md"), `\n## ${day} #${task.id} ${task.title}(${role === "architect" ? "設計者" : "デザイナー"})\n\n${items.map((d) => `- ${d}`).join("\n")}\n`);
   addEvent(ctx.db, { taskId: task.id, runId, kind: "decisions", payload: { role, decisions: items } });
 }
