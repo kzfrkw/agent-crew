@@ -105,8 +105,21 @@ const implementer: Handler = async (ctx, task) => {
       return { event: { type: "run_error", reason: "未コミットの変更が残っています" }, reason: `implementer: 未コミットの変更が残っています(${tr.worktreePath})` };
     }
     const commits = commitsSince(tr.worktreePath, before, ctx.gitEnv);
-    if (commits.length === 0) return { event: { type: "run_error", reason: "コミットがありません" }, reason: "implementer: done と判定しましたが、コミットがありません" };
-    addEvent(ctx.db, { taskId: task.id, runId: r.runId, kind: "implemented", payload: { commits: commits.map((c) => ({ sha: c.sha, subject: c.subject })) } });
+    if (commits.length === 0) {
+      // 差し戻し・回答での再開の後で、ブランチに実装のコミットがすでにあれば、原因が環境(依存の壊れなど)でコードを直す必要が無いこともある。
+      // 警告を残してテストの再実行・レビューに進める(虚偽の done は、そこでもう一度捕まる)。最初の実装でコミットが無いのは止める。
+      // 差し戻しの回数は回答で0に戻るので、条件にしない(4b で判明)
+      const already = commitsSince(tr.worktreePath, tr.baseSha, ctx.gitEnv).length > 0;
+      if (!already) return { event: { type: "run_error", reason: "コミットがありません" }, reason: "implementer: done と判定しましたが、コミットがありません" };
+      addEvent(ctx.db, {
+        taskId: task.id,
+        runId: r.runId,
+        kind: "warning",
+        payload: { message: `実装者が新しいコミットなしで done を返しました(理由: ${r.summary})。テストの再実行とレビューで確かめます` },
+      });
+    } else {
+      addEvent(ctx.db, { taskId: task.id, runId: r.runId, kind: "implemented", payload: { commits: commits.map((c) => ({ sha: c.sha, subject: c.subject })) } });
+    }
     const testCommand = r.extra.testCommand;
     if (typeof testCommand === "string" && testCommand.trim()) {
       addEvent(ctx.db, { taskId: task.id, runId: r.runId, kind: "test_command", payload: { command: testCommand.trim() } });

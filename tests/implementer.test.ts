@@ -1,9 +1,9 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { addEvent, getTask, listEvents, listTaskRepos, listValidApprovals } from "../src/db/store.ts";
+import { addEvent, getTask, listEvents, listTaskRepos, listValidApprovals, updateTaskState } from "../src/db/store.ts";
 import { commitsSince } from "../src/git/worktree.ts";
-import { latestNeedsInputReason, runUntilIdle } from "../src/orchestrator/engine.ts";
+import { latestNeedsInputReason, runUntilIdle, stepTask } from "../src/orchestrator/engine.ts";
 import { verifyTests } from "../src/orchestrator/verify.ts";
 import { approveTask } from "../src/orchestrator/human.ts";
 import { taskDir } from "../src/orchestrator/paths.ts";
@@ -66,6 +66,63 @@ describe("実装者", () => {
     await runUntilIdle(ctx);
     expect(getTask(ctx.db, t.id)!.state).toBe("needs_input");
     expect(latestNeedsInputReason(ctx.db, t.id)).toContain("コミット");
+  });
+
+  it("最初の実装で、変更もコミットも無いまま done なら needs_input", async () => {
+    const runner = new ScriptedRunner({
+      planner: plannerReady,
+      implementer: (spec) => {
+        writeArtifact(spec, "impl-notes.md", "done");
+        return { structuredOutput: { verdict: "done", summary: "何もしていない", testCommand: null } };
+      },
+    });
+    const { ctx, t } = await toImplementing(runner);
+    await runUntilIdle(ctx);
+    expect(getTask(ctx.db, t.id)!.state).toBe("needs_input");
+    expect(latestNeedsInputReason(ctx.db, t.id)).toContain("コミットがありません");
+  });
+
+  it("差し戻しの後は、原因が環境でコードを直す必要が無ければ、新しいコミットなしの done でも警告を残してテストの再実行に進む(フェーズ4bで判明)", async () => {
+    const runner = new ScriptedRunner({
+      planner: plannerReady,
+      implementer: (spec, n) => {
+        if (n === 0) return implementer()(spec);
+        // 2回目: テストの失敗は環境の問題で、コードの変更は不要と判断した
+        writeArtifact(spec, "impl-notes.md", "done");
+        return { structuredOutput: { verdict: "done", summary: "失敗は依存の壊れで、コードの変更は不要です", testCommand: null } };
+      },
+      verifier: (spec, n) => ({ structuredOutput: { verdict: n === 0 ? "failed" : "passed", summary: "s" }, bashResults: [{ command: "npm test", isError: n === 0, output: n === 0 ? "vitest: command not found" : "ok" }] }),
+      reviewer: answer("review.md", "approve", { findings: [] }),
+      qa: answer("qa-report.md", "passed"),
+    });
+    const { ctx, t } = await toImplementing(runner);
+    // 1回目のテストの再実行の後で、人が依存を直した(worktree のコミットは同じなので、キャッシュを使わず再実行させる)
+    await runUntilIdle(ctx);
+    expect(runner.rolesCalled().filter((r) => r === "verifier")).toHaveLength(2);
+    expect(getTask(ctx.db, t.id)!.state).toBe("awaiting_final_approval");
+    expect(listEvents(ctx.db, t.id).some((e) => e.kind === "warning" && JSON.stringify(e.payload).includes("新しいコミットなし"))).toBe(true);
+  });
+
+  it("回答で再開した場合(差し戻しの回数が0に戻る)も、ブランチに実装があれば同じく進む", async () => {
+    const runner = new ScriptedRunner({
+      planner: plannerReady,
+      implementer: (spec, n) => {
+        if (n === 0) return implementer()(spec);
+        writeArtifact(spec, "impl-notes.md", "done");
+        return { structuredOutput: { verdict: "done", summary: "コードの変更は不要です", testCommand: null } };
+      },
+      verifier: (spec, n) => ({ structuredOutput: { verdict: n === 0 ? "failed" : "passed", summary: "s" }, bashResults: [{ command: "npm test", isError: n === 0, output: "" }] }),
+      reviewer: answer("review.md", "approve", { findings: [] }),
+      qa: answer("qa-report.md", "passed"),
+    });
+    const { ctx, t } = await toImplementing(runner, {});
+    // 1回目: 実装 → テストの再実行が失敗して差し戻し。人が回答で止めて再開した状況を、回数を0に戻して作る
+    await stepTask(ctx, t.id);
+    await stepTask(ctx, t.id);
+    expect(getTask(ctx.db, t.id)!.state).toBe("implementing");
+    updateTaskState(ctx.db, t.id, { state: "implementing", reviewRounds: 0 });
+    await runUntilIdle(ctx);
+    expect(getTask(ctx.db, t.id)!.state).toBe("awaiting_final_approval");
   });
 
   it("未コミットの変更が残っていれば needs_input", async () => {

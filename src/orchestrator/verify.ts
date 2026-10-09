@@ -42,8 +42,9 @@ export async function verifyTests(ctx: AppContext, task: Task): Promise<VerifyRe
   // node_modules がある状態での入れ直しはサンドボックスに拒否されることがある(フェーズ4b で判明)
   const command = test;
 
-  const cached = listValidApprovals(ctx.db, task.id).filter((a) => a.kind === "tests" && a.commitSha === head && a.repoId === tr.repoId).at(-1);
-  if (cached) return { status: cached.result === "approved" ? "passed" : "failed", command, cached: true, reportPath };
+  // 同じコミットで成功していれば再実行しない。失敗は記録だけで使わない(環境を直して再実行できるように。フェーズ4b で判明)
+  const cached = listValidApprovals(ctx.db, task.id).filter((a) => a.kind === "tests" && a.commitSha === head && a.repoId === tr.repoId && a.result === "approved").at(-1);
+  if (cached) return { status: "passed", command, cached: true, reportPath };
 
   const r = await invokeRole(ctx, {
     roleName: "verifier",
