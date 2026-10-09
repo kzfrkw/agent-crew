@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Layout } from "./components/Layout.tsx";
+import { Empty } from "./components/Status.tsx";
 import { matchRoute, type Route } from "./lib/routes.ts";
 import { usePath } from "./lib/router.tsx";
 import { ArtifactPage } from "./pages/ArtifactPage.tsx";
@@ -30,6 +31,6 @@ function page(route: Route): ReactNode {
     case "project":
       return <ProjectPage key={route.id} id={route.id} />;
     case "notFound":
-      return <div className="state-msg">ページが見つかりません</div>;
+      return <Empty>ページが見つかりません</Empty>;
   }
 }

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextAction, Overview } from "../../../src/server/api-types.ts";
 import { NewTaskPage } from "../pages/NewTaskPage.tsx";
@@ -65,12 +65,18 @@ describe("ActionPanel", () => {
     expect(posts()).toEqual([]);
   });
 
-  it("停止: 1回目は確認に変わり、2回目で送る", async () => {
+  it("停止: 確認のダイアログを出し、確定で送る。やめれば送らない", async () => {
     render(<ActionPanel taskId={1} actions={[stop]} />);
     fireEvent.click(screen.getByRole("button", { name: "実行中の役割を停止する" }));
+    let dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText("実行中の claude を止めます")).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: "やめる" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
     expect(posts()).toEqual([]);
-    expect(screen.getByText(/実行中の claude を止めます/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /本当に/ }));
+
+    fireEvent.click(screen.getByRole("button", { name: "実行中の役割を停止する" }));
+    dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "実行中の役割を停止する" }));
     await waitFor(() => expect(posts()).toEqual([expect.objectContaining({ body: { action: "stop" } })]));
   });
 

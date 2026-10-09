@@ -1,17 +1,23 @@
+import { ChevronRightIcon } from "lucide-react";
 import type { ArtifactSummary, TaskDetail } from "../../../src/server/api-types.ts";
 import { ActionPanel } from "../components/ActionPanel.tsx";
 import { Commands } from "../components/Commands.tsx";
 import { EventList } from "../components/EventList.tsx";
-import { Crumbs } from "../components/Layout.tsx";
+import { Crumbs, Meta, PageTitle } from "../components/Layout.tsx";
+import { SectionHead } from "../components/Panel.tsx";
 import { Pipeline } from "../components/Pipeline.tsx";
 import { RunTable } from "../components/RunTable.tsx";
 import { StateBadge, VerdictBadge } from "../components/StateBadge.tsx";
-import { Async } from "../components/Status.tsx";
+import { Async, Empty } from "../components/Status.tsx";
 import { useApi, useEvents } from "../lib/api.ts";
 import { isRunDetail } from "../lib/events.ts";
 import { formatCost, formatDateTime, formatDuration } from "../lib/format.ts";
 import { paths } from "../lib/routes.ts";
 import { Link } from "../lib/router.tsx";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
 /** S2 タスク詳細 */
 export function TaskPage({ id }: { id: number }) {
@@ -24,101 +30,102 @@ function TaskView({ d, onDone }: { d: TaskDetail; onDone: () => void }) {
   return (
     <>
       <Crumbs items={[{ label: d.project.name, to: paths.project(d.project.id) }, { label: `#${t.id}` }]} />
-      <h1 className="page-title">
-        <span className="id num">#{t.id}</span>
-        {t.title}
-      </h1>
-      <div className="meta">
+      <PageTitle id={t.id}>{t.title}</PageTitle>
+      <Meta>
         <StateBadge task={t} />
         {t.kind === "test_infra" && <span>テスト基盤整備</span>}
         <span>差し戻し {t.reviewRounds} 回</span>
         <span>作成 {formatDateTime(t.createdAt)}</span>
         <span>更新 {formatDateTime(t.updatedAt)}</span>
-      </div>
+      </Meta>
       <Pipeline state={t.state} heldFrom={t.heldFromState} />
       <Banner d={d} onDone={onDone} />
 
-      <div className="grid-main section">
-        <div>
+      <div className="mt-6 grid grid-cols-1 items-start gap-6 min-[880px]:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="flex min-w-0 flex-col gap-6">
           <section>
-            <div className="section__head">
-              <h2 className="section__title">成果物</h2>
-            </div>
-            <div className="card">
+            <SectionHead title="成果物" />
+            <div className="rounded-lg border bg-card">
               <ArtifactList taskId={t.id} artifacts={d.artifacts} />
             </div>
           </section>
-          <section className="section">
-            <div className="section__head">
-              <h2 className="section__title">実行</h2>
-              <span className="section__count">{d.runs.length}</span>
-            </div>
-            <div className="card">
+          <section>
+            <SectionHead title="実行" note={d.runs.length} />
+            <div className="rounded-lg border bg-card">
               <RunTable runs={d.runs} />
             </div>
           </section>
           <Activity taskId={t.id} />
         </div>
-        <aside className="side">
-          <div className="card">
-            <h3 className="side__title">費用と時間(合計)</h3>
-            <dl className="kv num">
-              <dt>費用</dt>
-              <dd>{formatCost(d.totals.costUsd)}</dd>
-              <dt>時間</dt>
-              <dd>{formatDuration(d.totals.durationSec)}</dd>
+        <aside className="flex flex-col gap-3">
+          <SideCard title="費用と時間(合計)">
+            <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs tabular-nums">
+              <dt className="text-muted-foreground">費用</dt>
+              <dd className="m-0">{formatCost(d.totals.costUsd)}</dd>
+              <dt className="text-muted-foreground">時間</dt>
+              <dd className="m-0">{formatDuration(d.totals.durationSec)}</dd>
             </dl>
-          </div>
-          <div className="card">
-            <h3 className="side__title">worktree</h3>
+          </SideCard>
+          <SideCard title="worktree">
             {d.worktrees.length === 0 ? (
-              <span className="muted sm">まだありません</span>
+              <span className="text-xs text-muted-foreground">まだありません</span>
             ) : (
               d.worktrees.map((w) => (
-                <dl className="kv" key={w.worktreePath}>
-                  <dt>リポジトリ</dt>
-                  <dd>{w.repoRole}</dd>
-                  <dt>パス</dt>
-                  <dd className="mono">{w.worktreePath}</dd>
-                  <dt>ブランチ</dt>
-                  <dd className="mono">{w.branchName}</dd>
+                <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs" key={w.worktreePath}>
+                  <dt className="text-muted-foreground">リポジトリ</dt>
+                  <dd className="m-0">{w.repoRole}</dd>
+                  <dt className="text-muted-foreground">パス</dt>
+                  <dd className="m-0 font-mono break-all">{w.worktreePath}</dd>
+                  <dt className="text-muted-foreground">ブランチ</dt>
+                  <dd className="m-0 font-mono break-all">{w.branchName}</dd>
                 </dl>
               ))
             )}
-          </div>
-          <div className="card">
-            <h3 className="side__title">承認・合格</h3>
+          </SideCard>
+          <SideCard title="承認・合格">
             {d.approvals.length === 0 ? (
-              <span className="muted sm">まだありません</span>
+              <span className="text-xs text-muted-foreground">まだありません</span>
             ) : (
-              <ul className="events" style={{ fontSize: 12 }}>
+              <ul className="m-0 flex list-none flex-col gap-0.5 p-0 text-xs">
                 {d.approvals.map((a) => (
-                  <li key={a.id} style={{ display: "flex", gap: 8, alignItems: "baseline", opacity: a.invalidatedAt ? 0.55 : 1 }}>
-                    <span style={{ color: a.result === "approved" ? "var(--run)" : "var(--danger)" }}>{a.result === "approved" ? "✓" : "✗"}</span>
+                  <li key={a.id} className={cn("flex items-baseline gap-2", a.invalidatedAt && "opacity-55")}>
+                    <span className={a.result === "approved" ? "text-run" : "text-destructive"}>{a.result === "approved" ? "✓" : "✗"}</span>
                     <span>{APPROVAL[a.kind] ?? a.kind}</span>
-                    {a.commitSha && <span className="mono subtle">{a.commitSha.slice(0, 7)}</span>}
-                    {a.invalidatedAt && <span className="muted">失効</span>}
+                    {a.commitSha && <span className="font-mono text-subtle-foreground">{a.commitSha.slice(0, 7)}</span>}
+                    {a.invalidatedAt && <span className="text-muted-foreground">失効</span>}
                   </li>
                 ))}
               </ul>
             )}
-          </div>
-          <div className="card">
-            <details open={t.body.length < 600}>
-              <summary>チケット本文</summary>
-              <pre className="pre-text" style={{ fontFamily: "var(--font)", fontSize: 13 }}>
-                {t.body || "(本文なし)"}
-              </pre>
-              {t.sourceUrl && (
-                <a href={t.sourceUrl} target="_blank" rel="noreferrer noopener" className="sm">
-                  取り込み元 ↗
-                </a>
-              )}
-            </details>
+          </SideCard>
+          <div className="rounded-lg border bg-card px-4 py-3">
+            <Collapsible defaultOpen={t.body.length < 600}>
+              <CollapsibleTrigger className="group flex cursor-pointer items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+                <ChevronRightIcon className="size-3.5 transition-transform group-data-[state=open]:rotate-90" aria-hidden />
+                チケット本文
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-2">
+                <pre className="m-0 font-sans text-[13px] leading-relaxed break-words whitespace-pre-wrap">{t.body || "(本文なし)"}</pre>
+                {t.sourceUrl && (
+                  <a href={t.sourceUrl} target="_blank" rel="noreferrer noopener" className="text-xs">
+                    取り込み元 ↗
+                  </a>
+                )}
+              </CollapsibleContent>
+            </Collapsible>
           </div>
         </aside>
       </div>
     </>
+  );
+}
+
+function SideCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border bg-card px-4 py-3">
+      <h3 className="mt-0 mb-2 text-xs font-semibold text-muted-foreground">{title}</h3>
+      {children}
+    </div>
   );
 }
 
@@ -129,25 +136,27 @@ function Banner({ d, onDone }: { d: TaskDetail; onDone: () => void }) {
   const actions = <ActionPanel taskId={t.id} actions={d.nextActions} onDone={onDone} />;
   if (d.runActive && t.running) {
     return (
-      <div className="banner banner--running">
-        <p className="banner__title">
+      <Alert variant="running" role="status" className="mt-4">
+        <AlertTitle>
           エージェントが実行中です(<Link to={paths.run(t.running.id)}>{t.running.role}</Link>)
-        </p>
-        <span className="sm">worktree を触らないでください</span>
-        {actions}
-      </div>
+        </AlertTitle>
+        <AlertDescription className="text-foreground">
+          worktree を触らないでください
+          {actions}
+        </AlertDescription>
+      </Alert>
     );
   }
   if (!t.attention) {
     if (d.nextActions.length === 0) return null;
     // 完了後の push のように、GUI から送らない操作はコマンドだけを見せる
     return (
-      <div className="banner" style={{ background: "var(--surface-2)" }}>
-        {d.nextActions.some((a) => a.request) ? actions : <Commands actions={d.nextActions} />}
-      </div>
+      <Alert variant="muted" role="status" className="mt-4">
+        <AlertDescription className="w-full text-foreground">{d.nextActions.some((a) => a.request) ? actions : <Commands actions={d.nextActions} />}</AlertDescription>
+      </Alert>
     );
   }
-  const tone = t.attention === "failed" ? "danger" : t.attention === "human_working" ? "human" : "attention";
+  const variant = t.attention === "failed" ? "danger" : t.attention === "human_working" ? "human" : "attention";
   const title = {
     answer: "人の回答待ちです",
     approve_plan: "計画を確認して承認してください",
@@ -157,16 +166,18 @@ function Banner({ d, onDone }: { d: TaskDetail; onDone: () => void }) {
   }[t.attention];
   const plan = t.attention === "approve_plan" ? latestOf(d.artifacts, "plan") : undefined;
   return (
-    <div className={`banner banner--${tone}`}>
-      <p className="banner__title">{title}</p>
-      {t.reason && <p className="banner__reason">{t.reason}</p>}
-      {plan && (
-        <p className="sm" style={{ margin: "0 0 4px" }}>
-          <Link to={paths.artifact(t.id, plan.id)}>plan.md を読む →</Link>
-        </p>
-      )}
-      {actions}
-    </div>
+    <Alert variant={variant} role="status" className="mt-4">
+      <AlertTitle className="font-semibold">{title}</AlertTitle>
+      <AlertDescription className="w-full text-foreground">
+        {t.reason && <p className="m-0 break-words whitespace-pre-wrap">{t.reason}</p>}
+        {plan && (
+          <p className="m-0 text-xs">
+            <Link to={paths.artifact(t.id, plan.id)}>plan.md を読む →</Link>
+          </p>
+        )}
+        <div className="w-full">{actions}</div>
+      </AlertDescription>
+    </Alert>
   );
 }
 
@@ -174,55 +185,54 @@ const latestOf = (list: ArtifactSummary[], kind: string) => list.filter((a) => a
 
 /** 種類ごとに最新を見せ、前の版は畳む */
 function ArtifactList({ taskId, artifacts }: { taskId: number; artifacts: ArtifactSummary[] }) {
-  if (artifacts.length === 0) return <div className="panel__empty">成果物はまだありません</div>;
+  if (artifacts.length === 0) return <Empty>成果物はまだありません</Empty>;
   const kinds = [...new Set(artifacts.map((a) => a.kind))];
   return (
-    <table className="table">
-      <tbody>
+    <Table>
+      <TableBody>
         {kinds.map((k) => {
           const versions = artifacts.filter((a) => a.kind === k);
           const latest = versions.at(-1)!;
           return (
-            <tr key={k}>
-              <td className="title">
-                <Link to={paths.artifact(taskId, latest.id)}>{latest.fileName}</Link>
-              </td>
-              <td>
+            <TableRow key={k}>
+              <TableCell className="font-medium">
+                <Link to={paths.artifact(taskId, latest.id)} className="no-underline hover:underline">
+                  {latest.fileName}
+                </Link>
+              </TableCell>
+              <TableCell>
                 <VerdictBadge verdict={latest.verdict} />
-              </td>
-              <td className="sm muted">
+              </TableCell>
+              <TableCell className="text-xs text-muted-foreground">
                 {versions.length > 1 && (
                   <span>
                     前の版:{" "}
                     {versions.slice(0, -1).map((v, i) => (
-                      <Link key={v.id} to={paths.artifact(taskId, v.id)} style={{ marginRight: 6 }}>
+                      <Link key={v.id} to={paths.artifact(taskId, v.id)} className="mr-1.5">
                         {i + 1}
                       </Link>
                     ))}
                   </span>
                 )}
-              </td>
-              <td className="right num sm muted nowrap">{formatDateTime(latest.createdAt)}</td>
-            </tr>
+              </TableCell>
+              <TableCell className="text-right text-xs whitespace-nowrap text-muted-foreground tabular-nums">{formatDateTime(latest.createdAt)}</TableCell>
+            </TableRow>
           );
         })}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
 function Activity({ taskId }: { taskId: number }) {
   // タスクのイベントのうち、実行の中の細かいもの(発言・ツール)は実行ログで見る
-  const { events } = useEvents({ task: taskId }, 500);
+  const { events, loading } = useEvents({ task: taskId }, 500);
   const shown = events.filter((e) => !isRunDetail(e));
   return (
-    <section className="section">
-      <div className="section__head">
-        <h2 className="section__title">アクティビティ</h2>
-        <span className="section__count">状態の変化と出来事</span>
-      </div>
-      <div className="card panel__body">
-        <EventList events={shown} order="desc" />
+    <section>
+      <SectionHead title="アクティビティ" note="状態の変化と出来事" />
+      <div className="rounded-lg border bg-card py-2">
+        {loading && shown.length === 0 ? <Empty>読み込み中…</Empty> : <EventList events={shown} order="desc" />}
       </div>
     </section>
   );

@@ -1,12 +1,16 @@
 import type { ProjectDetail } from "../../../src/server/api-types.ts";
-import { Crumbs } from "../components/Layout.tsx";
+import { CommandLine } from "../components/Commands.tsx";
+import { Crumbs, Meta, PageTitle } from "../components/Layout.tsx";
 import { Markdown } from "../components/Markdown.tsx";
+import { SectionHead } from "../components/Panel.tsx";
 import { RunTable } from "../components/RunTable.tsx";
 import { Async } from "../components/Status.tsx";
 import { TaskTable } from "../components/TaskTable.tsx";
 import { useApi } from "../lib/api.ts";
 import { paths } from "../lib/routes.ts";
 import { PROFILE, TEST_INFRA } from "./Dashboard.tsx";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 
 /** S5 プロジェクト */
 export function ProjectPage({ id }: { id: number }) {
@@ -19,74 +23,65 @@ function ProjectView({ d }: { d: ProjectDetail }) {
   return (
     <>
       <Crumbs items={[{ label: "ダッシュボード", to: paths.dashboard() }, { label: p.name }]} />
-      <h1 className="page-title">{p.name}</h1>
-      <div className="meta">
-        <span className={`badge ${p.profileStatus === "approved" ? "badge--done" : "badge--attention"}`}>
-          プロファイル: {PROFILE[p.profileStatus] ?? p.profileStatus}
-        </span>
-        <span className={`badge ${p.testInfra === "present" ? "badge--done" : "badge--plain"}`}>テスト基盤: {TEST_INFRA[p.testInfra] ?? p.testInfra}</span>
+      <PageTitle>{p.name}</PageTitle>
+      <Meta>
+        <Badge variant={p.profileStatus === "approved" ? "done" : "attention"}>プロファイル: {PROFILE[p.profileStatus] ?? p.profileStatus}</Badge>
+        <Badge variant={p.testInfra === "present" ? "done" : "outline"}>テスト基盤: {TEST_INFRA[p.testInfra] ?? p.testInfra}</Badge>
         {p.allowWithoutTests && <span>テスト基盤の整備前の通常タスクを許可</span>}
-      </div>
+      </Meta>
       {p.profileStatus === "draft" && (
-        <div className="banner banner--attention">
-          <p className="banner__title">プロファイルの確認と承認が必要です</p>
-          <code>agent-crew project approve {p.name}</code>
-        </div>
+        <Alert variant="attention" role="status" className="mt-4">
+          <AlertTitle className="font-semibold">プロファイルの確認と承認が必要です</AlertTitle>
+          <AlertDescription className="w-full">
+            <CommandLine command={`agent-crew project approve ${p.name}`} />
+          </AlertDescription>
+        </Alert>
       )}
 
-      <div className="grid-main section">
-        <div>
+      <div className="mt-6 grid grid-cols-1 items-start gap-6 min-[880px]:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="flex min-w-0 flex-col gap-6">
           <section>
-            <div className="section__head">
-              <h2 className="section__title">タスク</h2>
-              <span className="section__count">{d.tasks.length}</span>
-            </div>
-            <div className="card">
+            <SectionHead title="タスク" note={d.tasks.length} />
+            <div className="rounded-lg border bg-card">
               <TaskTable tasks={[...d.tasks].sort((a, b) => b.id - a.id)} />
             </div>
           </section>
-          <section className="section">
-            <div className="section__head">
-              <h2 className="section__title">プロファイル</h2>
-              <span className="section__count">プロジェクト把握担当がまとめた前提</span>
-            </div>
-            <div className="card viewer__doc">
+          <section>
+            <SectionHead title="プロファイル" note="プロジェクト把握担当がまとめた前提" />
+            <div className="rounded-lg border bg-card px-8 py-6 max-[879px]:px-4 max-[879px]:py-4">
               {d.profileMd ? (
                 <Markdown text={d.profileMd} />
               ) : d.profile ? (
-                <pre className="pre-text">{JSON.stringify(d.profile, null, 2)}</pre>
+                <pre className="m-0 font-mono text-xs whitespace-pre-wrap">{JSON.stringify(d.profile, null, 2)}</pre>
               ) : (
-                <span className="muted">まだありません</span>
+                <span className="text-muted-foreground">まだありません</span>
               )}
             </div>
           </section>
-          <section className="section">
-            <div className="section__head">
-              <h2 className="section__title">設計判断ログ</h2>
-              <span className="section__count">decisions.md</span>
+          <section>
+            <SectionHead title="設計判断ログ" note="decisions.md" />
+            <div className="rounded-lg border bg-card px-8 py-6 max-[879px]:px-4 max-[879px]:py-4">
+              {d.decisionsMd ? <Markdown text={d.decisionsMd} /> : <span className="text-muted-foreground">まだありません</span>}
             </div>
-            <div className="card viewer__doc">{d.decisionsMd ? <Markdown text={d.decisionsMd} /> : <span className="muted">まだありません</span>}</div>
           </section>
         </div>
-        <aside className="side">
-          <div className="card">
-            <h3 className="side__title">リポジトリ</h3>
+        <aside className="flex flex-col gap-3">
+          <div className="rounded-lg border bg-card px-4 py-3">
+            <h3 className="mt-0 mb-2 text-xs font-semibold text-muted-foreground">リポジトリ</h3>
             {d.repos.map((r) => (
-              <dl className="kv" key={r.id}>
-                <dt>役目</dt>
-                <dd>{r.role}</dd>
-                <dt>パス</dt>
-                <dd className="mono">{r.path}</dd>
-                <dt>既定</dt>
-                <dd className="mono">{r.defaultBranch}</dd>
+              <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs" key={r.id}>
+                <dt className="text-muted-foreground">役目</dt>
+                <dd className="m-0">{r.role}</dd>
+                <dt className="text-muted-foreground">パス</dt>
+                <dd className="m-0 font-mono break-all">{r.path}</dd>
+                <dt className="text-muted-foreground">既定</dt>
+                <dd className="m-0 font-mono">{r.defaultBranch}</dd>
               </dl>
             ))}
           </div>
-          <div className="card" style={{ padding: 0 }}>
-            <h3 className="side__title" style={{ padding: "12px 16px 0" }}>
-              プロジェクト把握担当の実行
-            </h3>
-            <RunTable runs={d.runs} />
+          <div className="rounded-lg border bg-card">
+            <h3 className="mt-0 mb-0 px-4 pt-3 text-xs font-semibold text-muted-foreground">プロジェクト把握担当の実行</h3>
+            <RunTable runs={d.runs} compact />
           </div>
         </aside>
       </div>

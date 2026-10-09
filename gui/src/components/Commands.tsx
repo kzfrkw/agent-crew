@@ -1,20 +1,32 @@
 import { useState } from "react";
+import { CheckIcon, CopyIcon } from "lucide-react";
 import type { NextAction } from "../../../src/server/api-types.ts";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
-/** 人が次に打つ CLI コマンド(F9)。フェーズ3でボタンに置き換える */
+/** CLI のコマンドの表示(F9)。完了後の push のように、GUI から送らない操作に使う */
 export function Commands({ actions, showLabel = true }: { actions: NextAction[]; showLabel?: boolean }) {
-  if (actions.length === 0) return null;
+  const list = actions.flatMap((a) => (a.command === null ? [] : [{ ...a, command: a.command }]));
+  if (list.length === 0) return null;
   return (
-    <div className="cmds">
-      {actions.flatMap((a) => (a.command === null ? [] : [{ ...a, command: a.command }])).map((a) => (
-        <div className="cmd" key={a.command}>
-          {showLabel && <span className="cmd__label">{a.label}</span>}
-          <span className="cmd__code">
-            <code>{a.command}</code>
-            <CopyButton text={a.command} />
-          </span>
-        </div>
+    <div className="flex flex-col gap-1.5">
+      {list.map((a) => (
+        <CommandLine key={a.command} label={showLabel ? a.label : undefined} command={a.command} />
       ))}
+    </div>
+  );
+}
+
+export function CommandLine({ label, command, copy = true }: { label?: string; command: string; copy?: boolean }) {
+  return (
+    <div className="flex min-w-0 items-center gap-2 max-sm:flex-col max-sm:items-stretch max-sm:gap-0.5">
+      {label && <span className="text-xs whitespace-nowrap text-muted-foreground max-sm:whitespace-normal">{label}</span>}
+      <span className="flex min-w-0 flex-1 items-center gap-2 rounded-md border bg-card py-0.5 pr-1 pl-2.5">
+        <code className="min-w-0 flex-1 overflow-x-auto py-1 font-mono text-[12.5px] whitespace-nowrap before:text-subtle-foreground before:content-['$_'] max-sm:break-all max-sm:whitespace-pre-wrap">
+          {command}
+        </code>
+        {copy && <CopyButton text={command} />}
+      </span>
     </div>
   );
 }
@@ -31,8 +43,9 @@ export function CopyButton({ text }: { text: string }) {
     }
   };
   return (
-    <button type="button" className={`copy ${done ? "copy--done" : ""}`} onClick={copy} aria-label="コマンドをコピー">
+    <Button type="button" variant="ghost" size="xs" className={cn("text-muted-foreground", done && "text-run")} onClick={copy} aria-label="コマンドをコピー">
+      {done ? <CheckIcon /> : <CopyIcon />}
       {done ? "コピーしました" : "コピー"}
-    </button>
+    </Button>
   );
 }

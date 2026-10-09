@@ -4,14 +4,28 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
-    "lib": ["es2024", "dom", "dom.iterable"],
+    "lib": [
+      "es2024",
+      "dom",
+      "dom.iterable"
+    ],
     "strict": true,
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "noUncheckedIndexedAccess": true,
     "skipLibCheck": true,
-    "types": ["vite/client"]
+    "types": [
+      "vite/client"
+    ],
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ]
+    }
   },
-  "include": ["src", "../src/server/api-types.ts"]
+  "include": [
+    "src",
+    "../src/server/api-types.ts"
+  ]
 }

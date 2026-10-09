@@ -3,7 +3,7 @@ import remarkGfm from "remark-gfm";
 
 /**
  * 成果物の Markdown。react-markdown は生の HTML を描画しない(エージェントが書いた内容をそのまま信用しない)。
- * リンクは新しいタブで開き、参照元を送らない。
+ * リンクは新しいタブで開き、参照元を送らない。見た目は globals.css の .md(要素ごとのスタイル)
  */
 export function Markdown({ text }: { text: string }) {
   return (

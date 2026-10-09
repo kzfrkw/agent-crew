@@ -101,6 +101,7 @@
 - GUI のビルド: `npm run build:gui`(`npm install` 時にも `prepare` で実行される。結果は `dist/gui/`)
 - GUI の開発: `npx agent-crew serve` を起動したうえで `npm run dev:gui`(Vite。`/api` と `/files` を 4300 に中継。`AGENT_CREW_PORT` で変更可)
 - GUI の見本データ: `AGENT_CREW_HOME=<空のディレクトリ> node scripts/seed-demo.ts`(claude を使わずに全状態のタスクを作る。claudePath を /usr/bin/false にするので、常駐ワーカーが動いても利用枠は使わない)
+- shadcn/ui の部品の追加: `node scripts/shadcn-add.ts <名前...>`(公式レジストリから `gui/src/components/ui/` に置く。shadcn の CLI は GUI を `gui/` に分けた構成に合わないため使わない)。追加したら `docs/surface.md` の原則(影なし、状態の4色)に合わせて直す。画面のコードに色や px の値を直接書かない(トークン経由の Tailwind のクラスを使う)
 - GUI のテスト: `gui/src/**/*.test.{ts,tsx}`(vitest。DOM が要るものは先頭に `// @vitest-environment jsdom`)
 - 一周の通し確認: `npm run e2e`(実機の claude を使う。利用枠を消費する。結果は docs/e2e-log.md)
 - TypeScriptの制約: 型除去で動く構文だけを使う(`enum`・`namespace`・パラメータプロパティは不可。importは `.ts` 拡張子付き)

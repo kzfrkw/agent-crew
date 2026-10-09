@@ -3,50 +3,52 @@ import { formatDateTime } from "../lib/format.ts";
 import { paths } from "../lib/routes.ts";
 import { Link, navigate } from "../lib/router.tsx";
 import { StateBadge } from "./StateBadge.tsx";
+import { Empty } from "./Status.tsx";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-/** タスクの一覧表(F3)。行のどこを押しても詳細へ */
+/** タスクの一覧表(F3)。行のどこを押しても詳細へ。狭い画面では補助の列を隠す */
 export function TaskTable({ tasks, empty = "タスクはありません" }: { tasks: TaskSummary[]; empty?: string }) {
-  if (tasks.length === 0) return <div className="panel__empty">{empty}</div>;
+  if (tasks.length === 0) return <Empty>{empty}</Empty>;
   return (
-    <div className="table-wrap">
-      <table className="table">
-        <thead>
-          <tr>
-            <th className="hide-sm">ID</th>
-            <th>状態</th>
-            <th>タイトル</th>
-            <th className="hide-sm">実行中</th>
-            <th className="right hide-sm">差し戻し</th>
-            <th className="right">更新</th>
-          </tr>
-        </thead>
-        <tbody>
-          {tasks.map((t) => (
-            <tr key={t.id} onClick={(e) => !(e.target as HTMLElement).closest("a") && navigate(paths.task(t.id))}>
-              <td className="id num hide-sm">#{t.id}</td>
-              <td>
-                <StateBadge task={t} />
-              </td>
-              <td className="title">
-                <Link to={paths.task(t.id)}>{t.title}</Link>
-                {t.kind === "test_infra" && <span className="muted sm"> (テスト基盤整備)</span>}
-              </td>
-              <td className="sm hide-sm">
-                {t.running ? (
-                  <Link to={paths.run(t.running.id)} className="nowrap">
-                    {t.running.role}
-                    {t.running.model && <span className="muted">({t.running.model})</span>}
-                  </Link>
-                ) : (
-                  <span className="subtle">-</span>
-                )}
-              </td>
-              <td className="right num sm hide-sm">{t.reviewRounds}</td>
-              <td className="right num sm muted nowrap">{formatDateTime(t.updatedAt)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Table>
+      <TableHeader>
+        <TableRow className="hover:bg-transparent">
+          <TableHead className="max-sm:hidden">ID</TableHead>
+          <TableHead>状態</TableHead>
+          <TableHead>タイトル</TableHead>
+          <TableHead className="max-sm:hidden">実行中</TableHead>
+          <TableHead className="text-right max-sm:hidden">差し戻し</TableHead>
+          <TableHead className="text-right">更新</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {tasks.map((t) => (
+          <TableRow key={t.id} className="cursor-pointer" onClick={(e) => !(e.target as HTMLElement).closest("a") && navigate(paths.task(t.id))}>
+            <TableCell className="w-px whitespace-nowrap text-subtle-foreground tabular-nums max-sm:hidden">#{t.id}</TableCell>
+            <TableCell className="w-px whitespace-nowrap">
+              <StateBadge task={t} />
+            </TableCell>
+            <TableCell className="min-w-[10em] font-medium">
+              <Link to={paths.task(t.id)} className="no-underline">
+                {t.title}
+              </Link>
+              {t.kind === "test_infra" && <span className="text-xs font-normal text-muted-foreground"> (テスト基盤整備)</span>}
+            </TableCell>
+            <TableCell className="text-xs whitespace-nowrap max-sm:hidden">
+              {t.running ? (
+                <Link to={paths.run(t.running.id)}>
+                  {t.running.role}
+                  {t.running.model && <span className="text-muted-foreground">({t.running.model})</span>}
+                </Link>
+              ) : (
+                <span className="text-subtle-foreground">-</span>
+              )}
+            </TableCell>
+            <TableCell className="text-right text-xs tabular-nums max-sm:hidden">{t.reviewRounds}</TableCell>
+            <TableCell className="text-right text-xs whitespace-nowrap text-muted-foreground tabular-nums">{formatDateTime(t.updatedAt)}</TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   );
 }

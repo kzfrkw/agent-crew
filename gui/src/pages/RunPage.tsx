@@ -1,14 +1,15 @@
 import { useState } from "react";
 import type { RunDetail } from "../../../src/server/api-types.ts";
 import { EventList } from "../components/EventList.tsx";
-import { Crumbs } from "../components/Layout.tsx";
+import { Crumbs, Meta, PageTitle } from "../components/Layout.tsx";
 import { RunStateBadge, VerdictBadge } from "../components/StateBadge.tsx";
-import { Async } from "../components/Status.tsx";
+import { Async, Empty } from "../components/Status.tsx";
 import { useApi, useEvents } from "../lib/api.ts";
 import { elapsedSec, formatCost, formatDateTime, formatDuration } from "../lib/format.ts";
 import { paths } from "../lib/routes.ts";
 import { Link } from "../lib/router.tsx";
 import { useNow } from "../lib/useNow.ts";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 /** S4 実行ログ */
 export function RunPage({ id }: { id: number }) {
@@ -28,43 +29,38 @@ function RunView({ d }: { d: RunDetail }) {
   return (
     <>
       <Crumbs items={crumbs} />
-      <h1 className="page-title">
-        <span className="id num">#{r.id}</span>
-        {r.role}
-      </h1>
-      <div className="meta">
+      <PageTitle id={r.id}>{r.role}</PageTitle>
+      <Meta>
         <RunStateBadge state={r.state} />
         {r.model && <span>{r.model}</span>}
-        <span className="num">時間 {formatDuration(running ? elapsedSec(r.startedAt, now) : r.durationSec)}</span>
-        <span className="num">費用 {formatCost(r.costUsd)}</span>
-        <span>
+        <span className="tabular-nums">時間 {formatDuration(running ? elapsedSec(r.startedAt, now) : r.durationSec)}</span>
+        <span className="tabular-nums">費用 {formatCost(r.costUsd)}</span>
+        <span className="inline-flex items-center gap-1.5">
           判定 <VerdictBadge verdict={r.verdict} />
         </span>
-        <span className="num">開始 {formatDateTime(r.startedAt)}</span>
-      </div>
+        <span className="tabular-nums">開始 {formatDateTime(r.startedAt)}</span>
+      </Meta>
       {r.error && (
-        <div className="banner banner--danger">
-          <p className="banner__title">エラー</p>
-          <p className="banner__reason" style={{ margin: 0 }}>
-            {r.error}
-          </p>
-        </div>
+        <Alert variant="danger" role="status" className="mt-4">
+          <AlertTitle className="font-semibold">エラー</AlertTitle>
+          <AlertDescription className="break-words whitespace-pre-wrap text-foreground">{r.error}</AlertDescription>
+        </Alert>
       )}
       {(r.summary || d.artifacts.length > 0 || d.streamUrl) && (
-        <div className="card section" style={{ padding: "12px 16px" }}>
-          <dl className="kv">
+        <div className="mt-6 rounded-lg border bg-card px-4 py-3">
+          <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
             {r.summary && (
               <>
-                <dt>要約</dt>
-                <dd style={{ whiteSpace: "pre-wrap" }}>{r.summary}</dd>
+                <dt className="text-muted-foreground">要約</dt>
+                <dd className="m-0 whitespace-pre-wrap">{r.summary}</dd>
               </>
             )}
             {d.artifacts.length > 0 && d.task && (
               <>
-                <dt>成果物</dt>
-                <dd>
+                <dt className="text-muted-foreground">成果物</dt>
+                <dd className="m-0 flex flex-wrap gap-3">
                   {d.artifacts.map((a) => (
-                    <Link key={a.id} to={paths.artifact(d.task!.id, a.id)} style={{ marginRight: 12 }}>
+                    <Link key={a.id} to={paths.artifact(d.task!.id, a.id)}>
                       {a.fileName}
                     </Link>
                   ))}
@@ -73,8 +69,8 @@ function RunView({ d }: { d: RunDetail }) {
             )}
             {d.streamUrl && (
               <>
-                <dt>生ログ</dt>
-                <dd>
+                <dt className="text-muted-foreground">生ログ</dt>
+                <dd className="m-0">
                   <a href={d.streamUrl} target="_blank" rel="noreferrer">
                     stream.jsonl ↗
                   </a>
@@ -93,20 +89,18 @@ function Log({ runId, running }: { runId: number; running: boolean }) {
   const { events, loading } = useEvents({ run: runId }, 1000);
   const [follow, setFollow] = useState(true);
   return (
-    <section className="section">
-      <div className="toolbar">
-        <h2 className="section__title">ログ</h2>
-        <span className="section__count">{events.length} 件</span>
+    <section className="mt-6">
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <h2 className="m-0 text-[15px] font-semibold">ログ</h2>
+        <span className="text-xs text-muted-foreground">{events.length} 件</span>
         {running && (
-          <label className="check follow">
-            <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} />
+          <label className="ml-auto inline-flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+            <input type="checkbox" className="accent-foreground" checked={follow} onChange={(e) => setFollow(e.target.checked)} />
             最新に追従
           </label>
         )}
       </div>
-      <div className="card panel__body">
-        {loading && events.length === 0 ? <div className="panel__empty">読み込み中…</div> : <EventList events={events} follow={running && follow} />}
-      </div>
+      <div className="rounded-lg border bg-card py-2">{loading && events.length === 0 ? <Empty>読み込み中…</Empty> : <EventList events={events} follow={running && follow} />}</div>
     </section>
   );
 }

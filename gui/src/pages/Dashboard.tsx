@@ -2,11 +2,12 @@ import { useState } from "react";
 import type { Overview, TaskSummary } from "../../../src/server/api-types.ts";
 import { AttentionPanel } from "../components/dashboard/AttentionPanel.tsx";
 import { LivePanel } from "../components/dashboard/LivePanel.tsx";
-import { Async } from "../components/Status.tsx";
+import { Async, Empty } from "../components/Status.tsx";
 import { TaskTable } from "../components/TaskTable.tsx";
 import { useApi } from "../lib/api.ts";
 import { paths } from "../lib/routes.ts";
 import { Link } from "../lib/router.tsx";
+import { cn } from "@/lib/utils";
 
 type Filter = "all" | "active" | "attention";
 const FILTERS: { value: Filter; label: string }[] = [
@@ -24,7 +25,7 @@ export function Dashboard() {
     <Async state={overview}>
       {(o) => (
         <>
-          <div className="grid-2">
+          <div className="grid grid-cols-1 gap-4 min-[880px]:grid-cols-2">
             <AttentionPanel tasks={o.tasks} onDone={overview.reload} />
             <LivePanel running={o.running} />
           </div>
@@ -45,48 +46,60 @@ function TaskSection({ overview }: { overview: Overview }) {
 
   if (overview.projects.length === 0) {
     return (
-      <section className="section card">
-        <div className="state-msg">
-          プロジェクトがまだありません。<code>agent-crew project add &lt;path&gt; --name &lt;name&gt;</code> で登録します
-        </div>
+      <section className="mt-6 rounded-lg border bg-card">
+        <Empty>
+          プロジェクトがまだありません。<code className="font-mono">agent-crew project add &lt;path&gt; --name &lt;name&gt;</code> で登録します
+        </Empty>
       </section>
     );
   }
   return (
-    <section className="section">
-      <div className="toolbar">
-        <h2 className="section__title">タスク</h2>
-        <div className="seg" role="group" aria-label="絞り込み">
-          {FILTERS.map((f) => (
-            <button key={f.value} type="button" aria-pressed={filter === f.value} onClick={() => setFilter(f.value)}>
+    <section className="mt-6">
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <h2 className="m-0 text-[15px] font-semibold">タスク</h2>
+        <div className="inline-flex overflow-hidden rounded-md border bg-card" role="group" aria-label="絞り込み">
+          {FILTERS.map((f, i) => (
+            <button
+              key={f.value}
+              type="button"
+              aria-pressed={filter === f.value}
+              onClick={() => setFilter(f.value)}
+              className={cn(
+                "cursor-pointer px-3 py-0.5 text-xs text-muted-foreground",
+                i > 0 && "border-l",
+                filter === f.value && "bg-muted font-semibold text-foreground",
+              )}
+            >
               {f.label}
             </button>
           ))}
         </div>
-        <label className="check">
-          <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} />
+        <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+          <input type="checkbox" className="accent-foreground" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} />
           完了・取り消しも表示
         </label>
       </div>
-      {overview.projects.map((p) => {
-        const tasks = overview.tasks.filter((t) => t.projectId === p.id);
-        const shown = tasks.filter(pick).sort(sort);
-        const hidden = tasks.length - shown.length;
-        return (
-          <div className="card" key={p.id} style={{ marginBottom: 16 }}>
-            <div className="project-head">
-              <Link to={paths.project(p.id)} className="project-head__name">
-                {p.name}
-              </Link>
-              <span className="muted sm">
-                プロファイル: {PROFILE[p.profileStatus] ?? p.profileStatus} ・ テスト基盤: {TEST_INFRA[p.testInfra] ?? p.testInfra}
-              </span>
-              {hidden > 0 && <span className="subtle sm">ほか {hidden} 件は非表示</span>}
+      <div className="flex flex-col gap-4">
+        {overview.projects.map((p) => {
+          const tasks = overview.tasks.filter((t) => t.projectId === p.id);
+          const shown = tasks.filter(pick).sort(sort);
+          const hidden = tasks.length - shown.length;
+          return (
+            <div className="rounded-lg border bg-card" key={p.id}>
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b px-4 py-3 max-sm:px-3">
+                <Link to={paths.project(p.id)} className="font-semibold no-underline hover:underline">
+                  {p.name}
+                </Link>
+                <span className="text-xs text-muted-foreground">
+                  プロファイル: {PROFILE[p.profileStatus] ?? p.profileStatus} ・ テスト基盤: {TEST_INFRA[p.testInfra] ?? p.testInfra}
+                </span>
+                {hidden > 0 && <span className="text-xs text-subtle-foreground">ほか {hidden} 件は非表示</span>}
+              </div>
+              <TaskTable tasks={shown} empty="該当するタスクはありません" />
             </div>
-            <TaskTable tasks={shown} empty="該当するタスクはありません" />
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </section>
   );
 }

@@ -1,0 +1,163 @@
+/*
+ * 表層のトークン(docs/surface.md)。shadcn/ui の標準の名前に、このツールの状態の4色を足す。
+ * 画面のコードは Tailwind のクラス(bg-background、text-attn など)を通してだけ、ここの値を使う。
+ * ダークモードは OS の設定に従う(Tailwind v4 の dark: も prefers-color-scheme)。
+ */
+@import "tailwindcss";
+@import "tw-animate-css";
+
+:root {
+  --radius: 6px;
+  --background: #fafaf9;
+  --foreground: #1c1917;
+  --card: #ffffff;
+  --card-foreground: #1c1917;
+  --popover: #ffffff;
+  --popover-foreground: #1c1917;
+  --primary: #1c1917;
+  --primary-foreground: #fafaf9;
+  --secondary: #f5f5f4;
+  --secondary-foreground: #1c1917;
+  --muted: #f5f5f4;
+  --muted-foreground: #78716c;
+  --subtle-foreground: #a8a29e;
+  --accent: #f5f5f4;
+  --accent-foreground: #1c1917;
+  --border: #e7e5e4;
+  --input: #d6d3d1;
+  --ring: #57534e;
+  --attn: #b45309;
+  --attn-soft: #fef3c7;
+  --run: #047857;
+  --run-soft: #d1fae5;
+  --human: #1d4ed8;
+  --human-soft: #dbeafe;
+  --destructive: #b91c1c;
+  --destructive-soft: #fee2e2;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #141312;
+    --foreground: #f5f5f4;
+    --card: #1c1b1a;
+    --card-foreground: #f5f5f4;
+    --popover: #1c1b1a;
+    --popover-foreground: #f5f5f4;
+    --primary: #f5f5f4;
+    --primary-foreground: #141312;
+    --secondary: #242322;
+    --secondary-foreground: #f5f5f4;
+    --muted: #242322;
+    --muted-foreground: #a8a29e;
+    --subtle-foreground: #78716c;
+    --accent: #242322;
+    --accent-foreground: #f5f5f4;
+    --border: #2f2d2b;
+    --input: #44403c;
+    --ring: #d6d3d1;
+    --attn: #fbbf24;
+    --attn-soft: #3a2a0a;
+    --run: #34d399;
+    --run-soft: #0c2e22;
+    --human: #93c5fd;
+    --human-soft: #16213d;
+    --destructive: #f87171;
+    --destructive-soft: #3b1414;
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-subtle-foreground: var(--subtle-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-attn: var(--attn);
+  --color-attn-soft: var(--attn-soft);
+  --color-run: var(--run);
+  --color-run-soft: var(--run-soft);
+  --color-human: var(--human);
+  --color-human-soft: var(--human-soft);
+  --color-destructive: var(--destructive);
+  --color-destructive-soft: var(--destructive-soft);
+  --animate-pulse-dot: pulse-dot 1.6s ease-in-out infinite;
+  --animate-flash: flash 1.2s ease-out;
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+  @keyframes flash {
+    from { background-color: var(--run-soft); }
+    to { background-color: transparent; }
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans text-sm antialiased;
+    line-height: 1.6;
+  }
+  a {
+    text-decoration-color: var(--input);
+    text-underline-offset: 3px;
+  }
+  a:hover {
+    text-decoration-color: currentColor;
+  }
+}
+
+/*
+ * 成果物の Markdown(エージェントが書いた任意の文書)。要素ごとにクラスを付けられないので、ここだけは要素で書く。
+ * 値はトークンだけを使う。
+ */
+@layer components {
+  .md { @apply text-sm leading-7 break-words; }
+  .md > :first-child { @apply mt-0; }
+  .md h1 { @apply mt-8 mb-3 text-xl font-semibold tracking-tight; }
+  .md h2 { @apply mt-8 mb-2 border-b pb-1 text-[17px] font-semibold; }
+  .md h3 { @apply mt-6 mb-1.5 text-[15px] font-semibold; }
+  .md p, .md ul, .md ol { @apply my-2.5; }
+  .md ul { @apply list-disc pl-6; }
+  .md ol { @apply list-decimal pl-6; }
+  .md li + li { @apply mt-0.5; }
+  .md code { @apply rounded bg-muted px-1.5 py-px font-mono text-[12.5px]; }
+  .md pre { @apply overflow-x-auto rounded-md bg-muted px-4 py-3 leading-relaxed; }
+  .md pre code { @apply bg-transparent p-0; }
+  .md table { @apply block overflow-x-auto border-collapse text-xs; }
+  .md th, .md td { @apply border px-2.5 py-1; }
+  .md th { @apply bg-muted; }
+  .md blockquote { @apply my-3 border-l-[3px] border-input px-4 text-muted-foreground; }
+  .md hr { @apply my-6 border-t; }
+  .md a { @apply underline; }
+  .md input[type="checkbox"] { @apply mr-1.5; }
+}
+
+/* 動きを減らす設定では、脈動とハイライトを止める */
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse-dot, .animate-flash { animation: none; }
+}
