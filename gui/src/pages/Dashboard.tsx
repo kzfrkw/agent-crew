@@ -25,7 +25,7 @@ export function Dashboard() {
       {(o) => (
         <>
           <div className="grid-2">
-            <AttentionPanel tasks={o.tasks} />
+            <AttentionPanel tasks={o.tasks} onDone={overview.reload} />
             <LivePanel running={o.running} />
           </div>
           <TaskSection overview={o} />

@@ -1,6 +1,6 @@
-import { useEffect, type ReactNode } from "react";
-import type { Overview } from "../../../src/server/api-types.ts";
-import { useApi } from "../lib/api.ts";
+import { useEffect, useState, type ReactNode } from "react";
+import type { Overview, WorkerView } from "../../../src/server/api-types.ts";
+import { postJson, useApi } from "../lib/api.ts";
 import { paths } from "../lib/routes.ts";
 import { Link, navigate } from "../lib/router.tsx";
 import { useStream } from "../lib/stream.tsx";
@@ -41,16 +41,61 @@ export function Layout({ children, projectId }: { children: ReactNode; projectId
               ))}
             </select>
           )}
+          <Link to={paths.newTask()} className="btn btn--sm">
+            + チケット
+          </Link>
           <span className="header__spacer" />
+          {overview.data && <WorkerSwitch worker={overview.data.worker} onChange={overview.reload} />}
           <span className={`conn conn--${status}`} role="status">
             <span className="conn__dot" aria-hidden title={CONN[status]} />
             <span className="conn__label">{CONN[status]}</span>
           </span>
-          <span className="readonly" title="操作は CLI(agent-crew)で行います">読み取り専用</span>
+          {overview.data?.worker.state === "disabled" && (
+            <span className="readonly" title="serve --no-worker で起動しています。操作は CLI(agent-crew)で行います">
+              読み取り専用
+            </span>
+          )}
         </div>
       </header>
       <main className="main">{children}</main>
     </>
+  );
+}
+
+const WORKER = {
+  running: { label: "自動実行中", button: "一時停止" },
+  paused: { label: "一時停止中", button: "再開" },
+  locked: { label: "CLI の run が実行中", button: null },
+  disabled: { label: "", button: null },
+};
+
+/** 常駐ワーカーの状態と、一時停止・再開(G1・G2) */
+function WorkerSwitch({ worker, onChange }: { worker: WorkerView; onChange: () => void }) {
+  const [busy, setBusy] = useState(false);
+  if (worker.state === "disabled") return null;
+  const w = WORKER[worker.state];
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      await postJson("/api/worker", { paused: worker.state === "running" });
+      onChange();
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <span className={`worker worker--${worker.state}`}>
+      <span className="worker__dot" aria-hidden />
+      <span className="worker__label">
+        {w.label}
+        {worker.active.length > 0 && <span className="muted">({worker.active.length})</span>}
+      </span>
+      {w.button && (
+        <button type="button" className="btn btn--sm" onClick={toggle} disabled={busy} title={worker.state === "running" ? "新しい役割を起動しません(実行中のものは最後まで動きます)" : undefined}>
+          {w.button}
+        </button>
+      )}
+    </span>
   );
 }
 

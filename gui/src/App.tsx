@@ -4,6 +4,7 @@ import { matchRoute, type Route } from "./lib/routes.ts";
 import { usePath } from "./lib/router.tsx";
 import { ArtifactPage } from "./pages/ArtifactPage.tsx";
 import { Dashboard } from "./pages/Dashboard.tsx";
+import { NewTaskPage } from "./pages/NewTaskPage.tsx";
 import { ProjectPage } from "./pages/ProjectPage.tsx";
 import { RunPage } from "./pages/RunPage.tsx";
 import { TaskPage } from "./pages/TaskPage.tsx";
@@ -18,6 +19,8 @@ function page(route: Route): ReactNode {
   switch (route.name) {
     case "dashboard":
       return <Dashboard />;
+    case "newTask":
+      return <NewTaskPage />;
     case "task":
       return <TaskPage key={route.id} id={route.id} />;
     case "artifact":

@@ -45,7 +45,7 @@ describe("AttentionPanel", () => {
     const items = screen.getAllByRole("article");
     expect(items.map((i) => within(i).getByRole("link").textContent)).toEqual(["質問あり", "計画を見て", "手作業"]);
     expect(screen.getByText("AとBどちら?")).toBeTruthy();
-    expect(screen.getByText("agent-crew task approve 2 --kind plan")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "承認する" })).toBeTruthy(); // 主な操作はボタン(フェーズ3)
     expect(screen.getByRole("heading", { name: "対応待ち" }).nextSibling?.textContent).toBe("2");
   });
 

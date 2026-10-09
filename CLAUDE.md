@@ -97,7 +97,7 @@
 - 安全設定の実機検査: `npx agent-crew doctor --probe-sandbox`(claude -p を haiku で1回動かす。利用枠を少し使う。ランナーや安全設定を変えたら必ず実行する)
 - 基本の流れ: `project add <path> --name <n>` → `project approve <n>` → `task create --project <n> --title ... --body-file ...` → `run` → `task approve <id> --kind plan` → `run` → `task approve <id> --kind final` → `run`。人の対応待ちは `task list`(★)と `task show <id>`
 - 人への引き継ぎ: `task takeover <id>` → worktree で作業してコミット → `task return <id>`。ベースへの追従: `task update-base <id>`
-- GUI: `npx agent-crew serve`(http://127.0.0.1:4300/ 、読み取り専用。GUI のビルドが無いか古ければ自動でビルドする。`--no-build` で抑止)
+- GUI: `npx agent-crew serve`(http://127.0.0.1:4300/ 。常駐ワーカーがタスクを自動で進め、GUI から承認・回答・停止・引き取り・チケット投入ができる。`--no-worker` で読み取り専用。GUI のビルドが無いか古ければ自動でビルドする。`--no-build` で抑止)。CLI の `run` とはロックで排他する(GUI で一時停止すると CLI の run を使える)
 - GUI のビルド: `npm run build:gui`(`npm install` 時にも `prepare` で実行される。結果は `dist/gui/`)
 - GUI の開発: `npx agent-crew serve` を起動したうえで `npm run dev:gui`(Vite。`/api` と `/files` を 4300 に中継。`AGENT_CREW_PORT` で変更可)
 - GUI の見本データ: `AGENT_CREW_HOME=<空のディレクトリ> node scripts/seed-demo.ts`(claude を使わずに全状態のタスクを作る。claudePath を /usr/bin/false にするので、常駐ワーカーが動いても利用枠は使わない)

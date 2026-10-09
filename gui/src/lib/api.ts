@@ -21,12 +21,25 @@ export async function getJson<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-export type ApiState<T> = { data: T | undefined; error: ApiError | Error | undefined; loading: boolean };
+/** 書き込み API(POST)。外部のサイトからの操作を防ぐ専用ヘッダーを付ける。断られたらサーバーの理由を ApiError で投げる */
+export async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-agent-crew": "1", accept: "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = (await res.json().catch(() => ({}))) as T & { error?: string };
+  if (!res.ok) throw new ApiError(res.status, data.error ?? res.statusText);
+  return data;
+}
+
+export type ApiState<T> = { data: T | undefined; error: ApiError | Error | undefined; loading: boolean; reload: () => void };
 
 /** path が変わったとき、SSE で変化を受けたときに取り直す。取り直しのあいだは前のデータを見せる */
 export function useApi<T>(path: string | null): ApiState<T> {
   const { version } = useStream();
-  const [state, setState] = useState<ApiState<T>>({ data: undefined, error: undefined, loading: path !== null });
+  const [local, setLocal] = useState(0);
+  const [state, setState] = useState<Omit<ApiState<T>, "reload">>({ data: undefined, error: undefined, loading: path !== null });
   const current = useRef(path);
 
   useEffect(() => {
@@ -43,9 +56,9 @@ export function useApi<T>(path: string | null): ApiState<T> {
     return () => {
       alive = false;
     };
-  }, [path, version]);
+  }, [path, version, local]);
 
-  return state;
+  return { ...state, reload: () => setLocal((n) => n + 1) };
 }
 
 /**

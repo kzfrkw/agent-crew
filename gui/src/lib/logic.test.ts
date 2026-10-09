@@ -8,6 +8,7 @@ describe("matchRoute", () => {
   it.each([
     ["/", { name: "dashboard" }],
     ["/tasks/12", { name: "task", id: 12 }],
+    ["/tasks/new", { name: "newTask" }],
     ["/tasks/12/artifacts/3", { name: "artifact", taskId: 12, id: 3 }],
     ["/runs/45", { name: "run", id: 45 }],
     ["/projects/1", { name: "project", id: 1 }],

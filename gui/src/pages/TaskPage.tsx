@@ -1,4 +1,5 @@
 import type { ArtifactSummary, TaskDetail } from "../../../src/server/api-types.ts";
+import { ActionPanel } from "../components/ActionPanel.tsx";
 import { Commands } from "../components/Commands.tsx";
 import { EventList } from "../components/EventList.tsx";
 import { Crumbs } from "../components/Layout.tsx";
@@ -15,10 +16,10 @@ import { Link } from "../lib/router.tsx";
 /** S2 タスク詳細 */
 export function TaskPage({ id }: { id: number }) {
   const detail = useApi<TaskDetail>(`/api/tasks/${id}`);
-  return <Async state={detail}>{(d) => <TaskView d={d} />}</Async>;
+  return <Async state={detail}>{(d) => <TaskView d={d} onDone={detail.reload} />}</Async>;
 }
 
-function TaskView({ d }: { d: TaskDetail }) {
+function TaskView({ d, onDone }: { d: TaskDetail; onDone: () => void }) {
   const t = d.task;
   return (
     <>
@@ -35,7 +36,7 @@ function TaskView({ d }: { d: TaskDetail }) {
         <span>更新 {formatDateTime(t.updatedAt)}</span>
       </div>
       <Pipeline state={t.state} heldFrom={t.heldFromState} />
-      <Banner d={d} />
+      <Banner d={d} onDone={onDone} />
 
       <div className="grid-main section">
         <div>
@@ -123,8 +124,9 @@ function TaskView({ d }: { d: TaskDetail }) {
 
 const APPROVAL: Record<string, string> = { plan: "計画", design: "デザイン", final: "最終確認", review: "レビュー", qa: "QA", tests: "テストの再実行" };
 
-function Banner({ d }: { d: TaskDetail }) {
+function Banner({ d, onDone }: { d: TaskDetail; onDone: () => void }) {
   const t = d.task;
+  const actions = <ActionPanel taskId={t.id} actions={d.nextActions} onDone={onDone} />;
   if (d.runActive && t.running) {
     return (
       <div className="banner banner--running">
@@ -132,15 +134,18 @@ function Banner({ d }: { d: TaskDetail }) {
           エージェントが実行中です(<Link to={paths.run(t.running.id)}>{t.running.role}</Link>)
         </p>
         <span className="sm">worktree を触らないでください</span>
+        {actions}
       </div>
     );
   }
   if (!t.attention) {
-    return d.nextActions.length > 0 ? (
+    if (d.nextActions.length === 0) return null;
+    // 完了後の push のように、GUI から送らない操作はコマンドだけを見せる
+    return (
       <div className="banner" style={{ background: "var(--surface-2)" }}>
-        <Commands actions={d.nextActions} />
+        {d.nextActions.some((a) => a.request) ? actions : <Commands actions={d.nextActions} />}
       </div>
-    ) : null;
+    );
   }
   const tone = t.attention === "failed" ? "danger" : t.attention === "human_working" ? "human" : "attention";
   const title = {
@@ -152,7 +157,7 @@ function Banner({ d }: { d: TaskDetail }) {
   }[t.attention];
   const plan = t.attention === "approve_plan" ? latestOf(d.artifacts, "plan") : undefined;
   return (
-    <div className={`banner banner--${tone}`} role="status">
+    <div className={`banner banner--${tone}`}>
       <p className="banner__title">{title}</p>
       {t.reason && <p className="banner__reason">{t.reason}</p>}
       {plan && (
@@ -160,7 +165,7 @@ function Banner({ d }: { d: TaskDetail }) {
           <Link to={paths.artifact(t.id, plan.id)}>plan.md を読む →</Link>
         </p>
       )}
-      <Commands actions={d.nextActions} />
+      {actions}
     </div>
   );
 }
