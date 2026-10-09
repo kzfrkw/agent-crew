@@ -14,7 +14,7 @@ export function TaskTable({ tasks, empty = "タスクはありません" }: { ta
       <TableHeader>
         <TableRow className="hover:bg-transparent">
           <TableHead className="max-sm:hidden">ID</TableHead>
-          <TableHead>状態</TableHead>
+          <TableHead className="max-sm:hidden">状態</TableHead>
           <TableHead>タイトル</TableHead>
           <TableHead className="max-sm:hidden">実行中</TableHead>
           <TableHead className="text-right max-sm:hidden">差し戻し</TableHead>
@@ -26,10 +26,14 @@ export function TaskTable({ tasks, empty = "タスクはありません" }: { ta
         {tasks.map((t) => (
           <TableRow key={t.id} className="cursor-pointer" onClick={(e) => !(e.target as HTMLElement).closest("a") && navigate(paths.task(t.id))}>
             <TableCell className="w-px whitespace-nowrap text-subtle-foreground tabular-nums max-sm:hidden">#{t.id}</TableCell>
-            <TableCell className="w-px whitespace-nowrap">
+            <TableCell className="w-px whitespace-nowrap max-sm:hidden">
               <StateBadge task={t} />
             </TableCell>
             <TableCell className="min-w-[10em] font-medium">
+              {/* 狭い画面では状態の列を隠し、バッジをタイトルの上に置く(長い状態名で表が広がらないように) */}
+              <div className="mb-1 sm:hidden">
+                <StateBadge task={t} />
+              </div>
               <Link to={paths.task(t.id)} className="no-underline">
                 {t.title}
               </Link>

@@ -102,6 +102,21 @@ describe("TaskTable の費用の列", () => {
   });
 });
 
+describe("TaskTable の狭い画面", () => {
+  it("狭い画面では状態の列を隠し、状態のバッジをタイトルの上に置く(長い状態名で表が広がらないように。自己適用で発見)", () => {
+    render(<TaskTable tasks={[task({ id: 1, title: "t", state: "awaiting_design_approval", stateLabel: "デザイン仕様の承認待ち", attention: "approve_design" })]} />);
+    const heads = screen.getAllByRole("columnheader");
+    const stateCol = heads.findIndex((h) => h.textContent === "状態");
+    const titleCol = heads.findIndex((h) => h.textContent === "タイトル");
+    expect(heads[stateCol]!.className).toContain("max-sm:hidden");
+    const cells = within(screen.getAllByRole("row")[1]!).getAllByRole("cell");
+    expect(cells[stateCol]!.className).toContain("max-sm:hidden");
+    // タイトルの欄の中のバッジは、狭い画面だけで見える要素の中にある
+    const inTitle = within(cells[titleCol]!).getByText("デザイン仕様の承認待ち");
+    expect(inTitle.closest(".sm\\:hidden")).not.toBeNull();
+  });
+});
+
 describe("App(ダッシュボード)", () => {
   const overview: Overview = {
     worker: { state: "disabled", active: [] },

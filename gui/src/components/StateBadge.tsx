@@ -2,7 +2,7 @@ import type { TaskSummary } from "../../../src/server/api-types.ts";
 import { Badge } from "@/components/ui/badge";
 
 /** 状態バッジ(docs/surface.md)。色は状態の意味にだけ使う */
-export function StateBadge({ task }: { task: Pick<TaskSummary, "state" | "stateLabel" | "attention" | "running"> }) {
+export function StateBadge({ task, className }: { task: Pick<TaskSummary, "state" | "stateLabel" | "attention" | "running">; className?: string }) {
   const variant =
     task.attention === "failed"
       ? "danger"
@@ -16,7 +16,7 @@ export function StateBadge({ task }: { task: Pick<TaskSummary, "state" | "stateL
               ? "done"
               : "neutral";
   return (
-    <Badge variant={variant}>
+    <Badge variant={variant} className={className}>
       {variant === "attention" && <span aria-hidden>◆</span>}
       {variant === "running" && <PulseDot />}
       {task.stateLabel}
