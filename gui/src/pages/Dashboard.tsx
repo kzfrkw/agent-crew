@@ -7,16 +7,14 @@ import { TaskTable } from "../components/TaskTable.tsx";
 import { useApi } from "../lib/api.ts";
 import { paths } from "../lib/routes.ts";
 import { Link } from "../lib/router.tsx";
+import { countByFilter, matchesFilter, type Filter } from "../lib/taskFilter.ts";
 import { cn } from "@/lib/utils";
 
-type Filter = "all" | "active" | "attention";
 const FILTERS: { value: Filter; label: string }[] = [
   { value: "all", label: "すべて" },
   { value: "active", label: "進行中" },
   { value: "attention", label: "対応待ち" },
 ];
-
-const CLOSED = ["done", "cancelled"];
 
 /** S1 ダッシュボード: 対応待ちと実況を同じ重さで並べ、その下にタスク一覧 */
 export function Dashboard() {
@@ -39,9 +37,8 @@ export function Dashboard() {
 function TaskSection({ overview }: { overview: Overview }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [showClosed, setShowClosed] = useState(false);
-  const pick = (t: TaskSummary) =>
-    (showClosed || !CLOSED.includes(t.state)) &&
-    (filter === "all" || (filter === "attention" ? t.attention !== null : !CLOSED.includes(t.state) && t.attention === null));
+  const pick = (t: TaskSummary) => matchesFilter(t, filter, showClosed);
+  const counts = countByFilter(overview.tasks, showClosed);
   const sort = (a: TaskSummary, b: TaskSummary) => Number(b.attention !== null) - Number(a.attention !== null) || b.id - a.id;
 
   if (overview.projects.length === 0) {
@@ -57,7 +54,7 @@ function TaskSection({ overview }: { overview: Overview }) {
     <section className="mt-6">
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <h2 className="m-0 text-[15px] font-semibold">タスク</h2>
-        <div className="inline-flex overflow-hidden rounded-md border bg-card" role="group" aria-label="絞り込み">
+        <div className="inline-flex shrink-0 overflow-hidden rounded-md border bg-card" role="group" aria-label="絞り込み">
           {FILTERS.map((f, i) => (
             <button
               key={f.value}
@@ -65,12 +62,16 @@ function TaskSection({ overview }: { overview: Overview }) {
               aria-pressed={filter === f.value}
               onClick={() => setFilter(f.value)}
               className={cn(
-                "cursor-pointer px-3 py-0.5 text-xs text-muted-foreground",
+                "cursor-pointer whitespace-nowrap px-3 py-0.5 text-xs text-muted-foreground",
                 i > 0 && "border-l",
                 filter === f.value && "bg-muted font-semibold text-foreground",
               )}
             >
-              {f.label}
+              {f.label}{" "}
+              <span className="ml-1 tabular-nums">
+                {counts[f.value]}
+                <span className="sr-only">件</span>
+              </span>
             </button>
           ))}
         </div>
