@@ -64,6 +64,10 @@ export async function startSandboxedApp(o: {
   tmpDir: string;
   denyRead?: string[];
   timeoutMs?: number;
+  /** 追加の環境変数(複数リポジトリのつなぎ方など) */
+  env?: Record<string, string>;
+  /** false なら URL への応答を待たない(確認 URL の無いリポジトリ) */
+  waitForUrl?: boolean;
 }): Promise<SandboxedApp> {
   mkdirSync(o.tmpDir, { recursive: true });
   const logPath = join(o.tmpDir, "app.log");
@@ -71,7 +75,7 @@ export async function startSandboxedApp(o: {
   const profile = buildAppSandboxProfile({ writable: [...o.writable, o.tmpDir], denyRead: o.denyRead ?? [] });
   const child: ChildProcess = spawn("/usr/bin/sandbox-exec", ["-p", profile, "/bin/sh", "-c", o.command], {
     cwd: o.cwd,
-    env: buildAgentEnv(process.env, { TMPDIR: o.tmpDir }),
+    env: buildAgentEnv(process.env, { ...(o.env ?? {}), TMPDIR: o.tmpDir }),
     detached: true, // プロセスグループごと止めるため
     stdio: ["ignore", logFd, logFd],
   });
@@ -98,6 +102,11 @@ export async function startSandboxedApp(o: {
     }
   };
 
+  if (o.waitForUrl === false) {
+    await new Promise((r) => setTimeout(r, 1000));
+    if (exited !== null) throw new Error(`アプリが起動前に終了しました(終了コード ${exited}):\n${log().slice(-2000)}`);
+    return { log, stop };
+  }
   const until = Date.now() + (o.timeoutMs ?? 60_000);
   for (;;) {
     if (exited !== null) throw new Error(`アプリが起動前に終了しました(終了コード ${exited}):\n${log().slice(-2000)}`);

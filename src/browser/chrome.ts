@@ -49,6 +49,9 @@ export async function captureScreens(o: {
       `--user-data-dir=${profile}`,
       // 127.0.0.1 / localhost 以外には繋がない(外部の資源を読まない)
       "--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE localhost , EXCLUDE 127.0.0.1",
+      // macOS のキーチェーンを使わない(新しいプロファイルで起動すると許可のダイアログを待って止まることがある)
+      "--use-mock-keychain",
+      "--password-store=basic",
       "--no-first-run",
       "--no-default-browser-check",
       "--disable-extensions",
@@ -69,7 +72,7 @@ export async function captureScreens(o: {
       if (existsSync(portFile)) port = Number(readFileSync(portFile, "utf8").split("\n")[0]);
     }
     if (!port) throw new Error("Chrome の DevTools に接続できませんでした");
-    const targets = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()) as { type: string; webSocketDebuggerUrl: string }[];
+    const targets = (await (await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(10_000) })).json()) as { type: string; webSocketDebuggerUrl: string }[];
     const page = targets.find((t) => t.type === "page");
     if (!page) throw new Error("Chrome のページが見つかりません");
     const cdp = await connect(page.webSocketDebuggerUrl);
@@ -138,10 +141,18 @@ async function connect(url: string): Promise<Cdp> {
     }
   });
   return {
+    // 命令が返ってこないときに止まったままにならないよう、上限を設ける
     send: (method, params = {}) =>
       new Promise((resolve, reject) => {
         const i = ++id;
-        pending.set(i, { resolve, reject });
+        const t = setTimeout(() => {
+          pending.delete(i);
+          reject(new Error(`${method} が応答しませんでした`));
+        }, 20_000);
+        pending.set(i, {
+          resolve: (v) => (clearTimeout(t), resolve(v)),
+          reject: (e) => (clearTimeout(t), reject(e)),
+        });
         ws.send(JSON.stringify({ id: i, method, params }));
       }),
     once: (event, timeoutMs) =>

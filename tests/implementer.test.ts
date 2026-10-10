@@ -136,7 +136,7 @@ describe("実装者", () => {
     const runner = new ScriptedRunner({ planner: plannerReady, implementer: implementer({ testCommand: "node --test" }) });
     const { ctx, t } = await toImplementing(runner);
     await runUntilIdle(ctx);
-    expect(listEvents(ctx.db, t.id).find((e) => e.kind === "test_command")?.payload).toEqual({ command: "node --test" });
+    expect(listEvents(ctx.db, t.id).find((e) => e.kind === "test_command")?.payload).toEqual({ command: "node --test", repoId: expect.any(Number) }) // リポジトリごとに記録する(フェーズ5);
   });
 });
 

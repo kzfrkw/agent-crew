@@ -70,3 +70,75 @@ describe("複数リポジトリのタスク(フェーズ5)", () => {
     expect(latestNeedsInputReason(b.ctx.db, b.t.id)).toContain("db");
   });
 });
+
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { listEvents } from "../src/db/store.ts";
+import { sh } from "./helpers/gitrepo.ts";
+
+/** 実装者: 渡された worktree にファイルを書いてコミットする(どのリポジトリでも) */
+const implementer: Script = (spec) => {
+  writeFileSync(join(spec.cwd, `change-${spec.cwd.split("/").at(-1)}.js`), `export const v = ${Date.now()};\n`);
+  const env = { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", ...spec.extraEnv };
+  sh(spec.cwd, "git", ["add", "."], env);
+  sh(spec.cwd, "git", ["commit", "-q", "-m", `変更(${spec.cwd.split("/").at(-1)})`], env);
+  writeArtifact(spec, "impl-notes.md", "done");
+  return { structuredOutput: { verdict: "done", summary: "s", testCommand: null } };
+};
+const verifier: Script = (spec) => {
+  const command = /```sh\n(.*)\n```/.exec(spec.prompt)![1]!;
+  return { structuredOutput: { verdict: "passed", summary: "s" }, bashResults: [{ command, isError: false, output: "ok" }] };
+};
+
+describe("複数リポジトリのタスクを最後まで(フェーズ5)", () => {
+  it("実装者はリポジトリごとに計画の順で動き、自分の worktree にだけ書ける。テストの再実行もリポジトリごと。レビューは全差分、統合はリポジトリごと", async () => {
+    const { ctx, runner, project, t } = await multiProject(planner(["backend", "frontend"], { architect: true, designer: false }));
+    Object.assign(runner, {});
+    const scripts = (runner as unknown as { scripts: Record<string, Script> }).scripts;
+    Object.assign(scripts, {
+      architect: answer("design.md", "ready", { decisions: [] }),
+      implementer,
+      verifier,
+      reviewer: answer("review.md", "approve", { findings: [] }),
+      qa: answer("qa-report.md", "passed"),
+      integrator: answer("pr-draft.md", "done"),
+    });
+    await runUntilIdle(ctx);
+    approveTask(ctx, t.id, "plan");
+    await runUntilIdle(ctx);
+    expect(getTask(ctx.db, t.id)!.state).toBe("awaiting_final_approval");
+
+    const repos = listRepos(ctx.db, project.id);
+    const wt = (role: string) => listTaskRepos(ctx.db, t.id).find((x) => x.repoId === repos.find((r) => r.role === role)!.id)!.worktreePath;
+    const impl = runner.calls.filter((c) => c.role === "implementer");
+    expect(impl.map((c) => c.cwd)).toEqual([wt("backend"), wt("frontend")]);
+    expect(impl.every((c) => c.write === "worktree")).toBe(true);
+    expect(impl[0]!.prompt).toContain("[backend]");
+    expect(runner.calls.filter((c) => c.role === "verifier").map((c) => c.cwd)).toEqual([wt("backend"), wt("frontend")]);
+    const diff = readFileSync(join(taskDir(ctx.home, t.id), "diff.patch"), "utf8");
+    expect(diff).toContain("[backend]");
+    expect(diff).toContain("change-backend.js");
+    expect(diff).toContain("change-frontend.js");
+
+    approveTask(ctx, t.id, "final");
+    await runUntilIdle(ctx);
+    expect(getTask(ctx.db, t.id)!.state).toBe("done");
+    const integrated = listEvents(ctx.db, t.id).filter((e) => e.kind === "integrated").map((e) => (e.payload as { repo: string }).repo);
+    expect(integrated.sort()).toEqual(repos.map((r) => r.path).sort());
+    expect(runner.calls.find((c) => c.role === "integrator")!.prompt).toContain("[frontend]");
+  });
+
+  it("前のリポジトリの実装者が止まったら、次のリポジトリは動かさない", async () => {
+    const { ctx, runner, t } = await multiProject(planner(["backend", "frontend"], { architect: true, designer: false }));
+    const scripts = (runner as unknown as { scripts: Record<string, Script> }).scripts;
+    Object.assign(scripts, {
+      architect: answer("design.md", "ready", { decisions: [] }),
+      implementer: answer("impl-notes.md", "need_human"),
+    });
+    await runUntilIdle(ctx);
+    approveTask(ctx, t.id, "plan");
+    await runUntilIdle(ctx);
+    expect(runner.calls.filter((c) => c.role === "implementer")).toHaveLength(1);
+    expect(getTask(ctx.db, t.id)!.state).toBe("needs_input");
+  });
+});
