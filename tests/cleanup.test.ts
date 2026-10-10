@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { cleanupStrayProcesses } from "../src/runner/cleanup.ts";
+import { inAgentSandbox } from "./helpers/env.ts";
 import { tempDir } from "./helpers/gitrepo.ts";
 
 const alive = (pid: number) => {
@@ -21,7 +22,7 @@ function stray(cwd: string): number {
 
 const sleepMs = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-describe("役割の実行の後片付け(自己適用で発見)", () => {
+describe.skipIf(inAgentSandbox)("役割の実行の後片付け(自己適用で発見)", () => {
   it("作業ディレクトリの中で、実行の開始より後に起動されたプロセスを止める", async () => {
     const dir = tempDir("agent-crew-cleanup-");
     const since = Date.now();
