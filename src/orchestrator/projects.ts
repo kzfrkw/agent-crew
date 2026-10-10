@@ -203,7 +203,7 @@ export function mustProject(db: Db, name: string): Project {
 export type ProfileCommandsPatch = Partial<Record<"install" | "build" | "test" | "start" | "startUrl" | "analyze" | "platform", string>>;
 
 /** アプリの種類。種類を持たない古いプロファイルは web(フェーズ6) */
-export function platformOf(profile: Pick<Profile, "platform"> | null | undefined): Profile["platform"] {
+export function platformOf(profile: Pick<Profile, "platform"> | null | undefined): NonNullable<Profile["platform"]> {
   return profile?.platform ?? "web";
 }
 

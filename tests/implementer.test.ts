@@ -199,7 +199,7 @@ describe("verifyTests(テストの再実行)", () => {
 });
 
 describe("verifyTests(Flutter: ツールが sandbox-exec で直接実行する。フェーズ6)", () => {
-  const flutterProfile = { platform: "flutter", commands: { install: "flutter pub get", build: null, test: "flutter test", start: null, analyze: "flutter analyze" }, startUrl: null };
+  const flutterProfile = { platform: "flutter" as const, commands: { install: "flutter pub get", build: null, test: "flutter test", start: null, analyze: "flutter analyze" }, startUrl: null };
   async function reviewing(exitCode: number) {
     const runner = new ScriptedRunner({ planner: plannerReady, implementer: implementer() });
     const ctx = testContext(runner);
