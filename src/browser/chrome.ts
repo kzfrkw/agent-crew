@@ -22,7 +22,8 @@ export function findChrome(configured?: string): string | undefined {
 }
 
 export type Variant = { width: number; scheme: "light" | "dark" };
-export type Shot = { name: string; path: string; width: number; scheme: "light" | "dark"; file: string; error?: string };
+/** device は iOS シミュレータで撮ったときの機種(フェーズ6) */
+export type Shot = { name: string; path: string; width: number; scheme: "light" | "dark"; file: string; device?: string; error?: string };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

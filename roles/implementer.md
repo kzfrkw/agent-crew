@@ -27,6 +27,14 @@ maxBudgetUsd: 5
 - 最初に書いたテストを、通すために弱める・削除する・スキップすること。変更が必要な場合は理由を `impl-notes.md` に書く
 - 計画にない大きな変更。必要なら `need_human` を返す
 
+## Flutter のリポジトリ(プロファイルの種類が Flutter)
+- テストと静的解析は Bash ではなく、MCP の道具 `run_project_command`(kind: test / analyze)で実行してください(Bash の中では止まります)。依存の準備(`flutter pub get`)は Bash で実行してかまいません
+- `ui-spec.md` があるタスク(画面が変わる)では、`integration_test/screens_test.dart` を書いて更新してください。ツールがこのテストを iOS シミュレータで動かし、ライト / ダークの画面を撮ってデザインレビューに回します
+  - 画面を開くたびに `await binding.takeScreenshot('<画面の名前>')` を呼ぶ(名前は `ui-spec.md` の画面の ID に合わせ、英数字・`-`・`_` だけ。例: `s1-orders`)
+  - 先頭で `final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();`、アプリを `pumpWidget` した後に `await binding.convertFlutterSurfaceToImage();` と `pumpAndSettle()`
+  - `pubspec.yaml` の dev_dependencies に `integration_test`(sdk: flutter)と `flutter_driver`(sdk: flutter)が要ります。ドライバー(`test_driver/`)はツールが用意するので書かなくてかまいません
+  - このテストはシミュレータが要るため、`run_project_command` では実行されません(`flutter test` の対象は `test/` だけ)。正しさは撮影で確かめます
+
 ## impl-notes.md に書くこと
 - テストの失敗を確認したときの出力の要点(Red の証拠)
 - 受け入れ条件ごとに、どのテストで確認しているか。テストで確認できない条件は「QAで確認」と明記する

@@ -200,3 +200,10 @@ Xcode 26.4、iOS 26.4 のシミュレータ、Flutter 3.41.6 で確認した。
 
 - `claude -p --strict-mcp-config --mcp-config <実行ごとの mcp.json>` で、agent-crew の MCP サーバー(`agent-crew mcp-exec`)を渡し、`--allowedTools` と settings の allow に `mcp__agent-crew__run_project_command` だけを足した。haiku で、`flutter pub get`(Bash。Flutter のキャッシュへの書き込みと pub.dev / storage.googleapis.com への通信を足した)→ 橋で `flutter test` → 橋で `flutter analyze` がすべて終了コード 0 で通った($0.04)
 - 橋で実行できるのは、ツールが書いた設定ファイルのコマンド(プロファイルのテスト・解析)だけ。実行は sandbox-exec の中(書き込みは worktree と Flutter のキャッシュ、通信は localhost、資格情報は読めない)
+
+### 追記: 撮影(flutter drive)を sandbox-exec で囲う(2026-10-11、6a-4)
+
+- `flutter drive`(Xcode のビルドを含む)を sandbox-exec の中で動かすには、worktree と Flutter のキャッシュのほかに、`~/Library/Developer/Xcode/DerivedData` と、ユーザーの一時ディレクトリ(`getconf DARWIN_USER_TEMP_DIR`)への書き込みが要った。後者は Xcode の actool がそこへ直接書くため(`TemporaryItems` だけでは足りない。`TMPDIR` を変えても効かない)
+- ユーザーの一時ディレクトリはほかのアプリの一時ファイルも置かれる場所なので、エージェントのコード(ビルドの処理やテスト)がそこを書き換えられることは受け入れたリスク。ホームの文書や資格情報は読めず、通信は localhost だけのまま
+- アプリのシミュレータへのインストールは CoreSimulator のサービスが行うため、`~/Library/Developer/CoreSimulator` への書き込みは許していない
+- 実機で、専用の端末 `agent-crew-1` を借りて起動 → ライト / ダークのそれぞれ `flutter drive` → 止めて返す、までを確認した(約37秒。2画面 × 2配色)

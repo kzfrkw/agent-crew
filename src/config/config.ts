@@ -15,6 +15,8 @@ const ConfigSchema = z.object({
   claudePath: z.string().min(1).default("claude"),
   /** 実装後のデザインレビューの撮影に使う Chrome(既定は /Applications の Google Chrome を探す) */
   chromePath: z.string().min(1).optional(),
+  /** iOS シミュレータで撮るときの機種(例: "iPhone 17")。既定は最新の iOS が対応する最後の iPhone(フェーズ6) */
+  simulatorDevice: z.string().min(1).optional(),
   /** GUI の「エディタで開く」で起動するコマンド。引数には worktree のパスだけを渡す */
   editor: z.string().min(1).default("code"),
   limits: z

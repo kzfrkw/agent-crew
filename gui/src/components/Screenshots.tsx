@@ -15,7 +15,9 @@ export function Screenshots({ shots }: { shots: ScreenshotView[] }) {
             {shots
               .filter((s) => s.path === path)
               .map((s) => {
-                const label = `${s.path} ${s.width}px ${s.scheme === "dark" ? "ダーク" : "ライト"}`;
+                const size = s.device ?? `${s.width}px`;
+                const scheme = s.scheme === "dark" ? "ダーク" : "ライト";
+                const label = `${s.path} ${size} ${scheme}`;
                 return (
                   <figure key={s.file} className="m-0 flex flex-col gap-1">
                     {s.url ? (
@@ -28,7 +30,7 @@ export function Screenshots({ shots }: { shots: ScreenshotView[] }) {
                       </div>
                     )}
                     <figcaption className="text-xs text-muted-foreground tabular-nums">
-                      {s.width}px ・ {s.scheme === "dark" ? "ダーク" : "ライト"}
+                      {`${size} ・ ${scheme}`}
                     </figcaption>
                   </figure>
                 );

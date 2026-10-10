@@ -402,8 +402,10 @@ const designReview: Handler = async (ctx, task) => {
     cwd: tr.worktreePath,
     artifactsDir: dir,
     prompt: taskPrompt(ctx, task, "design_reviewer", [
-      "- スクリーンショット(幅 1280 と 390 の、それぞれライトとダーク):",
-      ...ok.map((s) => `  - ${join(outDir, s.file)}(${s.path}${screens.find((x) => x.path === s.path)?.note ? ` — ${screens.find((x) => x.path === s.path)!.note}` : ""}、幅 ${s.width}、${s.scheme === "dark" ? "ダーク" : "ライト"})`),
+      ok.some((s) => s.device)
+        ? `- スクリーンショット(iOS シミュレータ ${ok.find((s) => s.device)!.device} の、ライトとダーク。integration_test の takeScreenshot で撮ったアプリの画面で、ステータスバーは含まない):`
+        : "- スクリーンショット(幅 1280 と 390 の、それぞれライトとダーク):",
+      ...ok.map((s) => `  - ${join(outDir, s.file)}(${s.path}${screens.find((x) => x.path === s.path)?.note ? ` — ${screens.find((x) => x.path === s.path)!.note}` : ""}、${s.device ? s.device : `幅 ${s.width}`}、${s.scheme === "dark" ? "ダーク" : "ライト"})`),
       ...(shots.length > ok.length ? [`- 撮影できなかった画面: ${shots.filter((s) => s.error).map((s) => `${s.file}(${s.error})`).join("、")}`] : []),
     ]),
   });

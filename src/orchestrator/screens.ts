@@ -6,7 +6,8 @@ import { captureScreens, type Shot, type Variant } from "../browser/chrome.ts";
 import { getRepoProfile, listRepos, listTaskRepos, type Task } from "../db/store.ts";
 import type { Profile } from "../roles/schemas.ts";
 import type { AppContext, CaptureFn } from "./context.ts";
-import { resolveServiceEnv } from "./projects.ts";
+import { platformOf, resolveServiceEnv } from "./projects.ts";
+import { captureFlutterScreens } from "../mobile/capture.ts";
 
 /**
  * 実装後のデザインレビューのための撮影(設計メモ v0.13、4c)。
@@ -38,19 +39,31 @@ function servicesFor(ctx: AppContext, task: Task): Service[] {
   });
 }
 
-/** 撮る相手: 確認 URL のあるリポジトリのうち、計画の順で最後のもの(API → 画面なら画面)。無ければ登録の順で確認 URL のあるもの */
-export function pickScreenTarget(ctx: AppContext, task: Task): { role: string; url: string } | undefined {
+type ScreenTarget = { role: string; url: string; platform: "web" } | { role: string; url: null; platform: "flutter" };
+
+/**
+ * 撮る相手: 画面を持つリポジトリ(確認 URL のあるもの、または Flutter のアプリ)のうち、計画の順で最後のもの(API → 画面なら画面)。
+ * 無ければ登録の順で画面を持つもの
+ */
+export function pickScreenTarget(ctx: AppContext, task: Task): ScreenTarget | undefined {
   const repos = listRepos(ctx.db, task.projectId);
-  const withUrl = repos.flatMap((r) => {
-    const url = (getRepoProfile(ctx.db, r.id) as Profile | null)?.startUrl;
-    return url ? [{ role: r.role, url }] : [];
+  const withScreen = repos.flatMap((r): ScreenTarget[] => {
+    const p = getRepoProfile(ctx.db, r.id) as Profile | null;
+    if (platformOf(p) === "flutter") return [{ role: r.role, url: null, platform: "flutter" }];
+    return p?.startUrl ? [{ role: r.role, url: p.startUrl, platform: "web" }] : [];
   });
-  const planned = (task.repos ?? []).map((role) => withUrl.find((x) => x.role === role)).filter((x): x is { role: string; url: string } => !!x);
-  return planned.at(-1) ?? withUrl[0];
+  const planned = (task.repos ?? []).map((role) => withScreen.find((x) => x.role === role)).filter((x): x is ScreenTarget => !!x);
+  return planned.at(-1) ?? withScreen[0];
 }
 
 export const captureTaskScreens: CaptureFn = async (ctx, task, o) => {
   const target = pickScreenTarget(ctx, task);
+  // Flutter のアプリは iOS シミュレータで撮る(設計メモ v0.15)
+  if (target?.platform === "flutter") {
+    const repoId = listRepos(ctx.db, task.projectId).find((r) => r.role === target.role)!.id;
+    const worktree = listTaskRepos(ctx.db, task.id).find((x) => x.repoId === repoId)?.worktreePath ?? o.worktree;
+    return captureFlutterScreens({ home: ctx.home, taskId: task.id, worktree, outDir: o.outDir, slots: ctx.config.concurrency, deviceType: ctx.config.simulatorDevice });
+  }
   const services = servicesFor(ctx, task);
   if (!target || services.length === 0) throw new Error("プロファイルに起動コマンドと確認 URL がありません(agent-crew project set で設定してください)");
 

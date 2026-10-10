@@ -38,6 +38,18 @@ describe("撮る相手(複数リポジトリ)", () => {
   });
 });
 
+describe("Flutter のリポジトリの撮影(フェーズ6)", () => {
+  it("撮る相手が Flutter なら、iOS シミュレータの撮影に回す(screens_test.dart が無ければその理由で失敗する)", async () => {
+    const { ctx, project } = await setup(["app"]);
+    setProfileCommands(ctx, "shop", { platform: "flutter", start: "-", startUrl: "-", test: "flutter test" });
+    const t = createTask(ctx.db, { projectId: project.id, title: "t", body: "" });
+    ensureWorktrees(ctx, t);
+    const wt = listTaskRepos(ctx.db, t.id)[0]!.worktreePath;
+    expect(pickScreenTarget(ctx, t)).toMatchObject({ role: "app", platform: "flutter" });
+    await expect(captureTaskScreens(ctx, t, { worktree: wt, outDir: tempDir("agent-crew-shots-"), screens: [{ path: "s1" }] })).rejects.toThrow(/screens_test\.dart/);
+  });
+});
+
 describe.skipIf(!mac)("複数リポジトリの撮影(macOS、Chrome があるとき)", () => {
   it("関係するリポジトリを登録の順に起動し、つなぎ方の環境変数を渡して、画面のリポジトリから撮る", async () => {
     const { ctx, project } = await setup(["backend", "frontend"]);

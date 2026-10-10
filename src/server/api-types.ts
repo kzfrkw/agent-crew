@@ -135,7 +135,8 @@ export type ApprovalView = {
 export type WorktreeView = { repoRole: string; worktreePath: string; branchName: string; baseSha: string };
 
 /** 実装後のデザインレビューのために撮った画面(4c)。撮れなかったものは url が null で、error に理由 */
-export type ScreenshotView = { name: string; path: string; width: number; scheme: "light" | "dark"; file: string; url: string | null; error?: string };
+/** device は iOS シミュレータで撮ったときの機種(フェーズ6。そのときは幅の代わりに出す) */
+export type ScreenshotView = { name: string; path: string; width: number; scheme: "light" | "dark"; file: string; device?: string; url: string | null; error?: string };
 
 export type TaskDetail = {
   task: TaskSummary & { body: string; sourceKind: string; sourceUrl: string | null };

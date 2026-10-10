@@ -1,0 +1,129 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+import { ensureDevice, leaseSimulator, type Simctl } from "../src/mobile/simulator.ts";
+import { captureFlutterScreens, type DriveExec } from "../src/mobile/capture.ts";
+import { tempDir } from "./helpers/gitrepo.ts";
+
+/** 1x1 の PNG に、IHDR の幅・高さだけを書いたもの(幅の読み取りの確認用) */
+function png(width: number, height: number): Buffer {
+  const b = Buffer.alloc(33);
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(b, 0);
+  b.writeUInt32BE(13, 8);
+  b.write("IHDR", 12, "ascii");
+  b.writeUInt32BE(width, 16);
+  b.writeUInt32BE(height, 20);
+  return b;
+}
+
+const DEVICES = (extra: object[] = []) =>
+  JSON.stringify({ devices: { "com.apple.CoreSimulator.SimRuntime.iOS-26-4": [{ name: "iPhone 17", udid: "HUMAN-1", isAvailable: true, state: "Shutdown" }, ...extra] } });
+const RUNTIMES = JSON.stringify({
+  runtimes: [
+    { identifier: "com.apple.CoreSimulator.SimRuntime.iOS-18-0", platform: "iOS", isAvailable: true, version: "18.0", supportedDeviceTypes: [{ name: "iPhone 16", identifier: "x.iPhone-16" }] },
+    { identifier: "com.apple.CoreSimulator.SimRuntime.iOS-26-4", platform: "iOS", isAvailable: true, version: "26.4", supportedDeviceTypes: [{ name: "iPad Pro", identifier: "x.iPad" }, { name: "iPhone 17", identifier: "x.iPhone-17" }, { name: "iPhone 17 Pro", identifier: "x.iPhone-17-Pro" }] },
+  ],
+});
+
+function fakeSimctl(devices = DEVICES()) {
+  const calls: string[][] = [];
+  const simctl: Simctl = async (args) => {
+    calls.push(args);
+    if (args.join(" ") === "list devices -j") return devices;
+    if (args.join(" ") === "list runtimes -j") return RUNTIMES;
+    if (args[0] === "create") return "NEW-UDID\n";
+    return "";
+  };
+  return { simctl, calls };
+}
+
+describe("シミュレータ(フェーズ6)", () => {
+  it("ツール専用の端末(agent-crew-<番号>)が無ければ、最新の iOS と、その中の最後の iPhone で作る。人の端末には触らない", async () => {
+    const { simctl, calls } = fakeSimctl();
+    expect(await ensureDevice(simctl, "agent-crew-1")).toEqual({ udid: "NEW-UDID", name: "agent-crew-1", deviceType: "iPhone 17 Pro" });
+    expect(calls).toContainEqual(["create", "agent-crew-1", "x.iPhone-17-Pro", "com.apple.CoreSimulator.SimRuntime.iOS-26-4"]);
+    expect(calls.flat()).not.toContain("HUMAN-1");
+  });
+
+  it("機種を指定できる。あれば作らずに使う", async () => {
+    const a = fakeSimctl();
+    expect((await ensureDevice(a.simctl, "agent-crew-1", "iPhone 17")).deviceType).toBe("iPhone 17");
+    expect(a.calls).toContainEqual(["create", "agent-crew-1", "x.iPhone-17", "com.apple.CoreSimulator.SimRuntime.iOS-26-4"]);
+    const b = fakeSimctl(DEVICES([{ name: "agent-crew-1", udid: "MINE-1", isAvailable: true, state: "Shutdown", deviceTypeIdentifier: "x.iPhone-17" }]));
+    expect((await ensureDevice(b.simctl, "agent-crew-1")).udid).toBe("MINE-1");
+    expect(b.calls.some((c) => c[0] === "create")).toBe(false);
+  });
+
+  it("1タスク1台で貸し出す。空きが無ければ待ち、返されたら次が借りられる。持ち主のいない貸し出しは取り戻す", async () => {
+    const home = tempDir("agent-crew-sim-");
+    const { simctl } = fakeSimctl();
+    const a = await leaseSimulator({ home, taskId: 1, simctl, slots: 1, waitMs: 0 });
+    expect(a.name).toBe("agent-crew-1");
+    await expect(leaseSimulator({ home, taskId: 2, simctl, slots: 1, waitMs: 0 })).rejects.toThrow(/空き/);
+    const waiting = leaseSimulator({ home, taskId: 2, simctl, slots: 1, waitMs: 3000, pollMs: 50 });
+    setTimeout(() => a.release(), 200);
+    expect((await waiting).name).toBe("agent-crew-1");
+
+    // 持ち主のプロセスが終わった貸し出し(異常終了の跡)は取り戻す
+    const home2 = tempDir("agent-crew-sim-");
+    mkdirSync(join(home2, "simulators"), { recursive: true });
+    writeFileSync(join(home2, "simulators", "slot-1.lock"), JSON.stringify({ taskId: 9, pid: 999999, at: new Date().toISOString() }));
+    expect((await leaseSimulator({ home: home2, taskId: 3, simctl, slots: 1, waitMs: 0 })).name).toBe("agent-crew-1");
+  });
+});
+
+describe("Flutter の画面の撮影(フェーズ6)", () => {
+  function setup(o: { screensTest?: boolean; fail?: boolean } = {}) {
+    const home = tempDir("agent-crew-cap-");
+    const worktree = tempDir("agent-crew-cap-wt-");
+    if (o.screensTest !== false) {
+      mkdirSync(join(worktree, "integration_test"), { recursive: true });
+      writeFileSync(join(worktree, "integration_test", "screens_test.dart"), "// screens");
+    }
+    const { simctl, calls } = fakeSimctl();
+    const drives: { command: string; env: Record<string, string>; writable: string[]; appearance: string }[] = [];
+    const exec: DriveExec = async (req) => {
+      const appearance = calls.filter((c) => c[0] === "ui").at(-1)?.[3] ?? "";
+      drives.push({ command: req.command, env: req.env, writable: req.writable, appearance });
+      if (o.fail) return { exitCode: 1, timedOut: false, output: "Failed to build iOS app", durationMs: 1 };
+      const dir = req.env.AGENT_CREW_SHOTS_DIR!;
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, "s1-orders.png"), png(1206, 2622));
+      writeFileSync(join(dir, "s2-detail.png"), png(1206, 2622));
+      return { exitCode: 0, timedOut: false, output: "All tests passed!", durationMs: 1 };
+    };
+    return { home, worktree, simctl, calls, drives, exec, outDir: join(home, "tasks", "1", "screens") };
+  }
+
+  it("貸し出したシミュレータで、ライト・ダークのそれぞれ flutter drive を動かし、画面の名前ごとに PNG を置く", async () => {
+    const s = setup();
+    const shots = await captureFlutterScreens({ home: s.home, taskId: 1, worktree: s.worktree, outDir: s.outDir, simctl: s.simctl, exec: s.exec, slots: 1 });
+    expect(shots.map((x) => x.file).sort()).toEqual(["s1-orders-iphone-dark.png", "s1-orders-iphone-light.png", "s2-detail-iphone-dark.png", "s2-detail-iphone-light.png"]);
+    expect(shots[0]).toMatchObject({ device: "iPhone 17 Pro", width: 402 });
+    for (const x of shots) expect(existsSync(join(s.outDir, x.file))).toBe(true);
+    expect(s.drives.map((d) => d.appearance)).toEqual(["light", "dark"]);
+    // ドライバーはリポジトリのものではなく、ツールが build/ の下に書いたもの
+    expect(s.drives[0]!.command).toContain("--driver=build/agent_crew/screens_driver.dart");
+    expect(s.drives[0]!.command).toContain("--target=integration_test/screens_test.dart");
+    expect(s.drives[0]!.command).toContain("-d NEW-UDID");
+    expect(readFileSync(join(s.worktree, "build", "agent_crew", "screens_driver.dart"), "utf8")).toContain("AGENT_CREW_SHOTS_DIR");
+    expect(s.drives[0]!.writable).toContain(s.worktree);
+    // 使い終わったら止めて、返す
+    expect(s.calls).toContainEqual(["shutdown", "NEW-UDID"]);
+    expect(existsSync(join(s.home, "simulators", "slot-1.lock"))).toBe(false);
+  });
+
+  it("integration_test/screens_test.dart が無ければ、理由を添えて失敗する(シミュレータは借りない)", async () => {
+    const s = setup({ screensTest: false });
+    await expect(captureFlutterScreens({ home: s.home, taskId: 1, worktree: s.worktree, outDir: s.outDir, simctl: s.simctl, exec: s.exec, slots: 1 })).rejects.toThrow(/screens_test\.dart/);
+    expect(s.calls.some((c) => c[0] === "boot")).toBe(false);
+  });
+
+  it("flutter drive が失敗したら、出力を添えて撮れなかった印を返し、シミュレータは返す", async () => {
+    const s = setup({ fail: true });
+    const shots = await captureFlutterScreens({ home: s.home, taskId: 1, worktree: s.worktree, outDir: s.outDir, simctl: s.simctl, exec: s.exec, slots: 1 });
+    expect(shots.length).toBeGreaterThan(0);
+    expect(shots.every((x) => x.error?.includes("Failed to build iOS app"))).toBe(true);
+    expect(existsSync(join(s.home, "simulators", "slot-1.lock"))).toBe(false);
+  });
+});
