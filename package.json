@@ -17,7 +17,8 @@
     "build:gui": "vite build --config gui/vite.config.ts",
     "dev:gui": "vite --config gui/vite.config.ts",
     "prepare": "npm run build:gui",
-    "e2e": "node scripts/e2e.ts"
+    "e2e": "node scripts/e2e.ts",
+    "e2e:multi": "node scripts/e2e-multi.ts"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
