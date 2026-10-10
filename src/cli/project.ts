@@ -85,7 +85,7 @@ export function registerProjectCommands(program: Command): void {
 
   project
     .command("wire <name>")
-    .description("起動のつなぎ方: 役目のリポジトリを起動するときの環境変数({url:<役目>} / {port:<役目>} を使える。- で消す)")
+    .description("起動のつなぎ方: 役目のリポジトリを起動するときの環境変数({url:<役目>} / {origin:<役目>} / {port:<役目>} を使える。- で消す)")
     .requiredOption("--role <role>", "環境変数を渡すリポジトリの役目")
     .requiredOption("--env <pairs...>", "KEY=VALUE(複数可)")
     .action((name: string, o: { role: string; env: string[] }) => {

@@ -86,6 +86,14 @@ describe("起動のつなぎ方(環境変数)", () => {
     expect(resolveServiceEnv(ctx.db, project.id, "backend")).toEqual({});
   });
 
+  it("{origin:<役目>} は、確認 URL のパスを除いたもの(API の基点に使う)", async () => {
+    const { ctx } = await twoRepos({ frontend: {}, backend: { startUrl: "http://127.0.0.1:3001/api/orders" } });
+    setRepoWiring(ctx, "shop", "frontend", { API_BASE: "{origin:backend}", API_URL: "{origin:backend}/api" });
+    const project = getProjectByName(ctx.db, "shop")!;
+    expect(resolveServiceEnv(ctx.db, project.id, "frontend")).toEqual({ API_BASE: "http://127.0.0.1:3001", API_URL: "http://127.0.0.1:3001/api" });
+    expect(() => setRepoWiring(ctx, "shop", "frontend", { A: "{origin:db}" })).toThrow(/db/);
+  });
+
   it("知らない役目・確認 URL の無いリポジトリを指すものは設定できない", async () => {
     const { ctx } = await twoRepos({ frontend: {}, backend: { startUrl: null } });
     expect(() => setRepoWiring(ctx, "shop", "frontend", { API_URL: "{url:db}" })).toThrow(/db/);

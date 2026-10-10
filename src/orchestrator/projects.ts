@@ -230,9 +230,9 @@ export function setProfileCommands(ctx: AppContext, name: string, patch: Profile
   return next;
 }
 
-const PLACEHOLDER = /\{(url|port):([^}]+)\}/g;
+const PLACEHOLDER = /\{(url|origin|port):([^}]+)\}/g;
 
-/** 起動のつなぎ方を設定する(役目ごとの環境変数。設計メモ v0.14)。値の {url:<役目>} / {port:<役目>} は起動のときに置き換える */
+/** 起動のつなぎ方を設定する(役目ごとの環境変数。設計メモ v0.14)。値の {url:<役目>} / {origin:<役目>} / {port:<役目>} は起動のときに置き換える */
 export function setRepoWiring(ctx: AppContext, name: string, role: string, env: Record<string, string>): Wiring {
   const project = mustProject(ctx.db, name);
   const repos = listRepos(ctx.db, project.id);
@@ -252,6 +252,14 @@ export function setRepoWiring(ctx: AppContext, name: string, role: string, env: 
   return wiring;
 }
 
+/** {url:} は確認 URL のまま、{origin:} はパスを除いたもの、{port:} はポート */
+function placeholderValue(kind: string, startUrl: string): string {
+  if (kind === "url") return startUrl;
+  const u = new URL(startUrl);
+  if (kind === "origin") return u.origin;
+  return u.port || (u.protocol === "https:" ? "443" : "80");
+}
+
 /** 役目のリポジトリを起動するときの環境変数(つなぎ方の値を、各リポジトリの確認 URL / ポートに置き換えたもの) */
 export function resolveServiceEnv(db: Db, projectId: number, role: string): Record<string, string> {
   const repos = listRepos(db, projectId);
@@ -263,6 +271,6 @@ export function resolveServiceEnv(db: Db, projectId: number, role: string): Reco
   };
   const env = getProjectWiring(db, projectId)[role] ?? {};
   return Object.fromEntries(
-    Object.entries(env).map(([k, v]) => [k, v.replace(PLACEHOLDER, (_m, kind: string, r: string) => (kind === "url" ? url(r) : new URL(url(r)).port || (new URL(url(r)).protocol === "https:" ? "443" : "80")))]),
+    Object.entries(env).map(([k, v]) => [k, v.replace(PLACEHOLDER, (_m, kind: string, r: string) => placeholderValue(kind, url(r)))]),
   );
 }

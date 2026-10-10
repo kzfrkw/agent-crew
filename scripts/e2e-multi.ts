@@ -132,7 +132,7 @@ async function main(): Promise<void> {
   // 調査の結果に左右されないよう、起動コマンドと確認 URL を決めておく(人がプロファイルを直す想定)
   cli("project", "set", "shop", "--role", "backend", "--start", "PORT=3101 node server.js", "--start-url", "http://127.0.0.1:3101/api/orders", "--test", "npm test", "--install", "-", "--build", "-");
   cli("project", "set", "shop", "--role", "frontend", "--start", "PORT=3100 node server.js", "--start-url", "http://127.0.0.1:3100/", "--test", "npm test", "--install", "-", "--build", "-");
-  cli("project", "wire", "shop", "--role", "frontend", "--env", "API_URL={url:backend}");
+  cli("project", "wire", "shop", "--role", "frontend", "--env", "API_URL={origin:backend}");
   const approved = cli("project", "approve", "shop", "--allow-without-tests");
   const infra = /整備タスクを作りました: #(\d+)/.exec(approved);
   if (infra) cli("task", "cancel", infra[1]!);

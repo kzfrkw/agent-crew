@@ -102,3 +102,39 @@
   2. QA が、撮影できないことを理由に見た目の条件で need_human を返した → 見た目は後のデザインレビューに任せるよう QA の役割に明記
   3. プロファイルの起動コマンドの `mktemp -d` が、TMPDIR を見ずに OS の一時ディレクトリに作ろうとして拒否された → `$TMPDIR` を使う形に `project set` で直した
   4. 後片付けの lsof が全プロセスを調べていて、負荷が高いと全テストが30分を超えた → ps で絞ってから lsof
+
+## 2026-10-10T08:40:10.981Z 複数リポジトリ(モデル: sonnet)
+
+- 所要時間: 4分
+- 費用(見積もり)の合計: $1.101
+- 変更したリポジトリ(実装した順): backend → frontend
+
+| 役割 | モデル | 回数 | 費用 | 秒 |
+|---|---|---|---|---|
+| profiler | sonnet | 2 | $0.135 | 31 |
+| planner | sonnet | 1 | $0.113 | 30 |
+| architect | sonnet | 1 | $0.17 | 41 |
+| implementer | sonnet | 2 | $0.285 | 57 |
+| verifier | haiku | 2 | $0.055 | 12 |
+| reviewer | sonnet | 1 | $0.119 | 9 |
+| qa | sonnet | 1 | $0.107 | 19 |
+| integrator | sonnet | 1 | $0.117 | 22 |
+
+- ✓ タスクが完了
+- ✓ 変更するリポジトリが2つ(計画の repos)
+- ✓ 設計者が動いた(design.md、インターフェース契約)
+- ✓ 成果物 plan
+- ✓ 成果物 impl-notes
+- ✓ 成果物 review
+- ✓ 成果物 qa-report
+- ✓ 成果物 pr-draft
+- ✓ [backend] ローカルブランチ
+- ✓ [frontend] ローカルブランチ
+- ✓ [backend] エージェントのコミットに trailer
+- ✓ [frontend] エージェントのコミットに trailer
+- ✓ remote に push されていない
+
+コミット:
+- [backend] 注文に status(received / shipped)を持たせ、HTTP 層のテストを追加(agent-crew implementer)
+- [frontend] 注文の一覧に状態の列を追加する(agent-crew implementer)
+

@@ -106,7 +106,7 @@
 - サンドボックスに依存するテスト(`sandbox-exec` の撮影、プロセスの片付け)は、エージェントのサンドボックスの中(`AGENT_CREW_RUN=1`)では飛ばす(`tests/helpers/env.ts`)。人の環境の `npm test` では必ず実行される
 - GUI のテスト: `gui/src/**/*.test.{ts,tsx}`(vitest。DOM が要るものは先頭に `// @vitest-environment jsdom`)
 - 一周の通し確認: `npm run e2e`(実機の claude を使う。利用枠を消費する。結果は docs/e2e-log.md)。複数リポジトリは `npm run e2e:multi`(同梱の sample-api と sample-front)
-- 複数リポジトリ: `project add-repo <n> <path> --role <役目>` → `project wire <n> --role frontend --env API_URL={url:backend}`(起動のつなぎ方)
+- 複数リポジトリ: `project add-repo <n> <path> --role <役目>` → `project wire <n> --role frontend --env API_URL={origin:backend}`(起動のつなぎ方。{url:} は確認 URL そのまま、{origin:} はパスを除いたもの、{port:} はポート)
 - **agent-crew のエージェント(このリポジトリを対象に動く役割)は、`npm run e2e` と `doctor --probe-sandbox` を実行しない**(実機の claude を使うため、人が実行する)。テストは `npm test`、型チェックは `npm run typecheck` で確かめる
 - TypeScriptの制約: 型除去で動く構文だけを使う(`enum`・`namespace`・パラメータプロパティは不可。importは `.ts` 拡張子付き)
 
