@@ -172,3 +172,8 @@ QA と同じ設定(`write: artifacts`、`bashWritesWorktree`、`localServer`)の
 | さらに `network.allowAllUnixSockets` を許す | Chrome の起動処理の内部(`base/mac/mac_util.mm`)で OS への問い合わせが拒否され、強制終了(FATAL) |
 
 `--no-sandbox`、GPU・crashpad を切る指定でも変わらない。**結論: エージェントのサンドボックスの中で Chrome を動かす方式は採らない。** 許可を広げるほど別の制限に当たり、広げた許可(ユーザー一時ディレクトリへの書き込み、Unix ドメインソケット)は安全上も望ましくない。画面の確認は、サンドボックスの外の、ツールが管理する仕組みで行う(4c で決める)。
+
+### 7.x 追記: 画面が消えているときの停止(2026-10-11)
+
+- 画面がスリープしている間は、ヘッドレス Chrome が `CVDisplayLinkCreateWithCGDisplay failed` を出し、DevTools への接続を受け付けたまま応答しないことがある。そのプロセスを `lsof` で調べると `lsof` も止まり、役割の実行の後片付けが進まなくなった(テストが 15 分止まって発見)
+- 対策: DevTools への接続に上限(10 秒)、後片付けの `ps` / `lsof` に上限(15 秒。時間切れなら何も止めない)を設けた。撮影に失敗しても、タスクは止まらず、撮れなかった画面として扱われる

@@ -12,8 +12,12 @@ export type KilledProcess = { pid: number; command: string };
  * 対象は、作業ディレクトリ(worktree)の中を cwd にしていて、実行の開始(since)より後に起動されたプロセスだけ。
  * 実行の前から動いているもの(人の端末やエディタ)と、ほかの場所のプロセスには触らない。
  * lsof / ps が無い環境では何もしない。
+ * 応答しないプロセス(画面の無いときのヘッドレス Chrome など)を調べると lsof が止まることがあるため、上限の時間で諦める。
+ * 止まったままだと、役割の実行全体が先へ進まない。
  */
-export async function cleanupStrayProcesses(dir: string, since: number): Promise<KilledProcess[]> {
+export async function cleanupStrayProcesses(dir: string, since: number, o: { timeoutMs?: number; path?: string } = {}): Promise<KilledProcess[]> {
+  const timeout = o.timeoutMs ?? 15_000;
+  const env = { ...process.env, LC_ALL: "C", ...(o.path ? { PATH: o.path } : {}) };
   let root: string;
   try {
     root = realpathSync(dir);
@@ -26,7 +30,7 @@ export async function cleanupStrayProcesses(dir: string, since: number): Promise
   const sinceSec = Math.floor(since / 1000) * 1000;
   let recent: { pid: number; command: string }[];
   try {
-    const { stdout } = await run("ps", ["-A", "-o", "pid=,lstart=,command="], { env: { ...process.env, LC_ALL: "C" }, maxBuffer: 16 * 1024 * 1024 });
+    const { stdout } = await run("ps", ["-A", "-o", "pid=,lstart=,command="], { env, timeout, killSignal: "SIGKILL", maxBuffer: 16 * 1024 * 1024 });
     recent = stdout
       .split("\n")
       .map((l) => /^\s*(\d+)\s+(\w{3}\s+\w{3}\s+\d+\s+[\d:]+\s+\d{4})\s+(.*)$/.exec(l))
@@ -41,13 +45,15 @@ export async function cleanupStrayProcesses(dir: string, since: number): Promise
   // 2. そのうち、作業ディレクトリ(cwd)が dir の中にあるもの
   const insidePids = new Set<number>();
   try {
-    const { stdout } = await run("lsof", ["-n", "-a", "-d", "cwd", "-p", recent.map((r) => r.pid).join(","), "-F", "pn"], { maxBuffer: 16 * 1024 * 1024 });
+    const { stdout } = await run("lsof", ["-n", "-a", "-d", "cwd", "-p", recent.map((r) => r.pid).join(","), "-F", "pn"], { env, timeout, killSignal: "SIGKILL", maxBuffer: 16 * 1024 * 1024 });
     let pid = 0;
     for (const line of stdout.split("\n")) {
       if (line.startsWith("p")) pid = Number(line.slice(1));
       else if (line.startsWith("n") && pid && inside(line.slice(1))) insidePids.add(pid);
     }
   } catch (e) {
+    // 時間切れなら、途中までの出力では判断しない(誤って止めないよう、何もしない)
+    if ((e as { killed?: boolean }).killed) return [];
     // lsof は、調べたプロセスの一部がすでに終わっていると終了コード 1 を返す。出力は使える
     const out = (e as { stdout?: string }).stdout ?? "";
     let pid = 0;

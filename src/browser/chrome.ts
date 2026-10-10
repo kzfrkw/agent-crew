@@ -75,7 +75,7 @@ export async function captureScreens(o: {
     const targets = (await (await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(10_000) })).json()) as { type: string; webSocketDebuggerUrl: string }[];
     const page = targets.find((t) => t.type === "page");
     if (!page) throw new Error("Chrome のページが見つかりません");
-    const cdp = await connect(page.webSocketDebuggerUrl);
+    const cdp = await connectCdp(page.webSocketDebuggerUrl);
     try {
       await cdp.send("Page.enable");
       const shots: Shot[] = [];
@@ -120,11 +120,16 @@ type Cdp = {
   close: () => void;
 };
 
-async function connect(url: string): Promise<Cdp> {
+/** DevTools Protocol に接続する。接続を受け付けたまま応答しない相手(画面の無いときの Chrome など)で止まらないよう、上限を設ける */
+export async function connectCdp(url: string, timeoutMs = 10_000): Promise<Cdp> {
   const ws = new WebSocket(url);
   await new Promise<void>((resolve, reject) => {
-    ws.addEventListener("open", () => resolve(), { once: true });
-    ws.addEventListener("error", () => reject(new Error("DevTools に接続できませんでした")), { once: true });
+    const t = setTimeout(() => {
+      ws.close();
+      reject(new Error("DevTools に接続できませんでした(応答がありません)"));
+    }, timeoutMs);
+    ws.addEventListener("open", () => (clearTimeout(t), resolve()), { once: true });
+    ws.addEventListener("error", () => (clearTimeout(t), reject(new Error("DevTools に接続できませんでした"))), { once: true });
   });
   let id = 0;
   const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();

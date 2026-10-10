@@ -1,9 +1,11 @@
 import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildAppSandboxProfile, startSandboxedApp, type SandboxedApp } from "../src/browser/app.ts";
-import { captureScreens, findChrome } from "../src/browser/chrome.ts";
+import { captureScreens, connectCdp, findChrome } from "../src/browser/chrome.ts";
 import { inAgentSandbox } from "./helpers/env.ts";
 import { tempDir } from "./helpers/gitrepo.ts";
 
@@ -106,4 +108,20 @@ createServer((_, res) => res.end("<!doctype html><meta name=viewport content='wi
     for (const s of shots) expect(statSync(join(out, s.file)).size).toBeGreaterThan(1000);
     expect(shots.every((s) => s.error === undefined)).toBe(true);
   }, 60_000);
+});
+
+describe("DevTools への接続が止まったままにならない", () => {
+  it("接続を受け付けたまま応答しない相手には、上限の時間で失敗する(画面の無いときの Chrome など)", async () => {
+    const server = createServer(() => {}); // 受け付けるが、何も返さない
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+    const port = (server.address() as AddressInfo).port;
+    const started = Date.now();
+    try {
+      await expect(connectCdp(`ws://127.0.0.1:${port}/devtools/page/x`, 300)).rejects.toThrow(/DevTools/);
+      expect(Date.now() - started).toBeLessThan(3000);
+    } finally {
+      server.close();
+      server.closeAllConnections?.();
+    }
+  });
 });
