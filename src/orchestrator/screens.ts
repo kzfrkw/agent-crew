@@ -13,11 +13,12 @@ import type { CaptureFn } from "./context.ts";
  * サンドボックスの外の Chrome で撮る。撮影の後は必ずアプリを止める。
  */
 
-/** 広い画面のライト・ダークと、狭い画面のライト */
+/** 広い画面と狭い画面の、それぞれライト・ダーク(390px のダークはデザインレビュー担当の指摘で追加) */
 export const DEFAULT_VARIANTS: Variant[] = [
   { width: 1280, scheme: "light" },
   { width: 1280, scheme: "dark" },
   { width: 390, scheme: "light" },
+  { width: 390, scheme: "dark" },
 ];
 
 export const captureTaskScreens: CaptureFn = async (ctx, task, o) => {
