@@ -74,6 +74,27 @@ describe("registerProject", () => {
   });
 });
 
+describe("プロジェクト把握担当と MCP の橋(フェーズ6)", () => {
+  it("pubspec.yaml のあるリポジトリを調べるときは、flutter test / analyze を代わりに実行する橋を渡す。無ければ渡さない", async () => {
+    const { writeFileSync } = await import("node:fs");
+    const runner = new ScriptedRunner({ profiler: profiler("present") });
+    const ctx = testContext(runner);
+    const { repo } = makeRepo();
+    writeFileSync(join(repo, "pubspec.yaml"), "name: app\n");
+    git(repo, "add", ".");
+    git(repo, "commit", "-q", "-m", "flutter");
+    await registerProject(ctx, { name: "app", repoPath: repo });
+    const call = runner.calls.find((c) => c.role === "profiler")!;
+    const cfg = JSON.parse(readFileSync(call.mcpServers!["agent-crew"]!.args.at(-1)!, "utf8"));
+    expect(cfg).toMatchObject({ platform: "flutter", commands: { test: "flutter test", analyze: "flutter analyze" } });
+
+    const runner2 = new ScriptedRunner({ profiler: profiler("present") });
+    const ctx2 = testContext(runner2);
+    await registerProject(ctx2, { name: "web", repoPath: makeRepo().repo });
+    expect(runner2.calls.find((c) => c.role === "profiler")!.mcpServers).toBeUndefined();
+  });
+});
+
 describe("approveProfile とテスト基盤のゲート", () => {
   async function registered(testInfra: "present" | "insufficient" | "none") {
     const ctx = testContext(new ScriptedRunner({ profiler: profiler(testInfra) }));

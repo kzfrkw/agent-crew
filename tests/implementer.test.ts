@@ -234,3 +234,49 @@ describe("verifyTests(Flutter: ツールが sandbox-exec で直接実行する�
   });
 });
 
+describe("MCP の橋を渡す役割(Flutter。フェーズ6)", () => {
+  const flutterProfile = { platform: "flutter" as const, commands: { install: "flutter pub get", build: null, test: "flutter test", start: null, analyze: "flutter analyze" }, startUrl: null };
+
+  it("Flutter のリポジトリの実装者には、テスト/解析を代わりに実行する MCP サーバーを渡し、実行の記録をイベントにする", async () => {
+    const runner = new ScriptedRunner({
+      planner: plannerReady,
+      implementer: (spec) => {
+        // 実装者が橋を使った体で、記録を書く
+        const cfgPath = spec.mcpServers!["agent-crew"]!.args.at(-1)!;
+        const cfg = JSON.parse(readFileSync(cfgPath, "utf8"));
+        writeFileSync(cfg.logPath, JSON.stringify({ kind: "test", command: "flutter test", exitCode: 1, timedOut: false, durationMs: 3000 }) + "\n");
+        return implementer()(spec);
+      },
+    });
+    const ctx = testContext(runner);
+    ctx.toolExec = async () => ({ exitCode: 0, timedOut: false, output: "ok", durationMs: 1 });
+    const { project } = await approvedProject(ctx, flutterProfile);
+    const t = newTask(ctx, project.id);
+    await runUntilIdle(ctx);
+    approveTask(ctx, t.id, "plan");
+    await runUntilIdle(ctx);
+
+    const call = runner.calls.find((c) => c.role === "implementer")!;
+    const server = call.mcpServers!["agent-crew"]!;
+    expect(server.args).toContain("mcp-exec");
+    expect(call.extraAllowedTools).toEqual(["mcp__agent-crew__run_project_command"]);
+    // flutter pub get は Bash で行うため、Flutter のキャッシュへの書き込みと pub.dev への通信を足す
+    expect(call.extraWritable?.some((p) => p.endsWith("/.pub-cache"))).toBe(true);
+    expect(call.allowedDomains).toEqual(expect.arrayContaining(["pub.dev", "storage.googleapis.com"]));
+    const cfg = JSON.parse(readFileSync(server.args.at(-1)!, "utf8"));
+    expect(cfg).toMatchObject({ cwd: call.cwd, platform: "flutter", commands: { test: "flutter test", analyze: "flutter analyze" } });
+    expect(call.prompt).toContain("run_project_command");
+    const ev = listEvents(ctx.db, t.id, 200).find((e) => e.kind === "tool_command" && (e.payload as { purpose: string }).purpose === "agent");
+    expect(ev?.payload).toMatchObject({ role: "implementer", command: "flutter test", exitCode: 1 });
+  });
+
+  it("web のリポジトリには渡さない", async () => {
+    const runner = new ScriptedRunner({ planner: plannerReady, implementer: implementer(), verifier: () => ({ structuredOutput: { verdict: "passed", summary: "s" }, bashResults: [{ command: "npm test", isError: false, output: "ok" }] }) });
+    const { ctx } = await toImplementing(runner);
+    await runUntilIdle(ctx);
+    const call = runner.calls.find((c) => c.role === "implementer")!;
+    expect(call.mcpServers).toBeUndefined();
+    expect(call.prompt).not.toContain("run_project_command");
+  });
+});
+

@@ -127,6 +127,8 @@ async function profileRepo(ctx: AppContext, project: Project, repo: Repo): Promi
       cwd: worktree,
       artifactsDir: dir,
       prompt: profilerPrompt({ projectName: project.name, repoPath: repo.path, worktree, artifactsDir: dir }),
+      // Flutter のテスト・解析は Claude のサンドボックスの中では動かないため、ツールが代わりに実行する橋を渡す(設計メモ v0.15)
+      toolCommands: existsSync(join(worktree, "pubspec.yaml")) ? { platform: "flutter", commands: { test: "flutter test", analyze: "flutter analyze" } } : undefined,
     });
     if (!r.ok) {
       refreshProjectProfile(ctx, project);

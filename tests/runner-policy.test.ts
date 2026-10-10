@@ -50,6 +50,13 @@ describe("buildRunSettings", () => {
     expect(s.sandbox.filesystem).toEqual({ allowWrite: [], denyWrite: ["/h/worktrees/p/1/main"] });
   });
 
+  it("道具のキャッシュ(Flutter など)は Bash からだけ書ける。Edit/Write の許可には足さない(フェーズ6)", () => {
+    const s = buildRunSettings({ ...base, write: "worktree", extraWritable: ["/sdk/flutter/bin/cache", "/Users/me/.pub-cache"] });
+    expect(s.sandbox.filesystem.allowWrite).toEqual(["/h/tasks/1", "/sdk/flutter/bin/cache", "/Users/me/.pub-cache"]);
+    expect(s.permissions.allow.some((a) => a.includes("pub-cache"))).toBe(false);
+    expect(() => buildRunSettings({ ...base, write: "worktree", extraWritable: ["rel/path"] })).toThrow();
+  });
+
   it("相対パスは受け付けない", () => {
     expect(() => buildRunSettings({ ...base, worktree: "rel/wt", write: "worktree" })).toThrow(/絶対パス/);
   });

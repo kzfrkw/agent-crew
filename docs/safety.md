@@ -195,3 +195,8 @@ Xcode 26.4、iOS 26.4 のシミュレータ、Flutter 3.41.6 で確認した。
 | ツールの sandbox-exec(書き込みは worktree・一時ディレクトリ・Flutter のキャッシュ、通信は localhost、資格情報は読めない)の中の `flutter test` | 2秒で通る |
 
 方針(設計メモ v0.15): Flutter のテスト・解析・撮影はツールが sandbox-exec で代わりに実行し、エージェントには MCP で「決めたコマンドの実行」だけを渡す。`flutter drive` のドライバーはホストで動くため、リポジトリのものではなくツールが用意したものを使う。
+
+### 追記: MCP の橋の実機確認(2026-10-11、6a-3)
+
+- `claude -p --strict-mcp-config --mcp-config <実行ごとの mcp.json>` で、agent-crew の MCP サーバー(`agent-crew mcp-exec`)を渡し、`--allowedTools` と settings の allow に `mcp__agent-crew__run_project_command` だけを足した。haiku で、`flutter pub get`(Bash。Flutter のキャッシュへの書き込みと pub.dev / storage.googleapis.com への通信を足した)→ 橋で `flutter test` → 橋で `flutter analyze` がすべて終了コード 0 で通った($0.04)
+- 橋で実行できるのは、ツールが書いた設定ファイルのコマンド(プロファイルのテスト・解析)だけ。実行は sandbox-exec の中(書き込みは worktree と Flutter のキャッシュ、通信は localhost、資格情報は読めない)

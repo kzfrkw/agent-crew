@@ -29,7 +29,7 @@ maxBudgetUsd: 3
 ## Flutter のリポジトリ(`pubspec.yaml` がある)
 - 構造化出力の `profile.platform` を `flutter` にしてください(それ以外は `web`)
 - コマンドの目安: 依存の準備 `flutter pub get`、テスト `flutter test`、静的解析 `flutter analyze`。起動と確認URLは null(アプリはツールが iOS シミュレータで動かします)
-- **`flutter test` と `flutter analyze` は Bash で実行しないでください**(このサンドボックスの中では止まります。ツールが代わりに実行して確かめます)。テスト基盤は `test/` と `integration_test/` の中身を読んで判断し、`profile.md` に「実行は未確認」と書いてください
+- **`flutter test` と `flutter analyze` は Bash で実行しないでください**(このサンドボックスの中では止まります)。MCP の道具 `run_project_command`(kind: test / analyze)を使うと、ツールがサンドボックスの中で代わりに実行し、終了コードと出力を返します。依存の準備(`flutter pub get`)は Bash で実行してかまいません
 - QAの方法には、確かめたい画面と、`integration_test/screens_test.dart`(画面を開いて `takeScreenshot` するテスト)の有無を書いてください
 
 ## 成果物

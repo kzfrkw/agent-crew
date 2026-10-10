@@ -39,10 +39,18 @@ export class ClaudeRunner implements Runner {
       localServer: spec.localServer,
       allowedDomains: spec.allowedDomains,
       aliases: { worktree: resolve(spec.cwd), artifactsDir: resolve(spec.artifactsDir) },
+      extraAllow: spec.extraAllowedTools,
+      extraWritable: spec.extraWritable,
     });
     writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+    let mcpConfigPath: string | undefined;
+    if (spec.mcpServers && Object.keys(spec.mcpServers).length > 0) {
+      mcpConfigPath = join(spec.runDir, "mcp.json");
+      const servers = Object.fromEntries(Object.entries(spec.mcpServers).map(([name, s]) => [name, { type: "stdio", command: s.command, args: s.args }]));
+      writeFileSync(mcpConfigPath, JSON.stringify({ mcpServers: servers }, null, 2));
+    }
     writeFileSync(join(spec.runDir, "prompt.md"), spec.prompt);
-    const args = buildClaudeArgs({ ...spec, artifactsDir, settingsPath, allowedTools: settings.permissions.allow });
+    const args = buildClaudeArgs({ ...spec, artifactsDir, settingsPath, mcpConfigPath, allowedTools: settings.permissions.allow });
     writeFileSync(
       join(spec.runDir, "command.txt"),
       `cd ${shellQuote(cwd)} && ${[this.claudePath, ...args].map(shellQuote).join(" ")} < ${shellQuote(join(spec.runDir, "prompt.md"))}\n`,

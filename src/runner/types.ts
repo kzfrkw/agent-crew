@@ -32,6 +32,15 @@ export type RunSpec = {
   timeoutSec: number;
   maxBudgetUsd: number;
   allowedDomains: string[];
+  /**
+   * 実行ごとに渡す MCP サーバー(標準入出力)。ツールが代わりにコマンドを実行する橋に使う(フェーズ6)。
+   * MCP サーバーは Claude のサンドボックスの外で動くため、ツール自身が書いたものだけを渡す
+   */
+  mcpServers?: Record<string, { command: string; args: string[] }>;
+  /** Bash から追加で書ける場所(道具のキャッシュ。Flutter の SDK の bin/cache、~/.pub-cache など。フェーズ6) */
+  extraWritable?: string[];
+  /** 追加で許可する道具(MCP の道具。mcp__<サーバー>__<道具>) */
+  extraAllowedTools?: string[];
   /** 追加で渡す環境変数(認証情報は渡せない) */
   extraEnv?: Record<string, string>;
   resumeSessionId?: string;

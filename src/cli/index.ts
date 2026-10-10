@@ -71,6 +71,15 @@ export function createProgram(): Command {
 
   registerTaskCommands(program);
 
+  // エージェントに渡す MCP の橋(ツールが実行ごとに起動する。人が使うものではない。設計メモ v0.15)
+  program
+    .command("mcp-exec <config>", { hidden: true })
+    .description("プロファイルのコマンドを sandbox-exec で代わりに実行する MCP サーバー(標準入出力)")
+    .action(async (config: string) => {
+      const { serveMcp } = await import("../toolexec/mcp-server.ts");
+      await serveMcp(config);
+    });
+
   program
     .command("serve")
     .description("GUI を 127.0.0.1 で開く。エージェントを自動で進める常駐ワーカーも動かす")

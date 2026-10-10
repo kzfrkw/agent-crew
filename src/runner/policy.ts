@@ -64,8 +64,12 @@ export function buildRunSettings(o: {
    * サンドボックスはOSが実体のパスで判定するので、別名は不要。
    */
   aliases?: { worktree?: string; artifactsDir?: string };
+  /** 追加で許可する道具(MCP の道具など) */
+  extraAllow?: string[];
+  /** Bash から追加で書ける場所(道具のキャッシュ)。Edit/Write の許可には足さない */
+  extraWritable?: string[];
 }): RunSettings {
-  for (const p of [o.worktree, o.artifactsDir]) {
+  for (const p of [o.worktree, o.artifactsDir, ...(o.extraWritable ?? [])]) {
     if (!isAbsolute(p)) throw new Error(`絶対パスが必要です: ${p}`);
   }
   const wt = withAlias(o.worktree, o.aliases?.worktree);
@@ -76,14 +80,14 @@ export function buildRunSettings(o: {
     disableAllHooks: true,
     permissions: {
       deny: [...DENY],
-      allow: ["Read", "Grep", "Glob", "Bash", ...writable.flatMap((p) => [under("Edit", p), under("Write", p)])],
+      allow: ["Read", "Grep", "Glob", "Bash", ...writable.flatMap((p) => [under("Edit", p), under("Write", p)]), ...(o.extraAllow ?? [])],
     },
     sandbox: {
       enabled: true,
       failIfUnavailable: true,
       allowUnsandboxedCommands: false,
       filesystem: {
-        allowWrite: o.write === "none" ? [] : [o.artifactsDir],
+        allowWrite: o.write === "none" ? [] : [o.artifactsDir, ...(o.extraWritable ?? [])],
         denyWrite: bashCanWriteWorktree ? [] : [o.worktree],
       },
       network: o.localServer

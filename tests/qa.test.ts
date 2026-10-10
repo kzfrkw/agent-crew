@@ -27,10 +27,11 @@ const scripts: Record<string, Script> = {
   reviewer: answer("review.md", "approve", { findings: [] }),
 };
 
-async function untilQa(qa: Script) {
+async function untilQa(qa: Script, profile = {}) {
   const runner = new ScriptedRunner({ ...scripts, qa });
   const ctx = testContext(runner);
-  const { project } = await approvedProject(ctx);
+  ctx.toolExec = async () => ({ exitCode: 0, timedOut: false, output: "ok", durationMs: 1 });
+  const { project } = await approvedProject(ctx, profile);
   const t = newTask(ctx, project.id);
   await runUntilIdle(ctx);
   approveTask(ctx, t.id, "plan");
@@ -81,3 +82,13 @@ describe("QA", () => {
     expect(listValidApprovals(ctx.db, t.id).find((a) => a.kind === "final")!.commitSha).toBe(headSha(tr.worktreePath, ctx.gitEnv));
   });
 });
+
+describe("QA(Flutter。フェーズ6)", () => {
+  it("Flutter のリポジトリの QA にも MCP の橋を渡す", async () => {
+    const { runner } = await untilQa(answer("qa-report.md", "passed"), { platform: "flutter", commands: { install: "flutter pub get", build: null, test: "flutter test", start: null, analyze: "flutter analyze" }, startUrl: null });
+    const call = runner.calls.find((c) => c.role === "qa")!;
+    expect(call.mcpServers?.["agent-crew"]).toBeTruthy();
+    expect(call.prompt).toContain("run_project_command");
+  });
+});
+

@@ -55,6 +55,24 @@ describe("ClaudeRunner(偽の claude)", () => {
     expect(rec.argv).toContain("--strict-mcp-config");
   });
 
+  it("MCP サーバーを渡すときは、実行ごとの設定ファイルを --mcp-config で渡し、その道具だけ許可する(フェーズ6)", async () => {
+    const s = spec("ok", { mcpServers: { "agent-crew": { command: "/usr/bin/node", args: ["/x/agent-crew.js", "mcp-exec", "/r/tool-exec.json"] } }, extraAllowedTools: ["mcp__agent-crew__run_project_command"] });
+    await runner.run(s, () => {});
+    const argv: string[] = record(s).argv;
+    expect(argv).toContain("--strict-mcp-config");
+    const cfg = JSON.parse(readFileSync(argv[argv.indexOf("--mcp-config") + 1]!, "utf8"));
+    expect(cfg).toEqual({ mcpServers: { "agent-crew": { type: "stdio", command: "/usr/bin/node", args: ["/x/agent-crew.js", "mcp-exec", "/r/tool-exec.json"] } } });
+    expect(argv[argv.indexOf("--allowedTools") + 1]).toContain("mcp__agent-crew__run_project_command");
+    const settings = JSON.parse(readFileSync(join(s.runDir, "settings.json"), "utf8"));
+    expect(settings.permissions.allow).toContain("mcp__agent-crew__run_project_command");
+  });
+
+  it("MCP サーバーを渡さなければ --mcp-config は付けない", async () => {
+    const s = spec("ok");
+    await runner.run(s, () => {});
+    expect(record(s).argv).not.toContain("--mcp-config");
+  });
+
   it("再現用に settings.json とコマンドを実行ディレクトリに残す", async () => {
     const s = spec("ok");
     await runner.run(s, () => {});

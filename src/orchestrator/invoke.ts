@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { addArtifact, addEvent, finishRun, startRun } from "../db/store.ts";
@@ -7,6 +7,18 @@ import type { RunResult } from "../runner/types.ts";
 import type { AppContext } from "./context.ts";
 import { runDir } from "./paths.ts";
 import { cleanupStrayProcesses } from "../runner/cleanup.ts";
+import { TOOL_NAME, type ToolExecConfig } from "../toolexec/mcp-server.ts";
+import { findFlutterRoot, toolchainWritable } from "../toolexec/command.ts";
+import { homedir } from "node:os";
+
+/** Flutter の依存の準備(flutter pub get)に要る通信先 */
+const FLUTTER_DOMAINS = ["pub.dev", "storage.googleapis.com"];
+
+/** MCP の橋で代わりに実行するコマンド(Flutter のリポジトリ。設計メモ v0.15) */
+export type ToolCommands = Pick<ToolExecConfig, "platform" | "commands">;
+
+const AGENT_CREW_BIN = new URL("../../bin/agent-crew.js", import.meta.url).pathname;
+const MCP_TOOL = `mcp__agent-crew__${TOOL_NAME}`;
 
 export type InvokeResult =
   | { ok: true; runId: number; verdict: string; summary: string; extra: Record<string, unknown>; result: RunResult }
@@ -26,7 +38,7 @@ export function readArtifactVerdict(path: string): string | undefined {
  */
 export async function invokeRole(
   ctx: AppContext,
-  o: { roleName: string; taskId?: number; projectId?: number; cwd: string; artifactsDir: string; prompt: string; extraEnv?: Record<string, string> },
+  o: { roleName: string; taskId?: number; projectId?: number; cwd: string; artifactsDir: string; prompt: string; extraEnv?: Record<string, string>; toolCommands?: ToolCommands },
 ): Promise<InvokeResult> {
   const role = ctx.roles.get(o.roleName);
   if (!role) throw new Error(`役割 ${o.roleName} が定義されていません`);
@@ -41,6 +53,9 @@ export async function invokeRole(
     return { ok: false, runId: run.id, failure, reason, result };
   };
 
+  const bridge = o.toolCommands ? writeBridge(ctx, run.id, o.cwd, o.toolCommands) : undefined;
+  const prompt = bridge ? `${o.prompt}\n## テストと静的解析の実行\n- テスト・静的解析は Bash では実行せず、MCP の道具 \`${TOOL_NAME}\`(kind: ${bridge.kinds.join(" / ")})を使ってください。ツールがサンドボックスの中で代わりに実行し、終了コードと出力を返します(Bash の中ではこれらのコマンドは止まります)\n` : o.prompt;
+
   let result: RunResult;
   const startedAt = Date.now();
   try {
@@ -50,7 +65,7 @@ export async function invokeRole(
         cwd: o.cwd,
         runDir: runDir(ctx.home, run.id),
         artifactsDir: o.artifactsDir,
-        prompt: o.prompt,
+        prompt,
         systemPromptAppend: role.prompt,
         model: role.model,
         effort: role.effort,
@@ -61,17 +76,22 @@ export async function invokeRole(
         jsonSchema: verdictSchemaFor(role),
         timeoutSec: Math.min(role.timeoutSec, ctx.config.limits.runTimeoutSec),
         maxBudgetUsd: Math.min(role.maxBudgetUsd, ctx.config.limits.runMaxBudgetUsd),
-        allowedDomains: ctx.config.sandbox.allowedDomains,
+        allowedDomains: o.toolCommands?.platform === "flutter" ? [...new Set([...ctx.config.sandbox.allowedDomains, ...FLUTTER_DOMAINS])] : ctx.config.sandbox.allowedDomains,
         extraEnv: o.extraEnv,
+        ...(bridge ? { mcpServers: bridge.servers, extraAllowedTools: [MCP_TOOL] } : {}),
+        // 依存の準備(flutter pub get)は Bash で行うため、道具のキャッシュに書けるようにする(設計メモ v0.15)
+        ...(o.toolCommands ? { extraWritable: toolchainWritable(o.toolCommands.platform, { home: homedir(), flutterRoot: findFlutterRoot() }) } : {}),
         signal: o.taskId === undefined ? undefined : ctx.stops?.get(o.taskId)?.signal,
       },
       (e) => addEvent(ctx.db, { taskId: o.taskId, runId: run.id, kind: e.kind, payload: e.payload }),
     );
   } catch (e) {
     await cleanup(ctx, o, role.name, run.id, startedAt);
+    if (bridge) recordBridge(ctx, o.taskId, run.id, role.name, bridge.logPath);
     return fail("error", `実行に失敗しました: ${(e as Error).message}`);
   }
   await cleanup(ctx, o, role.name, run.id, startedAt);
+  if (bridge) recordBridge(ctx, o.taskId, run.id, role.name, bridge.logPath);
 
   if (result.status === "cancelled") return fail("cancelled", result.error ?? "人が停止しました", result, "cancelled");
   if (result.status === "timeout") return fail("limit", result.error ?? "時間の上限を超えました", result, "timeout");
@@ -109,6 +129,32 @@ export async function invokeRole(
     structuredOutput: result.structuredOutput,
   });
   return { ok: true, runId: run.id, verdict: parsed.verdict, summary: parsed.summary, extra: parsed.extra, result };
+}
+
+/** MCP の橋の設定を実行ディレクトリに書く。サーバーは claude が起動する(agent-crew mcp-exec <設定>) */
+function writeBridge(ctx: AppContext, runId: number, cwd: string, tc: ToolCommands) {
+  const dir = runDir(ctx.home, runId);
+  const cfg: ToolExecConfig = { cwd, platform: tc.platform, commands: tc.commands, tmpDir: join(dir, "tmp"), dataHome: ctx.home, logPath: join(dir, "tool-commands.jsonl") };
+  const cfgPath = join(dir, "tool-exec.json");
+  writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+  return {
+    servers: { "agent-crew": { command: process.execPath, args: [AGENT_CREW_BIN, "mcp-exec", cfgPath] } },
+    logPath: cfg.logPath,
+    kinds: (Object.keys(tc.commands) as (keyof ToolCommands["commands"])[]).filter((k) => tc.commands[k]),
+  };
+}
+
+/** 橋で実行したコマンドを、イベントにする(GUI の実行ログに出す) */
+function recordBridge(ctx: AppContext, taskId: number | undefined, runId: number, role: string, logPath: string): void {
+  if (!existsSync(logPath)) return;
+  for (const line of readFileSync(logPath, "utf8").split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      addEvent(ctx.db, { taskId, runId, kind: "tool_command", payload: { purpose: "agent", role, ...(JSON.parse(line) as object) } });
+    } catch {
+      // 壊れた行は飛ばす
+    }
+  }
 }
 
 /**

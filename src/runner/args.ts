@@ -14,6 +14,8 @@ export function buildClaudeArgs(o: {
   maxBudgetUsd: number;
   systemPromptAppend: string;
   resumeSessionId?: string;
+  /** 実行ごとの MCP 設定ファイル(--strict-mcp-config と合わせ、ここに書いたものだけを使う) */
+  mcpConfigPath?: string;
   /** settings の allow ルールと同じもの。CLAUDE_CODE_SUBPROCESS_ENV_SCRUB を設定すると権限モードが default に強制されるため、明示する */
   allowedTools?: string[];
 }): string[] {
@@ -21,6 +23,7 @@ export function buildClaudeArgs(o: {
     "-p",
     "--setting-sources", "",
     "--strict-mcp-config",
+    ...(o.mcpConfigPath ? ["--mcp-config", o.mcpConfigPath] : []),
     "--settings", o.settingsPath,
     "--permission-mode", "dontAsk",
     "--permission-prompts", "none",

@@ -6,12 +6,12 @@ import { changedFiles, commitsSince, containsRef, diffFromBase, diffStat, hasTra
 import { detectTestChanges, renderTestChanges } from "./test-changes.ts";
 import { testCommandFor, verifyTests } from "./verify.ts";
 import type { AppContext } from "./context.ts";
-import { invokeRole, type InvokeResult } from "./invoke.ts";
+import { invokeRole, type InvokeResult, type ToolCommands } from "./invoke.ts";
 import { projectDir, taskDir } from "./paths.ts";
 import type { ScreenRequest } from "./context.ts";
 import { captureTaskScreens } from "./screens.ts";
 import type { Shot } from "../browser/chrome.ts";
-import { resolveServiceEnv } from "./projects.ts";
+import { platformOf, resolveServiceEnv } from "./projects.ts";
 import { applyAudit, checkReviewConsistency, mustIndexes, type Finding } from "./review-findings.ts";
 import { taskPrompt } from "./prompts.ts";
 import type { Role, TaskEvent } from "./transitions.ts";
@@ -117,6 +117,14 @@ export function agentGitEnv(role: string): Record<string, string> {
  * 実装者。複数リポジトリでは、計画の順にリポジトリごとに動かす(設計メモ v0.14)。各実装者は自分の worktree にだけ書ける。
  * 前のリポジトリで止まったら(done 以外、コミットの確認に失敗)、次のリポジトリは動かさない
  */
+/** Flutter のリポジトリなら、MCP の橋で代わりに実行するコマンド(テストは実装者が記録したものを優先)。web なら undefined */
+export function toolCommandsFor(ctx: AppContext, repoId: number, task?: Task): ToolCommands | undefined {
+  const profile = getRepoProfile(ctx.db, repoId) as Profile | null;
+  const platform = platformOf(profile);
+  if (platform === "web") return undefined;
+  return { platform, commands: { test: task ? testCommandFor(ctx, task, repoId) : (profile?.commands.test ?? null), analyze: profile?.commands.analyze ?? null } };
+}
+
 const implementer: Handler = async (ctx, task) => {
   const dir = taskDir(ctx.home, task.id);
   const trs = orderedTaskRepos(ctx, task);
@@ -137,6 +145,7 @@ const implementer: Handler = async (ctx, task) => {
           : [],
       ),
       extraEnv: agentGitEnv("implementer"),
+      toolCommands: toolCommandsFor(ctx, tr.repoId, task),
     });
     const label = trs.length > 1 ? `implementer [${tr.role}]` : "implementer";
     if (r.ok && r.verdict === "done") {
@@ -348,6 +357,7 @@ const qa: Handler = async (ctx, task) => {
       `- 証拠(HTTPの応答、ログ)は ${evidence} に保存し、qa-report.md から参照してください`,
       "- 確認が終わったら、起動したプロセスを必ず止めてください。コードは変更しないでください",
     ]),
+    toolCommands: toolCommandsFor(ctx, tr.repoId, task),
   });
   for (const x of trs) {
     if (headSha(x.worktreePath, ctx.gitEnv) !== heads.get(x.repoId) || hasTrackedChanges(x.worktreePath, ctx.gitEnv)) {
