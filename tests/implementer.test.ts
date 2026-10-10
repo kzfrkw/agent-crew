@@ -197,3 +197,40 @@ describe("verifyTests(テストの再実行)", () => {
     expect(await verifyTests(ctx, getTask(ctx.db, t.id)!)).toMatchObject({ status: "skipped" });
   });
 });
+
+describe("verifyTests(Flutter: ツールが sandbox-exec で直接実行する。フェーズ6)", () => {
+  const flutterProfile = { platform: "flutter", commands: { install: "flutter pub get", build: null, test: "flutter test", start: null, analyze: "flutter analyze" }, startUrl: null };
+  async function reviewing(exitCode: number) {
+    const runner = new ScriptedRunner({ planner: plannerReady, implementer: implementer() });
+    const ctx = testContext(runner);
+    const calls: { cwd: string; command: string; platform: string }[] = [];
+    ctx.toolExec = async (_ctx, req) => {
+      calls.push({ cwd: req.cwd, command: req.command, platform: req.platform });
+      return { exitCode, timedOut: false, output: exitCode === 0 ? "All tests passed!" : "Some tests failed.", durationMs: 10 };
+    };
+    const { project } = await approvedProject(ctx, flutterProfile);
+    const t = newTask(ctx, project.id);
+    await runUntilIdle(ctx);
+    approveTask(ctx, t.id, "plan");
+    await runUntilIdle(ctx);
+    return { ctx, t, runner, calls };
+  }
+
+  it("claude(verifier)を使わず、ツールがテストを実行して終了コードで判定する", async () => {
+    const { ctx, t, runner, calls } = await reviewing(0);
+    expect(runner.calls.filter((c) => c.role === "verifier")).toHaveLength(0);
+    expect(calls[0]).toMatchObject({ command: "flutter test", platform: "flutter" });
+    expect(calls[0]!.cwd).toBe(listTaskRepos(ctx.db, t.id)[0]!.worktreePath);
+    expect(listValidApprovals(ctx.db, t.id).find((a) => a.kind === "tests")).toMatchObject({ result: "approved" });
+    expect(listEvents(ctx.db, t.id, 100).some((e) => e.kind === "tool_command")).toBe(true);
+    expect(await verifyTests(ctx, getTask(ctx.db, t.id)!)).toMatchObject({ status: "passed", cached: true });
+  });
+
+  it("終了コードが 0 でなければ failed。出力を報告に残す", async () => {
+    const { ctx, t } = await reviewing(1);
+    const r = await verifyTests(ctx, getTask(ctx.db, t.id)!);
+    expect(r).toMatchObject({ status: "failed" });
+    expect(readFileSync(join(taskDir(ctx.home, t.id), "verify-report.md"), "utf8")).toContain("Some tests failed.");
+  });
+});
+

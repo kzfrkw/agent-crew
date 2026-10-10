@@ -7,6 +7,7 @@ import { ClaudeRunner } from "../runner/claude.ts";
 import type { Runner } from "../runner/types.ts";
 import type { Shot } from "../browser/chrome.ts";
 import type { Task } from "../db/store.ts";
+import type { ToolExecFn } from "../toolexec/command.ts";
 
 export type ScreenRequest = { path: string; note?: string };
 /** タスクの worktree のアプリを起動して画面を撮り、outDir に PNG を置く(設計メモ v0.13) */
@@ -23,6 +24,8 @@ export type AppContext = {
   gitEnv: NodeJS.ProcessEnv;
   /** 画面の撮影(4c)。テストでは実際の Chrome を使わない関数に差し替える。無ければ screens.ts の既定 */
   capture?: CaptureFn;
+  /** ツールが代わりに実行するコマンド(Flutter のテストなど。フェーズ6)。テストでは差し替える。無ければ toolexec の既定(sandbox-exec) */
+  toolExec?: ToolExecFn;
   /** 進めている最中のタスクの、停止の合図(stepTask が作る。requestStop で鳴らす) */
   stops?: Map<number, AbortController>;
 };

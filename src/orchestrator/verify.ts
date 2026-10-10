@@ -1,11 +1,13 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { addApproval, getRepoProfile, listEvents, listValidApprovals, type Task } from "../db/store.ts";
+import { addApproval, addEvent, getRepoProfile, listEvents, listValidApprovals, type Task } from "../db/store.ts";
 import { headSha } from "../git/worktree.ts";
 import type { Profile } from "../roles/schemas.ts";
 import type { AppContext } from "./context.ts";
 import { orderedTaskRepos } from "./handlers.ts";
 import { invokeRole } from "./invoke.ts";
+import { platformOf } from "./projects.ts";
+import { defaultToolExec } from "../toolexec/command.ts";
 import { taskDir } from "./paths.ts";
 
 export type VerifyResult =
@@ -69,6 +71,18 @@ async function verifyRepo(ctx: AppContext, task: Task, tr: { repoId: number; wor
   // 同じコミットで成功していれば再実行しない。失敗は記録だけで使わない(環境を直して再実行できるように。フェーズ4b で判明)
   const cached = listValidApprovals(ctx.db, task.id).filter((a) => a.kind === "tests" && a.commitSha === head && a.repoId === tr.repoId && a.result === "approved").at(-1);
   if (cached) return { role: tr.role, status: "passed", command, head, detail: "", cached: true };
+
+  // Flutter は Claude のサンドボックスの中でテストが動かないため、ツールが sandbox-exec で直接実行する(設計メモ v0.15)
+  const platform = platformOf(getRepoProfile(ctx.db, tr.repoId) as Profile | null);
+  if (platform !== "web") {
+    const exec = ctx.toolExec ?? defaultToolExec;
+    const res = await exec(ctx, { cwd: tr.worktreePath, command, platform, tmpDir: join(dir, "tmp", `verify-${tr.repoId}`), signal: ctx.stops?.get(task.id)?.signal });
+    addEvent(ctx.db, { taskId: task.id, kind: "tool_command", payload: { purpose: "verify", repoId: tr.repoId, command, exitCode: res.exitCode, timedOut: res.timedOut, durationMs: res.durationMs } });
+    const passed = res.exitCode === 0 && !res.timedOut;
+    addApproval(ctx.db, { taskId: task.id, repoId: tr.repoId, kind: "tests", result: passed ? "approved" : "rejected", commitSha: head });
+    const detail = (res.timedOut ? "(時間切れで止めました)\n" : "") + res.output.slice(-4000);
+    return { role: tr.role, status: passed ? "passed" : "failed", command, head, detail };
+  }
 
   const r = await invokeRole(ctx, {
     roleName: "verifier",

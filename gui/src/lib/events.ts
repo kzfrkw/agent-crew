@@ -139,6 +139,17 @@ export function describeEvent(e: EventView): EventLine {
         detail: shots.map((s) => `${s.file}${s.error ? `: ${s.error}` : ""}`).join("\n"),
       };
     }
+    case "tool_command": {
+      const sec = Math.round(Number(p.durationMs ?? 0) / 1000);
+      const ok = p.exitCode === 0 && !p.timedOut;
+      const outcome = p.timedOut ? `時間切れ(${sec}秒)` : ok ? `成功(${sec}秒)` : `失敗(終了コード ${p.exitCode}、${sec}秒)`;
+      return {
+        tone: ok ? "success" : "danger",
+        icon: "▸",
+        title: p.purpose === "verify" ? "テストの再実行(ツール)" : "コマンドの実行(ツール)",
+        text: `${p.command ?? ""} — ${outcome}`,
+      };
+    }
     case "test_command":
       return { tone: "neutral", icon: "▸", title: "テストのコマンド", text: String(p.command ?? "") };
     case "integrated":
