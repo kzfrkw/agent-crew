@@ -4,9 +4,10 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildAppSandboxProfile, startSandboxedApp, type SandboxedApp } from "../src/browser/app.ts";
 import { captureScreens, findChrome } from "../src/browser/chrome.ts";
+import { inAgentSandbox } from "./helpers/env.ts";
 import { tempDir } from "./helpers/gitrepo.ts";
 
-const mac = process.platform === "darwin" && existsSync("/usr/bin/sandbox-exec");
+const mac = process.platform === "darwin" && existsSync("/usr/bin/sandbox-exec") && !inAgentSandbox;
 
 let app: SandboxedApp | undefined;
 afterEach(async () => {

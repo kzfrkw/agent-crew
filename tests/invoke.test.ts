@@ -5,6 +5,7 @@ import { createProject, createTask, listArtifacts, listEvents } from "../src/db/
 import { invokeRole } from "../src/orchestrator/invoke.ts";
 import { answer, ScriptedRunner, writeArtifact } from "./helpers/scripted-runner.ts";
 import { testContext } from "./helpers/context.ts";
+import { inAgentSandbox } from "./helpers/env.ts";
 import { tempDir } from "./helpers/gitrepo.ts";
 
 function setup(runner: ScriptedRunner) {
@@ -88,7 +89,7 @@ describe("invokeRole", () => {
   });
 });
 
-describe("invokeRole の後片付け(自己適用で発見)", () => {
+describe.skipIf(inAgentSandbox)("invokeRole の後片付け(自己適用で発見)", () => {
   it("役割が作業ディレクトリに残したプロセスを止め、イベントに残す", async () => {
     const { spawn } = await import("node:child_process");
     let pid = 0;
