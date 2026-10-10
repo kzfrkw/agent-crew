@@ -130,6 +130,9 @@ describe("App(ダッシュボード)", () => {
     stateLabels: {} as Overview["stateLabels"],
   };
 
+  const original = { projects: overview.projects, tasks: overview.tasks };
+  afterEach(() => Object.assign(overview, original));
+
   beforeEach(() => {
     window.history.pushState(null, "", "/");
     vi.stubGlobal(
@@ -152,6 +155,56 @@ describe("App(ダッシュボード)", () => {
     fireEvent.click(screen.getByLabelText("完了・取り消しも表示"));
     expect(within(screen.getByRole("table")).getByText("終わった")).toBeTruthy();
     await waitFor(() => expect(document.title).toBe("(1) agent-crew"));
+  });
+
+  describe("絞り込みの件数", () => {
+    const buttons = () => within(screen.getByRole("group", { name: "絞り込み" })).getAllByRole("button");
+    const names = () => buttons().map((b) => b.textContent);
+    const a = (o: Partial<TaskSummary>) => task({ state: "needs_input", stateLabel: "人の回答待ち", attention: "answer", ...o });
+
+    it("各ボタンにラベルと件数が出る。読み上げ名は「ラベル 件数件」。チェックで「すべて」だけ変わる", async () => {
+      render(<App />);
+      await screen.findByRole("heading", { name: "対応待ち" });
+      expect(names()).toEqual(["すべて 2件", "進行中 1件", "対応待ち 1件"]);
+      expect(screen.getByRole("button", { name: /^すべて\s+2件$/ })).toBeTruthy();
+      expect(buttons()[0]!.querySelector(".tabular-nums")?.textContent).toBe("2件");
+      fireEvent.click(screen.getByLabelText("完了・取り消しも表示"));
+      expect(names()).toEqual(["すべて 3件", "進行中 1件", "対応待ち 1件"]);
+      fireEvent.click(screen.getByLabelText("完了・取り消しも表示"));
+      expect(names()).toEqual(["すべて 2件", "進行中 1件", "対応待ち 1件"]);
+    });
+
+    it("複数プロジェクトの合計が、押したときの一覧の行数と一致する。0件でも押せる", async () => {
+      overview.projects = [...overview.projects, { id: 2, name: "blog", profileStatus: "approved", testInfra: "present", allowWithoutTests: false }];
+      overview.tasks = [
+        task({ id: 1, projectId: 1, title: "p1進行" }),
+        a({ id: 2, projectId: 1, title: "p1待ち" }),
+        task({ id: 3, projectId: 2, title: "p2進行" }),
+        a({ id: 4, projectId: 2, title: "p2待ち", state: "human_working", attention: "human_working" }),
+        task({ id: 5, projectId: 2, title: "p2完了", state: "done" }),
+      ];
+      render(<App />);
+      await screen.findByRole("heading", { name: "対応待ち" });
+      expect(names()).toEqual(["すべて 4件", "進行中 2件", "対応待ち 2件"]);
+      const rows = () => screen.getAllByRole("table").flatMap((t) => within(t).queryAllByRole("row").slice(1)).filter((r) => within(r).queryAllByRole("cell").length > 1);
+      for (const [i, n] of [[0, 4], [1, 2], [2, 2]] as const) {
+        fireEvent.click(buttons()[i]!);
+        expect(buttons()[i]!.getAttribute("aria-pressed")).toBe("true");
+        expect(rows().length).toBe(n);
+      }
+    });
+
+    it("該当0件のボタンは「0」を出し、押せる", async () => {
+      overview.tasks = [task({ id: 1, title: "進行のみ" })];
+      render(<App />);
+      await screen.findByRole("heading", { name: "対応待ち" });
+      expect(names()).toEqual(["すべて 1件", "進行中 1件", "対応待ち 0件"]);
+      const zero = buttons()[2]!;
+      expect((zero as HTMLButtonElement).disabled).toBe(false);
+      fireEvent.click(zero);
+      expect(zero.getAttribute("aria-pressed")).toBe("true");
+      expect(screen.getAllByText("該当するタスクはありません").length).toBeGreaterThan(0);
+    });
   });
 
   it("行のリンクでタスク詳細へ遷移する(ページの再読み込みなし)", async () => {

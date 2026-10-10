@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { describeEvent, isNoise, isRunDetail } from "./events.ts";
 import { formatCost, formatDuration, formatTime, elapsedSec } from "./format.ts";
 import { pipelineOf } from "./pipeline.ts";
+import { countByFilter, matchesFilter } from "./taskFilter.ts";
 import { matchRoute } from "./routes.ts";
 
 describe("matchRoute", () => {
@@ -198,5 +199,38 @@ describe("長いパスの省略", () => {
     const d = describeEvent(ev("plan", { acceptanceCriteria: ["A になる", "B になる"], testFirstException: false }));
     expect(d.text).toBe("受け入れ条件 2 件");
     expect(d.detail).toContain("- A になる");
+  });
+});
+
+describe("taskFilter(絞り込みの条件と件数)", () => {
+  const t = (state: string, attention: string | null = null) => ({ state, attention }) as never;
+  const tasks = [t("implementing"), t("needs_input", "answer"), t("human_working", "human_working"), t("done"), t("cancelled")];
+
+  it.each([
+    ["all", false, "implementing", null, true],
+    ["all", false, "done", null, false],
+    ["all", false, "cancelled", null, false],
+    ["all", true, "done", null, true],
+    ["all", true, "cancelled", null, true],
+    ["active", false, "implementing", null, true],
+    ["active", true, "done", null, false],
+    ["active", true, "cancelled", null, false],
+    ["active", false, "needs_input", "answer", false],
+    ["attention", false, "needs_input", "answer", true],
+    ["attention", false, "human_working", "human_working", true],
+    ["attention", true, "done", null, false],
+  ] as const)("%s / showClosed=%s / %s / %s → %s", (filter, showClosed, state, attention, expected) => {
+    expect(matchesFilter(t(state, attention), filter, showClosed)).toBe(expected);
+  });
+
+  it("件数は matchesFilter で一覧に出る行の数と一致し、showClosed で「すべて」だけが変わる", () => {
+    expect(countByFilter(tasks, false)).toEqual({ all: 3, active: 1, attention: 2 });
+    expect(countByFilter(tasks, true)).toEqual({ all: 5, active: 1, attention: 2 });
+    for (const showClosed of [false, true])
+      for (const [f, n] of Object.entries(countByFilter(tasks, showClosed))) expect(tasks.filter((x) => matchesFilter(x, f as never, showClosed)).length).toBe(n);
+  });
+
+  it("空なら全部 0", () => {
+    expect(countByFilter([], false)).toEqual({ all: 0, active: 0, attention: 0 });
   });
 });
