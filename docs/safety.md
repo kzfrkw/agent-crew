@@ -177,3 +177,21 @@ QA と同じ設定(`write: artifacts`、`bashWritesWorktree`、`localServer`)の
 
 - 画面がスリープしている間は、ヘッドレス Chrome が `CVDisplayLinkCreateWithCGDisplay failed` を出し、DevTools への接続を受け付けたまま応答しないことがある。そのプロセスを `lsof` で調べると `lsof` も止まり、役割の実行の後片付けが進まなくなった(テストが 15 分止まって発見)
 - 対策: DevTools への接続に上限(10 秒)、後片付けの `ps` / `lsof` に上限(15 秒。時間切れなら何も止めない)を設けた。撮影に失敗しても、タスクは止まらず、撮れなかった画面として扱われる
+
+## 8. 実験の記録: iOS シミュレータと Flutter(2026-10-11、フェーズ6の前提)
+
+Xcode 26.4、iOS 26.4 のシミュレータ、Flutter 3.41.6 で確認した。
+
+| 確認したこと | 結果 |
+|---|---|
+| ツールが専用の端末を作って起動(`simctl create` / `boot` / `bootstatus`) | できる。起動 約36秒、再起動 約10秒。Simulator.app は開かない |
+| インストール・起動・撮影(`simctl install` / `launch` / `io screenshot`) | できる。1206×2622 の PNG |
+| ライト/ダークの切り替え(`simctl ui <端末> appearance dark`) | できる(アプリが darkTheme を持っていれば反映) |
+| ディープリンク(`simctl openurl`) | iOS の確認ダイアログが出て、タップしないと進まない |
+| 起動時の環境変数(`SIMCTL_CHILD_*`) | `simctl spawn` には届くが、Flutter の `Platform.environment` には届かない |
+| `flutter drive` + `integration_test` の `takeScreenshot` | 特定の画面を開いて撮れる。ビルドを含め約28秒 |
+| Claude のサンドボックスの中の `flutter pub get --offline` | SDK の `bin/cache` 等への書き込みを許せば動く |
+| Claude のサンドボックスの中の `flutter test` | 動かない。キャッシュへの書き込みと 127.0.0.1 の待ち受けを許しても、テストのエンジン(flutter_tester)が読み込みで止まる |
+| ツールの sandbox-exec(書き込みは worktree・一時ディレクトリ・Flutter のキャッシュ、通信は localhost、資格情報は読めない)の中の `flutter test` | 2秒で通る |
+
+方針(設計メモ v0.15): Flutter のテスト・解析・撮影はツールが sandbox-exec で代わりに実行し、エージェントには MCP で「決めたコマンドの実行」だけを渡す。`flutter drive` のドライバーはホストで動くため、リポジトリのものではなくツールが用意したものを使う。
