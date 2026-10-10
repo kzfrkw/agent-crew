@@ -22,34 +22,41 @@ export async function cleanupStrayProcesses(dir: string, since: number): Promise
   }
   const inside = (p: string) => p === root || p.startsWith(root + sep);
 
-  let candidates: number[];
+  // 1. 実行の開始より後に起動したプロセスだけに絞る(ps は軽い。lsof で全プロセスを調べると、負荷が高いとき数秒かかる)
+  const sinceSec = Math.floor(since / 1000) * 1000;
+  let recent: { pid: number; command: string }[];
   try {
-    // -d cwd: 各プロセスの作業ディレクトリだけを出す。-F pn: pid と名前を機械向けに
-    const { stdout } = await run("lsof", ["-n", "-d", "cwd", "-F", "pn"], { maxBuffer: 16 * 1024 * 1024 });
-    candidates = [];
+    const { stdout } = await run("ps", ["-A", "-o", "pid=,lstart=,command="], { env: { ...process.env, LC_ALL: "C" }, maxBuffer: 16 * 1024 * 1024 });
+    recent = stdout
+      .split("\n")
+      .map((l) => /^\s*(\d+)\s+(\w{3}\s+\w{3}\s+\d+\s+[\d:]+\s+\d{4})\s+(.*)$/.exec(l))
+      .flatMap((m) => (m ? [{ pid: Number(m[1]), started: Date.parse(m[2]!), command: m[3]! }] : []))
+      .filter((r) => r.pid !== process.pid && Number.isFinite(r.started) && r.started >= sinceSec)
+      .map(({ pid, command }) => ({ pid, command }));
+  } catch {
+    return [];
+  }
+  if (recent.length === 0) return [];
+
+  // 2. そのうち、作業ディレクトリ(cwd)が dir の中にあるもの
+  const insidePids = new Set<number>();
+  try {
+    const { stdout } = await run("lsof", ["-n", "-a", "-d", "cwd", "-p", recent.map((r) => r.pid).join(","), "-F", "pn"], { maxBuffer: 16 * 1024 * 1024 });
     let pid = 0;
     for (const line of stdout.split("\n")) {
       if (line.startsWith("p")) pid = Number(line.slice(1));
-      else if (line.startsWith("n") && pid && pid !== process.pid && inside(line.slice(1))) candidates.push(pid);
+      else if (line.startsWith("n") && pid && inside(line.slice(1))) insidePids.add(pid);
     }
-  } catch {
-    return [];
+  } catch (e) {
+    // lsof は、調べたプロセスの一部がすでに終わっていると終了コード 1 を返す。出力は使える
+    const out = (e as { stdout?: string }).stdout ?? "";
+    let pid = 0;
+    for (const line of out.split("\n")) {
+      if (line.startsWith("p")) pid = Number(line.slice(1));
+      else if (line.startsWith("n") && pid && inside(line.slice(1))) insidePids.add(pid);
+    }
   }
-  if (candidates.length === 0) return [];
-
-  // 起動時刻(秒の精度)。実行の開始より後に起動されたものだけ
-  let rows: { pid: number; started: number; command: string }[];
-  try {
-    const { stdout } = await run("ps", ["-o", "pid=,lstart=,command=", "-p", candidates.join(",")], { env: { ...process.env, LC_ALL: "C" } });
-    rows = stdout
-      .split("\n")
-      .map((l) => /^\s*(\d+)\s+(\w{3}\s+\w{3}\s+\d+\s+[\d:]+\s+\d{4})\s+(.*)$/.exec(l))
-      .flatMap((m) => (m ? [{ pid: Number(m[1]), started: Date.parse(m[2]!), command: m[3]! }] : []));
-  } catch {
-    return [];
-  }
-  const sinceSec = Math.floor(since / 1000) * 1000;
-  const targets = rows.filter((r) => Number.isFinite(r.started) && r.started >= sinceSec);
+  const targets = recent.filter((r) => insidePids.has(r.pid));
 
   const killed: KilledProcess[] = [];
   for (const t of targets) {
