@@ -51,3 +51,16 @@ describe("プロジェクト画面(複数リポジトリ)", () => {
     expect(screen.getByText(/project set agent-crew --role frontend/)).toBeTruthy();
   });
 });
+
+describe("プロジェクト画面(Flutter、フェーズ6)", () => {
+  it("Flutter のリポジトリは種類と静的解析のコマンドを出す。web では種類の行を出さない", async () => {
+    const flutter: ProjectDetail = {
+      ...detail,
+      repos: [{ id: 1, path: "/r/app", role: "main", defaultBranch: "main", profile: { platform: "flutter", commands: { install: "flutter pub get", build: null, test: "flutter test", start: null, analyze: "flutter analyze" }, startUrl: null }, env: {} }],
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(flutter), { status: 200, headers: { "content-type": "application/json" } })));
+    render(<ProjectPage id={1} />);
+    expect(await screen.findByText("flutter analyze")).toBeTruthy();
+    expect(screen.getByText("Flutter(iOS)")).toBeTruthy();
+  });
+});

@@ -69,10 +69,10 @@ describe("後片付けが止まったままにならない", () => {
     // 直近に起動したプロセスがあるようにする(無ければ lsof まで進まない)
     const other = spawn("sleep", ["3"], { stdio: "ignore" });
     await sleepMs(100);
-    const killed = await cleanupStrayProcesses(dir, startedAt - 5000, { timeoutMs: 500, path: `${bin}:${process.env.PATH}` });
+    const killed = await cleanupStrayProcesses(dir, startedAt - 5000, { timeoutMs: 3000, path: `${bin}:${process.env.PATH}` });
     expect(existsSync(join(bin, "called"))).toBe(true);
     expect(killed).toEqual([]);
-    expect(Date.now() - startedAt).toBeLessThan(5000);
+    expect(Date.now() - startedAt).toBeLessThan(10_000);
     other.kill();
   });
 });

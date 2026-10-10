@@ -200,7 +200,12 @@ export function mustProject(db: Db, name: string): Project {
   return p;
 }
 
-export type ProfileCommandsPatch = Partial<Record<"install" | "build" | "test" | "start" | "startUrl", string>>;
+export type ProfileCommandsPatch = Partial<Record<"install" | "build" | "test" | "start" | "startUrl" | "analyze" | "platform", string>>;
+
+/** アプリの種類。種類を持たない古いプロファイルは web(フェーズ6) */
+export function platformOf(profile: Pick<Profile, "platform"> | null | undefined): Profile["platform"] {
+  return profile?.platform ?? "web";
+}
 
 /**
  * 役割に渡すコマンド(依存の準備・ビルド・テスト・起動・確認URL)を人が直す。正本は DB のプロファイル(profile.md は説明の文書)。
@@ -216,11 +221,13 @@ export function setProfileCommands(ctx: AppContext, name: string, patch: Profile
   const value = (v: string | undefined, prev: string | null) => (v === undefined ? prev : v.trim() === "-" ? null : v.trim());
   const next: Profile = ProfileSchema.parse({
     ...current,
+    platform: patch.platform?.trim() ?? platformOf(current),
     commands: {
       install: value(patch.install, current.commands.install),
       build: value(patch.build, current.commands.build),
       test: value(patch.test, current.commands.test),
       start: value(patch.start, current.commands.start),
+      analyze: value(patch.analyze, current.commands.analyze ?? null),
     },
     startUrl: value(patch.startUrl, current.startUrl),
   });

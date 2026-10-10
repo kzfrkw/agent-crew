@@ -21,7 +21,7 @@ export type Probe = {
 const OPTIONAL_TOOLS = [
   { cmd: "xcodebuild", args: ["-version"], feature: "iOSのビルドとQA(フェーズ6)" },
   { cmd: "flutter", args: ["--version"], feature: "FlutterのテストとQA(フェーズ6)" },
-  { cmd: "maestro", args: ["--version"], feature: "モバイルUIの自動操作(フェーズ6)" },
+  { cmd: "maestro", args: ["--version"], feature: "モバイルUIの自動操作(後のフェーズ)" },
 ];
 
 /** エージェントには渡さない認証情報(docs/safety.md 4章) */
@@ -37,6 +37,7 @@ export function runChecks(p: Probe): CheckResult[] {
     checkGithubCredentials(p),
     checkSandbox(p),
     ...OPTIONAL_TOOLS.map((t) => checkOptionalTool(p, t)),
+    checkSimulator(p),
   ];
 }
 
@@ -121,6 +122,17 @@ function checkSandbox(p: Probe): CheckResult {
     return { id: "sandbox", level: "error", message: `サンドボックスに必要な ${bin} が見つかりません` };
   }
   return { id: "sandbox", level: "ok", message: `サンドボックスを使えます(${bin})` };
+}
+
+/** iOS のシミュレータ(フェーズ6)。実行環境(runtime)が1つ以上あれば使える */
+function checkSimulator(p: Probe): CheckResult {
+  const id = "tool:simctl";
+  const off = "iOS シミュレータでの QA と撮影(フェーズ6)";
+  if (p.platform !== "darwin") return { id, level: "info", message: `macOS ではないため無効: ${off}` };
+  const r = p.run("xcrun", ["simctl", "list", "runtimes"]);
+  const ios = r.ok ? r.stdout.split("\n").find((l) => /^iOS \d/.test(l.trim())) : undefined;
+  if (!ios) return { id, level: "info", message: `iOS シミュレータの実行環境が無いため無効: ${off}(Xcode で iOS の Simulator を入れてください)` };
+  return { id, level: "ok", message: `iOS シミュレータ: ${/^iOS [\d.]+/.exec(ios.trim())?.[0] ?? ios.trim()}` };
 }
 
 function checkOptionalTool(p: Probe, t: (typeof OPTIONAL_TOOLS)[number]): CheckResult {

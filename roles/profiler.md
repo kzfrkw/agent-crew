@@ -26,6 +26,12 @@ maxBudgetUsd: 3
 4. 規約: コーディング規約、命名、コミットの書き方など、実装者が守るべきこと
 5. QAの方法: アプリを起動し、受け入れ条件をどう確かめるか。起動は 127.0.0.1 で待ち受ける形にし、確認するURLを決めてください
 
+## Flutter のリポジトリ(`pubspec.yaml` がある)
+- 構造化出力の `profile.platform` を `flutter` にしてください(それ以外は `web`)
+- コマンドの目安: 依存の準備 `flutter pub get`、テスト `flutter test`、静的解析 `flutter analyze`。起動と確認URLは null(アプリはツールが iOS シミュレータで動かします)
+- **`flutter test` と `flutter analyze` は Bash で実行しないでください**(このサンドボックスの中では止まります。ツールが代わりに実行して確かめます)。テスト基盤は `test/` と `integration_test/` の中身を読んで判断し、`profile.md` に「実行は未確認」と書いてください
+- QAの方法には、確かめたい画面と、`integration_test/screens_test.dart`(画面を開いて `takeScreenshot` するテスト)の有無を書いてください
+
 ## 成果物
 - `profile.md`: 上記を人が読める形でまとめる(人が確認して承認する)
 - 構造化出力の `profile`: 機械が使う値。コマンドは、リポジトリのルートでそのまま実行できる1行にしてください。無いものは null

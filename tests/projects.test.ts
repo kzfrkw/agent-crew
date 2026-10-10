@@ -140,6 +140,24 @@ describe("プロファイルのコマンドの手直し(自己適用で発見)",
     expect(taskPrompt(ctx, newTask(ctx, project.id), "qa")).toContain("npm start -- --port 4310");
   });
 
+  it("種類(web / flutter)と解析のコマンドを持てる。古いプロファイルは web として読む(フェーズ6)", async () => {
+    const { approvedProject, newTask } = await import("./helpers/project.ts");
+    const { getRepoProfile } = await import("../src/db/store.ts");
+    const { setProfileCommands, platformOf } = await import("../src/orchestrator/projects.ts");
+    const { taskPrompt } = await import("../src/orchestrator/prompts.ts");
+    const ctx = testContext(new ScriptedRunner({}));
+    const { project } = await approvedProject(ctx);
+    const repo = listRepos(ctx.db, project.id)[0]!;
+    expect(platformOf(getRepoProfile(ctx.db, repo.id) as never)).toBe("web");
+
+    setProfileCommands(ctx, "shop", { platform: "flutter", analyze: "flutter analyze", test: "flutter test" });
+    const prof = getRepoProfile(ctx.db, repo.id) as { platform: string; commands: Record<string, string | null> };
+    expect(prof.platform).toBe("flutter");
+    expect(prof.commands).toMatchObject({ analyze: "flutter analyze", test: "flutter test" });
+    expect(taskPrompt(ctx, newTask(ctx, project.id), "implementer")).toContain("flutter analyze");
+    expect(() => setProfileCommands(ctx, "shop", { platform: "android" })).toThrow();
+  });
+
   it("プロファイルが無ければ直せない", async () => {
     const { setProfileCommands } = await import("../src/orchestrator/projects.ts");
     const ctx = testContext(new ScriptedRunner({ profiler: () => ({ status: "failed", error: "x" }) }));

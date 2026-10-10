@@ -82,9 +82,11 @@ export function taskPrompt(ctx: AppContext, task: Task, role: PromptRole, extra:
     ...(profile
       ? [
           "## プロファイルのコマンド(リポジトリのルートで実行)",
+          ...(profile.platform === "flutter" ? ["- 種類: Flutter(iOS)"] : []),
           `- 依存の準備: ${profile.commands.install ?? "なし"}(実装者は worktree で最初に1回、依存を変えたら再度実行する。テストの再実行では実行しない)`,
           `- ビルド: ${profile.commands.build ?? "なし"}`,
           `- テスト: ${profile.commands.test ?? "なし"}`,
+          ...(profile.commands.analyze ? [`- 静的解析: ${profile.commands.analyze}`] : []),
           `- 起動: ${profile.commands.start ?? "なし"}(確認URL: ${profile.startUrl ?? "なし"})`,
           "",
         ]

@@ -19,10 +19,12 @@ import {
 function printCommands(p: Profile): void {
   console.log("  役割に渡すコマンド(agent-crew project set で直す):");
   for (const [label, v] of [
+    ["種類", p.platform ?? "web"],
     ["依存の準備", p.commands.install],
     ["ビルド", p.commands.build],
     ["テスト", p.commands.test],
     ["起動", p.commands.start],
+    ["静的解析", p.commands.analyze ?? null],
     ["確認URL", p.startUrl],
   ] as const) console.log(`    ${label}: ${v ?? "なし"}`);
 }
@@ -149,8 +151,10 @@ export function registerProjectCommands(program: Command): void {
     .option("--test <cmd>", "全テスト(テストの再実行に使う)")
     .option("--start <cmd>", "起動(QA が 127.0.0.1 で起動する)")
     .option("--start-url <url>", "起動後に確認する URL")
+    .option("--analyze <cmd>", "静的解析(flutter analyze など)")
+    .option("--platform <kind>", "アプリの種類(web / flutter)")
     .option("--role <role>", "直すリポジトリの役目(既定は1つ目)")
-    .action((name: string, o: { install?: string; build?: string; test?: string; start?: string; startUrl?: string; role?: string }) => {
+    .action((name: string, o: { install?: string; build?: string; test?: string; start?: string; startUrl?: string; analyze?: string; platform?: string; role?: string }) => {
       const ctx = createAppContext();
       try {
         const { role, ...patch } = o;

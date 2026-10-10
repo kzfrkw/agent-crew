@@ -7,6 +7,7 @@ import { z } from "zod";
 
 /** プロジェクトプロファイル(リポジトリ単位。フェーズ1は1リポジトリなので全体の項目も含む) */
 export const ProfileSchema = z.object({
+  platform: z.enum(["web", "flutter"]).default("web").describe("アプリの種類。pubspec.yaml があれば flutter(フェーズ6)"),
   testInfra: z.enum(["present", "insufficient", "none"]).describe("自動テストの基盤があるか"),
   testInfraNotes: z.string().describe("テスト基盤の種類と、不足している点"),
   conventions: z.string().describe("コーディング規約・構成の要点"),
@@ -16,10 +17,12 @@ export const ProfileSchema = z.object({
     build: z.string().nullable(),
     test: z.string().nullable().describe("全テストを実行するコマンド。終了コードで合否が分かること"),
     start: z.string().nullable().describe("アプリを起動するコマンド(127.0.0.1 で待ち受けること)"),
+    analyze: z.string().nullable().default(null).describe("静的解析のコマンド(flutter analyze など。無ければ null)"),
   }),
   startUrl: z.string().nullable().describe("起動後に確認するURL(http://127.0.0.1:<port>/ など)"),
 });
-export type Profile = z.infer<typeof ProfileSchema>;
+/** DB に残るプロファイル。フェーズ6より前のものは platform / commands.analyze を持たない(読むときは platformOf など既定値で補う) */
+export type Profile = z.input<typeof ProfileSchema>;
 
 const PlannerExtra = z.object({
   acceptanceCriteria: z.array(z.string()).describe("受け入れ条件(plan.md と同じもの)"),

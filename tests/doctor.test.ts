@@ -12,6 +12,7 @@ function probe(over: Partial<Probe> & { outputs?: Record<string, string | null> 
     "xcodebuild -version": "Xcode 26.4",
     "flutter --version": "Flutter 3.40.0",
     "maestro --version": null,
+    "xcrun simctl list runtimes": "== Runtimes ==\niOS 26.4 (26.4 - 23E000) - com.apple.CoreSimulator.SimRuntime.iOS-26-4",
     ...over.outputs,
   };
   return {
@@ -95,6 +96,13 @@ describe("doctor のチェック", () => {
   it("サンドボックスが使えなければエラー", () => {
     expect(find(runChecks(probe({ exists: () => false })), "sandbox").level).toBe("error");
     expect(find(runChecks(probe({ platform: "win32" })), "sandbox").level).toBe("error");
+  });
+
+  it("iOS のシミュレータの実行環境があれば ok、無ければモバイルの QA を無効として info(フェーズ6)", () => {
+    expect(find(runChecks(probe()), "tool:simctl").level).toBe("ok");
+    expect(find(runChecks(probe({ outputs: { "xcrun simctl list runtimes": "== Runtimes ==\n" } })), "tool:simctl").level).toBe("info");
+    expect(find(runChecks(probe({ outputs: { "xcrun simctl list runtimes": null } })), "tool:simctl").level).toBe("info");
+    expect(find(runChecks(probe({ platform: "linux" })), "tool:simctl").level).toBe("info");
   });
 
   it("任意の道具が無ければ、その機能を無効として info", () => {
