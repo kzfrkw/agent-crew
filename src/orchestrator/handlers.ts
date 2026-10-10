@@ -1,6 +1,6 @@
 import { appendFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { addApproval, addEvent, listEvents, setTaskDesign, getRepo, getRepoProfile, listTaskRepos, listValidApprovals, setProjectProfile, setRepoProfile, type Task } from "../db/store.ts";
+import { addApproval, addEvent, listEvents, listRepos, setTaskDesign, setTaskRepos, getRepo, getRepoProfile, listTaskRepos, listValidApprovals, setProjectProfile, setRepoProfile, type Task } from "../db/store.ts";
 import type { Judgment, Profile } from "../roles/schemas.ts";
 import { changedFiles, commitsSince, containsRef, diffFromBase, diffStat, hasTrackedChanges, headSha, isDirty, mergeBase } from "../git/worktree.ts";
 import { detectTestChanges, renderTestChanges } from "./test-changes.ts";
@@ -35,13 +35,27 @@ export function primaryRepo(ctx: AppContext, task: Task) {
 }
 
 const planner: Handler = async (ctx, task) => {
-  const tr = primaryRepo(ctx, task);
   const dir = taskDir(ctx.home, task.id);
-  const r = await invokeRole(ctx, { roleName: "planner", taskId: task.id, cwd: tr.worktreePath, artifactsDir: dir, prompt: taskPrompt(ctx, task, "planner") });
+  mkdirSync(dir, { recursive: true });
+  const repos = listRepos(ctx.db, task.projectId);
+  const multi = repos.length > 1;
+  // 複数リポジトリでは worktree がまだ無い(計画で決める)。作業場所は成果物ディレクトリで、各リポジトリの本体を読む
+  const cwd = multi ? dir : primaryRepo(ctx, task).worktreePath;
+  const r = await invokeRole(ctx, { roleName: "planner", taskId: task.id, cwd, artifactsDir: dir, prompt: taskPrompt(ctx, task, "planner") });
   if (r.ok) {
     addEvent(ctx.db, { taskId: task.id, runId: r.runId, kind: "plan", payload: r.extra });
     const d = r.extra.design as { architect: boolean; designer: boolean };
-    setTaskDesign(ctx.db, task.id, { architect: d.architect, designer: d.designer });
+    let architect = d.architect;
+    if (multi && r.verdict === "ready") {
+      const chosen = (r.extra.repos as string[] | undefined) ?? [];
+      const unknown = chosen.filter((role) => !repos.some((x) => x.role === role));
+      if (chosen.length === 0) return stop(`planner: 変更するリポジトリ(repos)を返しませんでした(詳細: ${dir}/plan.md)`);
+      if (unknown.length > 0) return stop(`planner: 無い役目のリポジトリを返しました: ${unknown.join(", ")}(役目: ${repos.map((x) => x.role).join(", ")})`);
+      setTaskRepos(ctx.db, task.id, [...new Set(chosen)]);
+      // 2つ以上のリポジトリを変えるなら、設計者は必須(インターフェース契約を書く。設計メモ 5.3)
+      if (new Set(chosen).size > 1) architect = true;
+    }
+    setTaskDesign(ctx.db, task.id, { architect, designer: d.designer });
   }
   return outcomeOf(r, "planner", `${dir}/plan.md`);
 };

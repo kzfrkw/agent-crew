@@ -1,9 +1,9 @@
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { addApproval, listTaskRepos } from "../db/store.ts";
+import { addApproval, getTask, listTaskRepos } from "../db/store.ts";
 import { headSha } from "../git/worktree.ts";
 import type { AppContext } from "./context.ts";
-import { applyEvent } from "./engine.ts";
+import { applyEvent, ensureWorktrees } from "./engine.ts";
 import type { DesignPlan } from "./transitions.ts";
 import { taskDir } from "./paths.ts";
 
@@ -19,6 +19,13 @@ export function appendHumanNote(ctx: AppContext, taskId: number, heading: string
 
 /** design は計画の承認のときだけ使う(設計の段で動かす役割の、人による上書き) */
 export function approveTask(ctx: AppContext, taskId: number, kind: "plan" | "design" | "final", comment?: string, design?: DesignPlan): void {
+  const task = getTask(ctx.db, taskId);
+  if (!task) throw new Error(`タスク ${taskId} がありません`);
+  if (kind === "plan" && task.repos && task.state === "awaiting_plan_approval") {
+    // 複数リポジトリ: 2つ以上を変えるなら設計者は必須(人も外せない)。選ばれたリポジトリだけ worktree を作る(設計メモ v0.14)
+    if (task.repos.length > 1) design = { ...(design ?? task.design), architect: true };
+    ensureWorktrees(ctx, task, task.repos);
+  }
   applyEvent(ctx, taskId, { type: "approve", kind, ...(kind === "plan" && design ? { design } : {}) });
   if (kind === "final") {
     // 最終確認の承認は、承認した時点のコミットに紐づける

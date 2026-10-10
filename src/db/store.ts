@@ -132,6 +132,8 @@ export type Task = {
   reviewRounds: number;
   /** 設計の段で動かす役割(フェーズ4) */
   design: { architect: boolean; designer: boolean };
+  /** 計画で決まった、変更するリポジトリの役目(実装する順。フェーズ5)。1リポジトリのプロジェクトでは null */
+  repos: string[] | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -149,6 +151,7 @@ const toTask = (r: Row): Task => ({
   assignee: (r.assignee as Task["assignee"]) ?? null,
   reviewRounds: r.review_rounds as number,
   design: { architect: r.design_architect === 1, designer: r.design_designer === 1 },
+  repos: r.repos_json ? (JSON.parse(r.repos_json as string) as string[]) : null,
   createdAt: r.created_at as string,
   updatedAt: r.updated_at as string,
 });
@@ -201,6 +204,11 @@ export function updateTaskState(
     now(),
     id,
   );
+}
+
+/** 計画で決まった、変更するリポジトリの役目を記録する(実装する順) */
+export function setTaskRepos(db: Db, id: number, roles: string[]): void {
+  db.prepare("UPDATE tasks SET repos_json = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(roles), now(), id);
 }
 
 /** 設計の段で動かす役割を記録する(プランナーの判定)。状態は変えない */

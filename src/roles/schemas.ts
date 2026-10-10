@@ -31,6 +31,10 @@ const PlannerExtra = z.object({
       reason: z.string().describe("判断の理由(1〜2文)"),
     })
     .describe("実装の前に、設計の段で動かす役割(人が計画の承認時に上書きできる)"),
+  repos: z
+    .array(z.string())
+    .optional()
+    .describe("複数リポジトリのプロジェクトのときだけ: 変更するリポジトリの役目を、実装する順に(例: [\"backend\", \"frontend\"])。1リポジトリなら省く"),
 });
 
 const ImplementerExtra = z.object({

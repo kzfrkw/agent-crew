@@ -43,6 +43,19 @@ export function taskPrompt(ctx: AppContext, task: Task, role: PromptRole, extra:
     "",
     task.body.trim() || "(本文なし)",
     "",
+    ...(repos.length > 1
+      ? [
+          "## リポジトリ(このプロジェクトは複数のリポジトリのまとまり)",
+          ...repos.map((r) => {
+            const tr = trs.find((x) => x.repoId === r.id);
+            const planned = task.repos?.includes(r.role);
+            return `- [${r.role}] 本体: ${r.path}(既定ブランチ ${r.defaultBranch})${tr ? `、このタスクの worktree: ${tr.worktreePath}` : ""}${task.repos ? (planned ? "(変更する)" : "(変更しない)") : ""}`;
+          }),
+          ...(task.repos ? [`- 実装する順: ${task.repos.join(" → ")}`] : []),
+          ...repos.flatMap((r, i) => (i === 0 ? [] : ref(`[${r.role}] のプロファイル`, join(pdir, "repos", r.role, "profile.md")))),
+          "",
+        ]
+      : []),
     "## 作業場所",
     ...trs.map((tr) => {
       const repo = repos.find((r) => r.id === tr.repoId);
@@ -87,6 +100,7 @@ const ROLE_INSTRUCTIONS: Record<PromptRole, string[]> = {
   planner: [
     "- 成果物ディレクトリに `plan.md` を書き、判定を返してください。人のコメントがあれば、それを反映して計画を直してください",
     "- 実装の前に設計者・デザイナーを動かすべきかを `design` で判定してください(構造やインターフェースの判断があれば設計者、画面・見た目・操作の流れが変わるならデザイナー)",
+    "- 複数リポジトリのプロジェクトでは、変更するリポジトリの役目を、実装する順に `repos` で返してください(API を先に、画面を後に、など)。片方だけで済むならそれだけ。2つ以上なら設計者がインターフェース契約を書きます",
   ],
   architect: ["- `plan.md` と既存のコードを読み、成果物ディレクトリに `design.md` を書いてください。コードは変更しないでください"],
   designer: ["- `plan.md`(と、あれば `design.md`)と既存の UI を読み、成果物ディレクトリに `ui-spec.md` を書いてください。コードは変更しないでください"],

@@ -116,4 +116,8 @@ export const MIGRATIONS: string[] = [
   `
   ALTER TABLE projects ADD COLUMN wiring_json TEXT;
   `,
+  // v4(フェーズ5): 計画で決まった、変更するリポジトリの役目(実装する順。JSON の配列)。1リポジトリのプロジェクトでは null
+  `
+  ALTER TABLE tasks ADD COLUMN repos_json TEXT;
+  `,
 ];

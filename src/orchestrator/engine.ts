@@ -83,11 +83,13 @@ export function runnableTasks(ctx: AppContext): Task[] {
 }
 
 /** タスクのworktreeを用意する(プロジェクトの全リポジトリ。フェーズ1は1つ) */
-export function ensureWorktrees(ctx: AppContext, task: Task): void {
-  if (listTaskRepos(ctx.db, task.id).length > 0) return;
+export function ensureWorktrees(ctx: AppContext, task: Task, roles?: string[]): void {
   const project = getProject(ctx.db, task.projectId)!;
+  const existing = new Set(listTaskRepos(ctx.db, task.id).map((tr) => tr.repoId));
   const branch = branchNameFor(task.id, task.title);
-  for (const repo of listRepos(ctx.db, project.id)) {
+  const repos = listRepos(ctx.db, project.id).filter((r) => roles === undefined || roles.includes(r.role));
+  for (const repo of repos) {
+    if (existing.has(repo.id)) continue;
     const worktreePath = worktreePathFor(ctx.home, { project: project.name, taskId: task.id, repoRole: repo.role });
     const { baseSha } = createWorktree({ home: ctx.home, repoPath: repo.path, worktreePath, branch, base: repo.defaultBranch, env: ctx.gitEnv });
     attachRepoToTask(ctx.db, { taskId: task.id, repoId: repo.id, worktreePath, branchName: branch, baseSha });
@@ -128,7 +130,8 @@ async function stepTaskInner(ctx: AppContext, taskId: number, signal: AbortSigna
   };
   try {
     if (task.state === "queued") {
-      ensureWorktrees(ctx, task);
+      // 複数リポジトリのプロジェクトは、計画で変更するリポジトリを決めてから worktree を作る(設計メモ v0.14)
+      if (listRepos(ctx.db, task.projectId).length === 1) ensureWorktrees(ctx, task);
       applyEvent(ctx, taskId, { type: "start" });
       return;
     }
