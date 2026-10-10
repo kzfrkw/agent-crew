@@ -79,7 +79,9 @@ function ProjectView({ d }: { d: ProjectDetail }) {
               </dl>
             ))}
           </div>
-          <ProfileCommands name={p.name} profile={d.profile} />
+          {d.repos.map((r) => (
+            <ProfileCommands key={r.id} name={p.name} role={d.repos.length > 1 ? r.role : undefined} profile={r.profile ?? d.profile} env={r.env} />
+          ))}
           <div className="rounded-lg border bg-card">
             <h3 className="mt-0 mb-0 px-4 pt-3 text-xs font-semibold text-muted-foreground">プロジェクト把握担当の実行</h3>
             <RunTable runs={d.runs} compact />
@@ -93,7 +95,7 @@ function ProjectView({ d }: { d: ProjectDetail }) {
 type ProfileJson = { commands?: Record<"install" | "build" | "test" | "start", string | null>; startUrl?: string | null } | null;
 
 /** 役割に渡すコマンド。正本は DB のプロファイル(profile.md を手で直しても反映されない)ので、直し方を添える */
-function ProfileCommands({ name, profile }: { name: string; profile: unknown }) {
+function ProfileCommands({ name, role, profile, env = {} }: { name: string; role?: string; profile: unknown; env?: Record<string, string> }) {
   const p = profile as ProfileJson;
   if (!p?.commands) return null;
   const rows: [string, string | null | undefined][] = [
@@ -105,7 +107,7 @@ function ProfileCommands({ name, profile }: { name: string; profile: unknown }) 
   ];
   return (
     <div className="rounded-lg border bg-card px-4 py-3">
-      <h3 className="mt-0 mb-2 text-xs font-semibold text-muted-foreground">役割に渡すコマンド</h3>
+      <h3 className="mt-0 mb-2 text-xs font-semibold text-muted-foreground">役割に渡すコマンド{role && <span className="font-mono">[{role}]</span>}</h3>
       <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
         {rows.map(([label, v]) => (
           <div key={label} className="contents">
@@ -114,8 +116,18 @@ function ProfileCommands({ name, profile }: { name: string; profile: unknown }) 
           </div>
         ))}
       </dl>
+      {Object.keys(env).length > 0 && (
+        <div className="mt-2 text-xs">
+          <span className="text-muted-foreground">起動のつなぎ方: </span>
+          {Object.entries(env).map(([k, v]) => (
+            <code key={k} className="mr-2 font-mono break-all">
+              {k}={v}
+            </code>
+          ))}
+        </div>
+      )}
       <p className="mt-2 mb-0 text-xs text-muted-foreground">
-        直すとき: <code className="font-mono break-all">agent-crew project set {name} --start "..."</code>(profile.md を直しても反映されません)
+        直すとき: <code className="font-mono break-all">agent-crew project set {name}{role ? ` --role ${role}` : ""} --start "..."</code>(profile.md を直しても反映されません)
       </p>
     </div>
   );

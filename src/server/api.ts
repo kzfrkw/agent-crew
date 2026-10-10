@@ -9,6 +9,8 @@ import {
   getArtifact,
   getProject,
   getProjectProfile,
+  getProjectWiring,
+  getRepoProfile,
   getRun,
   getTask,
   listAllApprovals,
@@ -307,7 +309,14 @@ function projectDetail(home: string, db: Db, id: number): ProjectDetail | undefi
   const costs = costByTask(db);
   return {
     project: projectSummary(p),
-    repos: listRepos(db, id).map((r) => ({ id: r.id, path: r.path, role: r.role, defaultBranch: r.defaultBranch })),
+    repos: listRepos(db, id).map((r) => ({
+      id: r.id,
+      path: r.path,
+      role: r.role,
+      defaultBranch: r.defaultBranch,
+      profile: getRepoProfile(db, r.id),
+      env: getProjectWiring(db, id)[r.role] ?? {},
+    })),
     profile: getProjectProfile(db, id),
     profileMd: markdownBody(readText(join(projectDir(home, id), "profile.md"))),
     decisionsMd: readText(join(projectDir(home, id), "decisions.md")),

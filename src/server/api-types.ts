@@ -177,7 +177,8 @@ export type RunDetail = {
 
 export type ProjectDetail = {
   project: ProjectSummary;
-  repos: { id: number; path: string; role: string; defaultBranch: string }[];
+  /** リポジトリごとのプロファイル(役割に渡すコマンド)と、起動のつなぎ方の環境変数(フェーズ5) */
+  repos: { id: number; path: string; role: string; defaultBranch: string; profile: unknown; env: Record<string, string> }[];
   profile: unknown;
   profileMd: string | null;
   decisionsMd: string | null;
