@@ -138,3 +138,10 @@
 - [backend] 注文に status(received / shipped)を持たせ、HTTP 層のテストを追加(agent-crew implementer)
 - [frontend] 注文の一覧に状態の列を追加する(agent-crew implementer)
 
+
+## 2026-10-10T23:31Z Flutter / iOS シミュレータ(モデル: sonnet)— 失敗(デザインレビューで止まった)
+
+- 把握担当・実装者・QA は MCP の橋で flutter test / analyze を実行できた(実装者はテスト先行: 失敗 → 成功)。テストの再実行はツールが行い成功。費用 約$0.95、約5分
+- 撮影で、ライトの画像に integration_test の起動直後の画面(「Test starting...」)が写った。デザインレビュー担当がそれを見つけて need_human を返した(正しい振る舞い)
+- 原因: iOS では描画が1フレーム遅れることがあり、`pumpAndSettle` の直後に `takeScreenshot` すると前の画面が写ることがある(同じ条件で2回再現を試みたが再現せず、間欠的)
+- 対策: 撮る前に `pumpAndSettle` → 800ms 待つ → `pump` を、同梱サンプルの `screens_test.dart` と実装者の決まりに入れた
