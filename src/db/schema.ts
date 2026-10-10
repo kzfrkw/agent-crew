@@ -112,4 +112,8 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE tasks ADD COLUMN design_architect INTEGER NOT NULL DEFAULT 0;
   ALTER TABLE tasks ADD COLUMN design_designer INTEGER NOT NULL DEFAULT 0;
   `,
+  // v3(フェーズ5): 起動のつなぎ方。役目ごとの環境変数({ [role]: { KEY: "VALUE" } })
+  `
+  ALTER TABLE projects ADD COLUMN wiring_json TEXT;
+  `,
 ];

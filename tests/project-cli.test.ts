@@ -42,5 +42,14 @@ describe("agent-crew project", () => {
     const set = cli(home, "project", "set", "shop", "--test", "npm test");
     expect(set.code).toBe(1);
     expect(set.out).toContain("プロファイルがありません");
+
+    // 複数リポジトリ: 追加と、つなぎ方の設定(知らない役目は理由を出して失敗)
+    const { repo: back } = makeRepo();
+    const addRepo = cli(home, "project", "add-repo", "shop", back, "--role", "backend");
+    expect(addRepo.out).toContain("追加しました: shop [backend]");
+    expect(cli(home, "project", "show", "shop").out).toContain(back);
+    const wire = cli(home, "project", "wire", "shop", "--role", "nope", "--env", "A=1");
+    expect(wire.code).toBe(1);
+    expect(wire.out).toContain("nope");
   }, 60_000);
 });

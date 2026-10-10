@@ -64,6 +64,18 @@ export function setAllowWithoutTests(db: Db, id: number, allow: boolean): void {
   db.prepare("UPDATE projects SET allow_without_tests = ?, updated_at = ? WHERE id = ?").run(allow ? 1 : 0, now(), id);
 }
 
+export type Wiring = Record<string, Record<string, string>>;
+
+/** 起動のつなぎ方(役目ごとの環境変数。値に {url:<役目>} / {port:<役目>} を使える) */
+export function getProjectWiring(db: Db, id: number): Wiring {
+  const r = db.prepare("SELECT wiring_json FROM projects WHERE id = ?").get(id) as { wiring_json: string | null } | undefined;
+  return r?.wiring_json ? (JSON.parse(r.wiring_json) as Wiring) : {};
+}
+
+export function setProjectWiring(db: Db, id: number, wiring: Wiring): void {
+  db.prepare("UPDATE projects SET wiring_json = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(wiring), now(), id);
+}
+
 export function getProjectProfile(db: Db, id: number): unknown {
   const r = db.prepare("SELECT profile_json FROM projects WHERE id = ?").get(id) as { profile_json: string | null } | undefined;
   return r?.profile_json ? JSON.parse(r.profile_json) : null;
