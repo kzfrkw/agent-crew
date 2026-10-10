@@ -6,7 +6,7 @@ import type { TaskState } from "./states.ts";
  * 状態遷移は役割の「判定の列挙値」と人の操作だけを見て決める。
  */
 
-export type Role = "planner" | "architect" | "designer" | "implementer" | "reviewer" | "qa" | "integrator";
+export type Role = "planner" | "architect" | "designer" | "implementer" | "reviewer" | "qa" | "design_reviewer" | "integrator";
 
 /** 設計の段で動かす役割(プランナーが判定し、計画の承認時に人が上書きできる) */
 export type DesignPlan = { architect: boolean; designer: boolean };
@@ -18,6 +18,7 @@ const ROLE_BY_STATE: Partial<Record<TaskState, Role>> = {
   implementing: "implementer",
   reviewing: "reviewer",
   qa: "qa",
+  design_reviewing: "design_reviewer",
   integrating: "integrator",
 };
 
@@ -36,14 +37,16 @@ const VERDICTS: Record<Role, Record<string, Outcome>> = {
   designer: { ready: { to: "awaiting_design_approval" }, need_human: "hold" },
   implementer: { done: { to: "reviewing" }, blocked: "hold", need_human: "hold" },
   reviewer: { approve: { to: "qa" }, changes_requested: "bounce", need_human: "hold" },
+  // QA の合格は、デザイナーを動かしたタスクならデザインレビューへ(遷移の中で決める)
   qa: { passed: { to: "awaiting_final_approval" }, failed: "bounce", need_human: "hold" },
+  design_reviewer: { approve: { to: "awaiting_final_approval" }, changes_requested: "bounce", need_human: "hold" },
   integrator: { done: { to: "done" }, blocked: "hold" },
 };
 
 /** 人が変更して戻したとき、レビューからやり直す対象になる段階(実装が存在する段階) */
-const AFTER_IMPLEMENTATION: TaskState[] = ["implementing", "reviewing", "qa", "awaiting_final_approval", "integrating"];
+const AFTER_IMPLEMENTATION: TaskState[] = ["implementing", "reviewing", "qa", "design_reviewing", "awaiting_final_approval", "integrating"];
 /** ベースを取り込んだとき、レビューからやり直す段階(レビュー済みの内容が変わるため) */
-const REVIEWED: TaskState[] = ["reviewing", "qa", "awaiting_final_approval", "integrating"];
+const REVIEWED: TaskState[] = ["reviewing", "qa", "design_reviewing", "awaiting_final_approval", "integrating"];
 const RESTART_REVIEW: Effect[] = [{ type: "invalidate_approvals", kinds: ["review", "qa", "final"] }];
 
 export type TaskEvent =
@@ -137,6 +140,7 @@ export function transition(t: TaskSnapshot, e: TaskEvent, c: TransitionContext):
       if (!outcome) fail(`${e.role} は ${e.verdict} を返せません`);
       if (outcome === "bounce") return bounce();
       if (outcome === "hold") return hold(t.state);
+      if (e.role === "qa" && e.verdict === "passed" && t.design?.designer) return to("design_reviewing");
       return to(outcome!.to);
     }
 

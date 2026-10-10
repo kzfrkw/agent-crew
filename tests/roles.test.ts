@@ -64,14 +64,17 @@ describe("loadRoles", () => {
 describe("同梱の役割定義", () => {
   const roles = loadRoles(defaultRolesDir());
 
-  it("役割がそろっている(フェーズ4で設計者・デザイナーを追加)", () => {
-    expect([...roles.keys()].sort()).toEqual(["architect", "auditor", "designer", "implementer", "integrator", "planner", "profiler", "qa", "reviewer", "verifier"]);
+  it("役割がそろっている(フェーズ4で設計者・デザイナー・デザインレビュー担当を追加)", () => {
+    expect([...roles.keys()].sort()).toEqual(["architect", "auditor", "design_reviewer", "designer", "implementer", "integrator", "planner", "profiler", "qa", "reviewer", "verifier"]);
   });
 
   it("判定の列挙値が状態遷移と一致している", () => {
     expect(roles.get("planner")!.verdicts).toEqual(["ready", "need_human"]);
     expect(roles.get("architect")!.verdicts).toEqual(["ready", "need_human"]);
     expect(roles.get("designer")!.verdicts).toEqual(["ready", "need_human"]);
+    expect(roles.get("design_reviewer")!.verdicts).toEqual(["approve", "changes_requested", "need_human"]);
+    // デザインレビュー担当は画像を読むだけ(Bash なし)
+    expect(roles.get("design_reviewer")!.tools).not.toContain("Bash");
     expect(roles.get("implementer")!.verdicts).toEqual(["done", "blocked", "need_human"]);
     expect(roles.get("reviewer")!.verdicts).toEqual(["approve", "changes_requested", "need_human"]);
     expect(roles.get("auditor")!.verdicts).toEqual(["upheld", "overturned", "need_human"]);

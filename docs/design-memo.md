@@ -370,6 +370,7 @@ Claude Codeのサンドボックス(Bashコマンドを、OSの機能で囲い�
   - Chrome が無い・撮影に失敗したときは、警告を残してデザインレビューを飛ばさず、人の判断待ちにする
 - **デザインレビュー(役割 design-reviewer)**: 撮影した画像と `ui-spec.md`、デザイン方針(`design-guide.md`)を見比べ、`design-review.md` に approve / changes_requested / need_human を書く。差し戻しは実装へ(差し戻しの回数に数える)。画像は成果物ディレクトリにあり、Read で読む(書き込みは成果物ディレクトリだけ、Bash なし)
 - **GUI**: パイプラインに「デザインレビュー」(デザイナーを動かさないタスクでは飛ばす)。タスク詳細に撮影した画面を並べ、最終確認の判断材料にする
+- 進捗(2026-10-10): 撮影の仕組み(`src/browser/`)、状態 design_reviewing、役割 design_reviewer、QA の `screens`、GUI の撮影した画面を実装。撮影は `AppContext.capture` で差し替えられる(テストは実際の Chrome を使わない)。`config.json` の `chromePath` で Chrome を指定できる。残り: 実機での確認
 
 ### 4b(自己適用)で見つかったことと直したこと(2026-10-10)
 - テストの再実行(verifier)では依存の準備(install)をしない。node_modules がある状態での入れ直しがサンドボックスに拒否され(EPERM)、しかも途中で失敗して `node_modules/.bin` を壊した。準備は worktree に書ける実装者の責任

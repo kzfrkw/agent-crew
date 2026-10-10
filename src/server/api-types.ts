@@ -134,6 +134,9 @@ export type ApprovalView = {
 
 export type WorktreeView = { repoRole: string; worktreePath: string; branchName: string; baseSha: string };
 
+/** 実装後のデザインレビューのために撮った画面(4c)。撮れなかったものは url が null で、error に理由 */
+export type ScreenshotView = { name: string; path: string; width: number; scheme: "light" | "dark"; file: string; url: string | null; error?: string };
+
 export type TaskDetail = {
   task: TaskSummary & { body: string; sourceKind: string; sourceUrl: string | null };
   project: ProjectSummary;
@@ -145,6 +148,8 @@ export type TaskDetail = {
   totals: { costUsd: number | null; durationSec: number };
   nextActions: NextAction[];
   runActive: boolean;
+  /** 最新の撮影の画面(デザインレビューの判断材料。無ければ空) */
+  screenshots: ScreenshotView[];
   /** このサーバーで操作できるか(serve --no-worker の読み取り専用なら false。GUI はボタンの代わりに CLI のコマンドを出す) */
   operable: boolean;
 };

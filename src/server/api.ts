@@ -27,7 +27,7 @@ import {
 } from "../db/store.ts";
 import { latestReason, runActive } from "../orchestrator/engine.ts";
 import { attentionOf, nextActions } from "../orchestrator/next-actions.ts";
-import { projectDir, runDir } from "../orchestrator/paths.ts";
+import { projectDir, runDir, taskDir } from "../orchestrator/paths.ts";
 import { STATE_LABELS } from "../orchestrator/states.ts";
 import type {
   ArtifactDetail,
@@ -38,6 +38,7 @@ import type {
   ProjectSummary,
   RunDetail,
   RunSummary,
+  ScreenshotView,
   TaskDetail,
   TaskSummary,
   WorkerView,
@@ -252,8 +253,16 @@ function taskDetail(home: string, db: Db, id: number, operable: boolean): TaskDe
     },
     nextActions: nextActions(db, t),
     runActive: runActive(db, id),
+    screenshots: screenshotsOf(home, db, id),
     operable,
   };
+}
+
+/** 最新の撮影(screens のイベント)の画面。画像は成果物ディレクトリの screens/ にある */
+function screenshotsOf(home: string, db: Db, taskId: number): ScreenshotView[] {
+  const ev = queryEvents(db, { taskId, limit: 1000 }).filter((e) => e.kind === "screens").at(-1);
+  const shots = ((ev?.payload as { shots?: Omit<ScreenshotView, "url">[] } | undefined)?.shots ?? []);
+  return shots.map((s) => ({ ...s, url: s.error ? null : fileUrl(home, join(taskDir(home, taskId), "screens", s.file)) }));
 }
 
 function artifactDetail(home: string, db: Db, id: number): ArtifactDetail | undefined {

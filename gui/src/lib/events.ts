@@ -128,6 +128,17 @@ export function describeEvent(e: EventView): EventLine {
         detail: list.map((x) => `${x.pid} ${x.command}`).join("\n"),
       };
     }
+    case "screens": {
+      const shots: P[] = Array.isArray(p.shots) ? p.shots : [];
+      const failed = shots.filter((s) => s.error).length;
+      return {
+        tone: failed ? "attention" : "neutral",
+        icon: "📷",
+        title: "画面の撮影",
+        text: `${shots.length} 枚${failed ? `(撮れなかったもの ${failed} 枚)` : ""}`,
+        detail: shots.map((s) => `${s.file}${s.error ? `: ${s.error}` : ""}`).join("\n"),
+      };
+    }
     case "test_command":
       return { tone: "neutral", icon: "▸", title: "テストのコマンド", text: String(p.command ?? "") };
     case "integrated":

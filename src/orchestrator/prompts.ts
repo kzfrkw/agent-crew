@@ -62,6 +62,7 @@ export function taskPrompt(ctx: AppContext, task: Task, role: PromptRole, extra:
     ...ref("レビュー結果", join(tdir, "review.md")),
     ...ref("Must 指摘の監査結果(invalid とされた指摘は対応不要)", join(tdir, "audit.md")),
     ...ref("QA結果", join(tdir, "qa-report.md")),
+    ...ref("デザインレビューの結果", join(tdir, "design-review.md")),
     ...ref("人の変更(人が引き取って直した内容)", join(tdir, "human-changes.md")),
     ...ref("人からのコメント・回答(最優先で従う)", join(tdir, "human-notes.md")),
     "",
@@ -98,6 +99,10 @@ const ROLE_INSTRUCTIONS: Record<PromptRole, string[]> = {
     "- `design.md` / `ui-spec.md` があれば、実装がそれと食い違っていないかも確認してください",
   ],
   auditor: ["- 下の Must 指摘を、実際のコードを読んで1件ずつ検証し、成果物ディレクトリに `audit.md` を書いてください。コードは変更しないでください"],
-  qa: ["- 受け入れ条件を動くアプリで確認し、成果物ディレクトリに `qa-report.md` を書いてください"],
+  qa: [
+    "- 受け入れ条件を動くアプリで確認し、成果物ディレクトリに `qa-report.md` を書いてください",
+    "- `ui-spec.md` があるときは、実装後のデザインレビューのために、変更された画面のパス(起動 URL からの相対。例 `/tasks/1`)を構造化出力の `screens` に入れてください(撮影はツールが行います)",
+  ],
+  design_reviewer: ["- 下のスクリーンショットを Read で見て、`ui-spec.md` とデザイン方針に照らし、成果物ディレクトリに `design-review.md` を書いてください"],
   integrator: ["- 成果物ディレクトリに `pr-draft.md` を書いてください。git の操作は行わないでください"],
 };

@@ -71,7 +71,16 @@ const DesignExtra = z.object({
   decisions: z.array(z.string()).describe("設計判断ログに残す、このプロジェクトの重要な判断(1件1文)。なければ空配列"),
 });
 
+/** QA: 実装後のデザインレビューで撮ってほしい画面(ui-spec.md の画面。UI を伴うタスクのとき) */
+const QaExtra = z.object({
+  screens: z
+    .array(z.object({ path: z.string().describe("起動 URL からのパス(例: /tasks/1)"), note: z.string().describe("何の画面か") }))
+    .optional()
+    .describe("UI 仕様(ui-spec.md)があるとき、変更された画面を撮るためのパスの一覧。なければ省く"),
+});
+
 export const EXTRA_SCHEMAS: Record<string, z.ZodObject> = {
+  qa: QaExtra,
   architect: DesignExtra,
   designer: DesignExtra,
   implementer: ImplementerExtra,

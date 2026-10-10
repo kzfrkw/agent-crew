@@ -54,6 +54,7 @@ describe("pipelineOf", () => {
       "実装:current",
       "レビュー:todo",
       "QA:todo",
+      "デザインレビュー:skipped",
       "最終確認:todo",
       "統合:todo",
       "完了:todo",
@@ -68,7 +69,7 @@ describe("pipelineOf", () => {
 
   it("承認待ちは、人の対応待ちとして印を付ける", () => {
     expect(labels("awaiting_plan_approval")[1]).toBe("計画の承認:blocked");
-    expect(labels("awaiting_final_approval")[7]).toBe("最終確認:blocked");
+    expect(labels("awaiting_final_approval")[8]).toBe("最終確認:blocked");
   });
 
   it("設計の段: 動かす段は通常どおり、デザイナーを動かさなければデザインの承認は飛ばす", () => {
@@ -77,6 +78,9 @@ describe("pipelineOf", () => {
     expect(pipelineOf("awaiting_design_approval", null, both)[3]!.status).toBe("blocked");
     expect(pipelineOf("implementing", null, { architect: true, designer: false }).map((s) => s.status).slice(2, 5)).toEqual(["done", "skipped", "current"]);
     expect(pipelineOf("needs_input", "designing", both)[2]!.status).toBe("blocked");
+    // デザインレビュー(QA の後)は、デザイナーを動かしたタスクだけ
+    expect(pipelineOf("design_reviewing", null, both)[7]).toMatchObject({ label: "デザインレビュー", status: "current" });
+    expect(pipelineOf("awaiting_final_approval", null, { architect: true, designer: false })[7]!.status).toBe("skipped");
   });
 
   it("完了はすべて済み(飛ばした段は飛ばしたまま)。待機は何も始まっていない", () => {
@@ -129,6 +133,11 @@ describe("describeEvent", () => {
     const d = describeEvent(ev("cleanup", { role: "qa", processes: [{ pid: 1, command: "node serve --port 4310" }] }));
     expect(d).toMatchObject({ tone: "attention", title: "後片付け(qa)", text: "残っていたプロセスを 1 件止めました" });
     expect(d.detail).toContain("node serve --port 4310");
+  });
+
+  it("撮影は枚数と、撮れなかった数で見せる", () => {
+    const d = describeEvent(ev("screens", { shots: [{ file: "a.png" }, { file: "b.png", error: "x" }] }));
+    expect(d).toMatchObject({ title: "画面の撮影", text: "2 枚(撮れなかったもの 1 枚)" });
   });
 
   it("知らない種類も落ちずに表示する", () => {

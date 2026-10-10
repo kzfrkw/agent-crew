@@ -7,6 +7,7 @@ import { Crumbs, Meta, PageTitle } from "../components/Layout.tsx";
 import { SectionHead } from "../components/Panel.tsx";
 import { Pipeline } from "../components/Pipeline.tsx";
 import { RunTable } from "../components/RunTable.tsx";
+import { Screenshots } from "../components/Screenshots.tsx";
 import { StateBadge, VerdictBadge } from "../components/StateBadge.tsx";
 import { Async, Empty } from "../components/Status.tsx";
 import { useApi, useEvents } from "../lib/api.ts";
@@ -49,6 +50,14 @@ function TaskView({ d, onDone }: { d: TaskDetail; onDone: () => void }) {
               <ArtifactList taskId={t.id} artifacts={d.artifacts} />
             </div>
           </section>
+          {d.screenshots.length > 0 && (
+            <section>
+              <SectionHead title="撮影した画面" note="実装後のデザインレビューの材料" />
+              <div className="rounded-lg border bg-card p-4">
+                <Screenshots shots={d.screenshots} />
+              </div>
+            </section>
+          )}
           <section>
             <SectionHead title="実行" note={d.runs.length} />
             <div className="rounded-lg border bg-card">

@@ -1,6 +1,6 @@
 import { appendFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { addApproval, addEvent, setTaskDesign, getRepo, getRepoProfile, listTaskRepos, listValidApprovals, setProjectProfile, setRepoProfile, type Task } from "../db/store.ts";
+import { addApproval, addEvent, listEvents, setTaskDesign, getRepo, getRepoProfile, listTaskRepos, listValidApprovals, setProjectProfile, setRepoProfile, type Task } from "../db/store.ts";
 import type { Judgment, Profile } from "../roles/schemas.ts";
 import { changedFiles, commitsSince, containsRef, diffFromBase, diffStat, hasTrackedChanges, headSha, isDirty, mergeBase } from "../git/worktree.ts";
 import { detectTestChanges, renderTestChanges } from "./test-changes.ts";
@@ -8,6 +8,9 @@ import { testCommandFor, verifyTests } from "./verify.ts";
 import type { AppContext } from "./context.ts";
 import { invokeRole, type InvokeResult } from "./invoke.ts";
 import { projectDir, taskDir } from "./paths.ts";
+import type { ScreenRequest } from "./context.ts";
+import { captureTaskScreens } from "./screens.ts";
+import type { Shot } from "../browser/chrome.ts";
 import { applyAudit, checkReviewConsistency, mustIndexes, type Finding } from "./review-findings.ts";
 import { taskPrompt } from "./prompts.ts";
 import type { Role, TaskEvent } from "./transitions.ts";
@@ -267,8 +270,45 @@ const qa: Handler = async (ctx, task) => {
   }
   if (r.ok && r.verdict === "passed") {
     addApproval(ctx.db, { taskId: task.id, repoId: tr.repoId, kind: "qa", result: "approved", commitSha: before });
+    // デザインレビューで撮る画面(UI を伴うタスクで QA が返したもの)
+    const screens = r.extra.screens as ScreenRequest[] | undefined;
+    if (screens?.length) addEvent(ctx.db, { taskId: task.id, runId: r.runId, kind: "qa_screens", payload: { screens } });
   }
   return outcomeOf(r, "qa", `${dir}/qa-report.md`);
+};
+
+/**
+ * 実装後のデザインレビュー(設計メモ v0.13、4c)。QA が返した画面をツールが撮り(アプリはツールの sandbox-exec の中、
+ * Chrome はサンドボックスの外)、デザインレビュー担当が画像と ui-spec.md を見比べる。撮れなければ、飛ばさず人の判断待ちにする
+ */
+const designReview: Handler = async (ctx, task) => {
+  const tr = primaryRepo(ctx, task);
+  const dir = taskDir(ctx.home, task.id);
+  const outDir = join(dir, "screens");
+  const requested = listEvents(ctx.db, task.id, 1000).filter((e) => e.kind === "qa_screens").at(-1)?.payload as { screens: ScreenRequest[] } | undefined;
+  const screens: ScreenRequest[] = requested?.screens?.length ? requested.screens : [{ path: "/", note: "トップ(QA が撮る画面を返さなかったため)" }];
+  let shots: Shot[];
+  try {
+    shots = await (ctx.capture ?? captureTaskScreens)(ctx, task, { worktree: tr.worktreePath, outDir, screens });
+  } catch (e) {
+    return stop(`画面を撮影できませんでした: ${(e as Error).message}`);
+  }
+  addEvent(ctx.db, { taskId: task.id, kind: "screens", payload: { shots } });
+  const ok = shots.filter((s) => !s.error);
+  if (ok.length === 0) return stop(`画面を撮影できませんでした: ${shots.map((s) => s.error).filter(Boolean).join(" / ") || "撮る画面がありません"}`);
+
+  const r = await invokeRole(ctx, {
+    roleName: "design_reviewer",
+    taskId: task.id,
+    cwd: tr.worktreePath,
+    artifactsDir: dir,
+    prompt: taskPrompt(ctx, task, "design_reviewer", [
+      "- スクリーンショット(幅 1280 はライトとダーク、390 は狭い画面):",
+      ...ok.map((s) => `  - ${join(outDir, s.file)}(${s.path}${screens.find((x) => x.path === s.path)?.note ? ` — ${screens.find((x) => x.path === s.path)!.note}` : ""}、幅 ${s.width}、${s.scheme === "dark" ? "ダーク" : "ライト"})`),
+      ...(shots.length > ok.length ? [`- 撮影できなかった画面: ${shots.filter((s) => s.error).map((s) => `${s.file}(${s.error})`).join("、")}`] : []),
+    ]),
+  });
+  return outcomeOf(r, "design_reviewer", `${dir}/design-review.md`);
 };
 
 const stop = (reason: string): HandlerOutcome => ({ event: { type: "run_error", reason }, reason });
@@ -317,4 +357,4 @@ const integrator: Handler = async (ctx, task) => {
 };
 
 /** 状態ごとの処理 */
-export const HANDLERS: Partial<Record<Role, Handler>> = { planner, architect: design, implementer, reviewer, qa, integrator };
+export const HANDLERS: Partial<Record<Role, Handler>> = { planner, architect: design, implementer, reviewer, qa, design_reviewer: designReview, integrator };

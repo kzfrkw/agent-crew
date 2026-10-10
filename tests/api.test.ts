@@ -159,6 +159,31 @@ describe("読み取り API", () => {
     expect(d.operable).toBe(false); // ops なし(--no-worker)で起動したサーバーでは操作できない
   });
 
+  it("task: 最新の撮影の画面(4c)を、画像の URL つきで返す。撮れなかったものは URL なし", async () => {
+    const s = seed();
+    const db = openDb(appDbPath(s.home));
+    const dir = join(s.home, "tasks", String(s.t1.id), "screens");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "s1-1280-light.png"), "png");
+    addEvent(db, {
+      taskId: s.t1.id,
+      kind: "screens",
+      payload: {
+        shots: [
+          { name: "s1", path: "/items", width: 1280, scheme: "light", file: "s1-1280-light.png" },
+          { name: "s1", path: "/items", width: 390, scheme: "light", file: "s1-390-light.png", error: "タイムアウト" },
+        ],
+      },
+    });
+    db.close();
+    server = await startServer({ home: s.home, port: 0 });
+    const d = await json<TaskDetail>(`api/tasks/${s.t1.id}`);
+    expect(d.screenshots).toEqual([
+      expect.objectContaining({ file: "s1-1280-light.png", url: `/files/tasks/${s.t1.id}/screens/s1-1280-light.png` }),
+      expect.objectContaining({ file: "s1-390-light.png", url: null, error: "タイムアウト" }),
+    ]);
+  });
+
   it("artifact: 実行時点の写しを返し、Markdown の frontmatter を分ける", async () => {
     const s = seed();
     server = await startServer({ home: s.home, port: 0 });

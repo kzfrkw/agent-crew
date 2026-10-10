@@ -1,4 +1,4 @@
-/** タスクの状態(設計メモ第5章)。designing / awaiting_design_approval はフェーズ4から */
+/** タスクの状態(設計メモ第5章)。designing / awaiting_design_approval / design_reviewing はフェーズ4から */
 export const TASK_STATES = [
   "queued",
   "planning",
@@ -8,6 +8,7 @@ export const TASK_STATES = [
   "implementing",
   "reviewing",
   "qa",
+  "design_reviewing",
   "awaiting_final_approval",
   "integrating",
   "done",
@@ -29,6 +30,7 @@ export const STATE_LABELS: Record<TaskState, string> = {
   implementing: "実装中",
   reviewing: "レビュー中",
   qa: "QA中",
+  design_reviewing: "デザインレビュー中",
   awaiting_final_approval: "最終確認待ち",
   integrating: "統合中",
   done: "完了",

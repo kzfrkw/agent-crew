@@ -290,3 +290,35 @@ describe("設計の段(designing、フェーズ4)", () => {
     expect(() => next(snap("planning"), { type: "verdict", role: "architect", verdict: "ready" })).toThrow(TransitionError);
   });
 });
+
+describe("デザインレビューの段(design_reviewing、4c)", () => {
+  const ui = { architect: false, designer: true };
+  const noUi = { architect: true, designer: false };
+
+  it("QA の合格: デザイナーを動かしたタスクはデザインレビューへ、それ以外は最終確認待ちへ", () => {
+    expect(next(snap("qa", { design: ui }), { type: "verdict", role: "qa", verdict: "passed" }).state).toBe("design_reviewing");
+    expect(next(snap("qa", { design: noUi }), { type: "verdict", role: "qa", verdict: "passed" }).state).toBe("awaiting_final_approval");
+    expect(next(snap("qa"), { type: "verdict", role: "qa", verdict: "passed" }).state).toBe("awaiting_final_approval");
+  });
+
+  it("design_reviewing の役割はデザインレビュー担当", () => {
+    expect(roleForState("design_reviewing")).toBe("design_reviewer");
+  });
+
+  it("approve は最終確認待ちへ、changes_requested は実装へ差し戻し(回数に数える)、need_human は人の判断待ち", () => {
+    expect(next(snap("design_reviewing", { design: ui }), { type: "verdict", role: "design_reviewer", verdict: "approve" }).state).toBe("awaiting_final_approval");
+    expect(next(snap("design_reviewing", { design: ui, reviewRounds: 1 }), { type: "verdict", role: "design_reviewer", verdict: "changes_requested" })).toMatchObject({
+      state: "implementing",
+      reviewRounds: 2,
+    });
+    expect(next(snap("design_reviewing", { design: ui }), { type: "verdict", role: "design_reviewer", verdict: "need_human" })).toMatchObject({
+      state: "needs_input",
+      heldFromState: "design_reviewing",
+    });
+  });
+
+  it("人の変更・ベースの取り込みの後は、デザインレビューの後でもレビューからやり直す", () => {
+    expect(next(snap("human_working", { heldFromState: "design_reviewing", design: ui }), { type: "return", humanChanged: true }).state).toBe("reviewing");
+    expect(next(snap("design_reviewing", { design: ui }), { type: "base_updated" }).state).toBe("reviewing");
+  });
+});

@@ -13,6 +13,7 @@ const STAGES: { state: TaskState; label: string }[] = [
   { state: "implementing", label: "実装" },
   { state: "reviewing", label: "レビュー" },
   { state: "qa", label: "QA" },
+  { state: "design_reviewing", label: "デザインレビュー" },
   { state: "awaiting_final_approval", label: "最終確認" },
   { state: "integrating", label: "統合" },
   { state: "done", label: "完了" },
@@ -22,10 +23,10 @@ const HOLD: Partial<Record<TaskState, StageStatus>> = { needs_input: "blocked", 
 /** 人の承認を待つ段(現在地だが、エージェントは動いていない) */
 const WAITING: TaskState[] = ["awaiting_plan_approval", "awaiting_design_approval", "awaiting_final_approval"];
 
-/** 設計の段は、動かす役割がなければ飛ばす。デザインの承認はデザイナーを動かすときだけ */
+/** 設計の段は、動かす役割がなければ飛ばす。デザインの承認と実装後のデザインレビューは、デザイナーを動かすときだけ */
 function skipped(state: TaskState, design: DesignOptions): boolean {
   if (state === "designing") return !design.architect && !design.designer;
-  if (state === "awaiting_design_approval") return !design.designer;
+  if (state === "awaiting_design_approval" || state === "design_reviewing") return !design.designer;
   return false;
 }
 
