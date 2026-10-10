@@ -8,6 +8,8 @@ export default defineConfig({
   test: {
     // fixtures/ のサンプルアプリのテストは対象にしない。GUI のテストは gui/src に置く(jsdom で動かす)
     include: ["tests/**/*.test.ts", "gui/src/**/*.test.{ts,tsx}"],
+    // テストが作った一時ディレクトリを、テストファイルの終わりに消す
+    setupFiles: ["tests/helpers/setup.ts"],
     // 一時的な git リポジトリを多く作るため、並行実行時は 5 秒を超えることがある
     testTimeout: 30_000,
   },

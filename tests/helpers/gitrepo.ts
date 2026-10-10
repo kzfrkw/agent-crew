@@ -25,8 +25,13 @@ export function sh(cwd: string, cmd: string, args: string[], env = gitEnv()): st
 
 export const git = (cwd: string, ...args: string[]) => sh(cwd, "git", args);
 
+/** テストが作った一時ディレクトリ。テストファイルの終わりに消す(tests/helpers/setup.ts) */
+export const createdTempDirs: string[] = [];
+
 export function tempDir(prefix: string): string {
-  return realpathSync(mkdtempSync(join(tmpdir(), prefix)));
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), prefix)));
+  createdTempDirs.push(dir);
+  return dir;
 }
 
 /** main ブランチに1コミットあるリポジトリと、そのpush先のbareリポジトリを作る */
