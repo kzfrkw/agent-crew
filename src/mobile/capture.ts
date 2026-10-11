@@ -1,10 +1,11 @@
-import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, openSync, readdirSync, readSync, closeSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { execFile, execFileSync } from "node:child_process";
+import { promisify } from "node:util";
+import { copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, readSync, closeSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Shot } from "../browser/chrome.ts";
 import { defaultDenyRead } from "../browser/app.ts";
-import { findFlutterRoot, runSandboxedCommand, toolchainWritable, type CommandResult } from "../toolexec/command.ts";
+import { findFlutterRoot, runSandboxedCommand, toolchainRules, toolchainWritable, userTempDir, type CommandResult } from "../toolexec/command.ts";
 import { bootDevice, defaultSimctl, leaseSimulator, setAppearance, shutdownDevice, type Simctl } from "./simulator.ts";
 
 /**
@@ -34,7 +35,8 @@ Future<void> main() => integrationDriver(
     );
 `;
 
-export type DriveExec = (req: { cwd: string; command: string; env: Record<string, string>; writable: string[]; tmpDir: string }) => Promise<CommandResult>;
+/** extraRules は種類ごとの sandbox-exec の追加の規則(ネイティブ iOS のテスト。toolchainRules) */
+export type DriveExec = (req: { cwd: string; command: string; env: Record<string, string>; writable: string[]; tmpDir: string; extraRules?: string[] }) => Promise<CommandResult>;
 
 /** ビルドと撮影で書き込む場所(worktree と撮影先のほか) */
 function buildWritable(): string[] {
@@ -51,7 +53,7 @@ function buildWritable(): string[] {
 export const defaultDriveExec =
   (dataHome: string): DriveExec =>
   (req) =>
-    runSandboxedCommand({ cwd: req.cwd, command: req.command, env: req.env, writable: req.writable, tmpDir: req.tmpDir, denyRead: defaultDenyRead(homedir(), dataHome), timeoutMs: 20 * 60_000 });
+    runSandboxedCommand({ cwd: req.cwd, command: req.command, env: req.env, writable: req.writable, tmpDir: req.tmpDir, denyRead: defaultDenyRead(homedir(), dataHome), extraRules: req.extraRules, timeoutMs: 20 * 60_000 });
 
 /** git の作業ツリーの変更(porcelain)。git のリポジトリでなければ null */
 function gitStatus(worktree: string): string | null {
@@ -148,6 +150,100 @@ export async function captureFlutterScreens(o: {
     if (wasClean) {
       const restored = restoreWorktree(o.worktree);
       if (restored.length > 0) o.onNote?.(`撮影(ビルド)で変わったファイルを元に戻しました: ${restored.join("、")}(ビルドで変わるファイルは、実装者がコミットしておくと、次からは変わりません)`);
+    }
+  }
+}
+
+/** xcresult の添付(スクリーンショット)を取り出す。manifest.json と画像を outDir に置く。テストでは差し替える */
+export type XcresultExport = (resultPath: string, outDir: string) => Promise<void>;
+
+const runFile = promisify(execFile);
+export const defaultXcresultExport: XcresultExport = async (resultPath, outDir) => {
+  mkdirSync(outDir, { recursive: true });
+  await runFile("xcrun", ["xcresulttool", "export", "attachments", "--path", resultPath, "--output-path", outDir], { timeout: 120_000 });
+};
+
+/**
+ * ネイティブ iOS の画面の撮影(設計メモ v0.16、6b)。
+ * 実装者が書いた「画面を撮る UI テスト」(XCTAttachment に画面の ID の名前でスクリーンショットを添付する)を、
+ * 貸し出したシミュレータで、ライト・ダークのそれぞれ -only-testing で動かし、xcresult から添付を取り出す。
+ * sandbox-exec の許可はネイティブ iOS のもの(worktree・ユーザーの一時ディレクトリ・testmanagerd のソケット・/dev/ptmx。docs/safety.md 9章)
+ */
+export async function captureIosScreens(o: {
+  home: string;
+  taskId: number;
+  worktree: string;
+  outDir: string;
+  scheme: string;
+  /** 画面を撮る UI テスト(<ターゲット>/<クラス>) */
+  screens: string | null;
+  simctl?: Simctl;
+  exec?: DriveExec;
+  xcresult?: XcresultExport;
+  slots?: number;
+  waitMs?: number;
+  deviceType?: string;
+  onNote?: (message: string) => void;
+}): Promise<Shot[]> {
+  if (!o.screens) throw new Error("撮影の UI テストがプロファイルにありません(agent-crew project set <名前> --screens <UIテストのターゲット>/ScreensUITests で設定してください)");
+  const simctl = o.simctl ?? defaultSimctl;
+  const exec = o.exec ?? defaultDriveExec(o.home);
+  const xcresult = o.xcresult ?? defaultXcresultExport;
+  const wasClean = gitStatus(o.worktree) === "";
+  rmSync(o.outDir, { recursive: true, force: true });
+  mkdirSync(o.outDir, { recursive: true });
+  const tmp = join(o.home, "tmp", `ios-${o.taskId}-${Date.now()}`);
+  mkdirSync(tmp, { recursive: true });
+
+  const lease = await leaseSimulator({ home: o.home, taskId: o.taskId, simctl, slots: o.slots ?? 1, waitMs: o.waitMs ?? 30 * 60_000, deviceType: o.deviceType });
+  const shots: Shot[] = [];
+  try {
+    await bootDevice(simctl, lease.udid);
+    for (const scheme of ["light", "dark"] as const) {
+      await setAppearance(simctl, lease.udid, scheme);
+      const result = join(tmp, `${scheme}.xcresult`);
+      const r = await exec({
+        cwd: o.worktree,
+        command: `xcodebuild test -scheme ${o.scheme} -destination 'platform=iOS Simulator,id=${lease.udid}' -derivedDataPath build/DerivedData -only-testing:${o.screens} -resultBundlePath '${result}' -quiet`,
+        env: {},
+        writable: [o.worktree, tmp, ...toolchainWritable("ios", { home: homedir(), flutterRoot: null, userTmp: userTempDir() })],
+        tmpDir: join(tmp, `run-${scheme}`),
+        extraRules: toolchainRules("ios"),
+      });
+      const raw = join(tmp, `raw-${scheme}`);
+      let entries: { file: string; name: string }[] = [];
+      if (existsSync(result) || o.xcresult) {
+        try {
+          await xcresult(result, raw);
+          const manifest = JSON.parse(readFileSync(join(raw, "manifest.json"), "utf8")) as { attachments?: { exportedFileName: string; suggestedHumanReadableName?: string }[] }[];
+          entries = manifest.flatMap((t) => t.attachments ?? []).flatMap((a) => {
+            // 名前は「<添付の名前>_<番号>_<UUID>.png」
+            const name = /^(.+?)_\d+_[0-9A-Fa-f-]{36}\.png$/.exec(a.suggestedHumanReadableName ?? "")?.[1] ?? (a.suggestedHumanReadableName ?? a.exportedFileName).replace(/\.png$/, "");
+            return a.exportedFileName.endsWith(".png") ? [{ file: a.exportedFileName, name: name.replace(/[^A-Za-z0-9_-]/g, "_") }] : [];
+          });
+        } catch {
+          entries = [];
+        }
+      }
+      if (r.exitCode !== 0 || r.timedOut || entries.length === 0) {
+        const why = r.timedOut ? "UI テストが時間切れになりました" : r.exitCode === 0 ? "スクリーンショットの添付がありません" : `UI テストが失敗しました(終了コード ${r.exitCode})`;
+        shots.push({ name: "screens", path: o.screens, width: 0, scheme, file: `screens-iphone-${scheme}.png`, device: lease.deviceType, error: `${why}:\n${r.output.slice(-1500)}` });
+        continue;
+      }
+      for (const e of entries) {
+        const file = `${e.name}-iphone-${scheme}.png`;
+        copyFileSync(join(raw, e.file), join(o.outDir, file));
+        shots.push({ name: e.name, path: e.name, width: Math.round(pngWidth(join(o.outDir, file)) / 3), scheme, file, device: lease.deviceType });
+      }
+    }
+    return shots;
+  } finally {
+    await shutdownDevice(simctl, lease.udid);
+    lease.release();
+    rmSync(tmp, { recursive: true, force: true });
+    if (wasClean) {
+      const restored = restoreWorktree(o.worktree);
+      if (restored.length > 0) o.onNote?.(`撮影(ビルド)で変わったファイルを元に戻しました: ${restored.join("、")}`);
     }
   }
 }

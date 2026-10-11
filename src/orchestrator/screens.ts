@@ -7,7 +7,7 @@ import { addEvent, getRepoProfile, listRepos, listTaskRepos, type Task } from ".
 import type { Profile } from "../roles/schemas.ts";
 import type { AppContext, CaptureFn } from "./context.ts";
 import { platformOf, resolveServiceEnv } from "./projects.ts";
-import { captureFlutterScreens } from "../mobile/capture.ts";
+import { captureFlutterScreens, captureIosScreens } from "../mobile/capture.ts";
 
 /**
  * 実装後のデザインレビューのための撮影(設計メモ v0.13、4c)。
@@ -39,7 +39,7 @@ function servicesFor(ctx: AppContext, task: Task): Service[] {
   });
 }
 
-type ScreenTarget = { role: string; url: string; platform: "web" } | { role: string; url: null; platform: "flutter" };
+type ScreenTarget = { role: string; url: string; platform: "web" } | { role: string; url: null; platform: "flutter" | "ios" };
 
 /**
  * 撮る相手: 画面を持つリポジトリ(確認 URL のあるもの、または Flutter のアプリ)のうち、計画の順で最後のもの(API → 画面なら画面)。
@@ -49,7 +49,8 @@ export function pickScreenTarget(ctx: AppContext, task: Task): ScreenTarget | un
   const repos = listRepos(ctx.db, task.projectId);
   const withScreen = repos.flatMap((r): ScreenTarget[] => {
     const p = getRepoProfile(ctx.db, r.id) as Profile | null;
-    if (platformOf(p) === "flutter") return [{ role: r.role, url: null, platform: "flutter" }];
+    const platform = platformOf(p);
+    if (platform !== "web") return [{ role: r.role, url: null, platform }];
     return p?.startUrl ? [{ role: r.role, url: p.startUrl, platform: "web" }] : [];
   });
   const planned = (task.repos ?? []).map((role) => withScreen.find((x) => x.role === role)).filter((x): x is ScreenTarget => !!x);
@@ -58,10 +59,28 @@ export function pickScreenTarget(ctx: AppContext, task: Task): ScreenTarget | un
 
 export const captureTaskScreens: CaptureFn = async (ctx, task, o) => {
   const target = pickScreenTarget(ctx, task);
-  // Flutter のアプリは iOS シミュレータで撮る(設計メモ v0.15)
-  if (target?.platform === "flutter") {
+  // Flutter とネイティブ iOS のアプリは iOS シミュレータで撮る(設計メモ v0.15 / v0.16)
+  if (target && target.platform !== "web") {
     const repoId = listRepos(ctx.db, task.projectId).find((r) => r.role === target.role)!.id;
     const worktree = listTaskRepos(ctx.db, task.id).find((x) => x.repoId === repoId)?.worktreePath ?? o.worktree;
+    const onNote = (message: string) => addEvent(ctx.db, { taskId: task.id, kind: "warning", payload: { message } });
+    if (target.platform === "ios") {
+      const profile = getRepoProfile(ctx.db, repoId) as Profile | null;
+      const scheme = /-scheme\s+('([^']+)'|"([^"]+)"|(\S+))/.exec(profile?.commands.test ?? profile?.commands.build ?? "");
+      if (!scheme) throw new Error("テストのコマンドからスキーム(-scheme)を読めません(agent-crew project set で直してください)");
+      return captureIosScreens({
+        home: ctx.home,
+        taskId: task.id,
+        worktree,
+        outDir: o.outDir,
+        scheme: scheme[2] ?? scheme[3] ?? scheme[4]!,
+        screens: profile?.commands.screens ?? null,
+        simctl: ctx.simctl,
+        slots: ctx.config.concurrency,
+        deviceType: ctx.config.simulatorDevice,
+        onNote,
+      });
+    }
     return captureFlutterScreens({
       home: ctx.home,
       taskId: task.id,
@@ -69,7 +88,7 @@ export const captureTaskScreens: CaptureFn = async (ctx, task, o) => {
       outDir: o.outDir,
       slots: ctx.config.concurrency,
       deviceType: ctx.config.simulatorDevice,
-      onNote: (message) => addEvent(ctx.db, { taskId: task.id, kind: "warning", payload: { message } }),
+      onNote,
     });
   }
   const services = servicesFor(ctx, task);

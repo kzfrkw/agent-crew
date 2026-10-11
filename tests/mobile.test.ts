@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ensureDevice, leaseSimulator, type Simctl } from "../src/mobile/simulator.ts";
-import { captureFlutterScreens, type DriveExec } from "../src/mobile/capture.ts";
+import { captureFlutterScreens, captureIosScreens, type DriveExec, type XcresultExport } from "../src/mobile/capture.ts";
 import { git, makeRepo, tempDir } from "./helpers/gitrepo.ts";
 
 /** 1x1 の PNG に、IHDR の幅・高さだけを書いたもの(幅の読み取りの確認用) */
@@ -160,3 +160,58 @@ describe("Flutter の画面の撮影(フェーズ6)", () => {
     expect(existsSync(join(repo, "wip.txt"))).toBe(true);
   });
 });
+
+describe("ネイティブ iOS の画面の撮影(XCUITest。6b)", () => {
+  function setup(o: { fail?: boolean } = {}) {
+    const home = tempDir("agent-crew-ioscap-");
+    const { repo } = makeRepo();
+    const { simctl, calls } = fakeSimctl();
+    const runs: { command: string; appearance: string; writable: string[]; rules: string[] }[] = [];
+    const exec: DriveExec = async (req) => {
+      runs.push({ command: req.command, appearance: calls.filter((c) => c[0] === "ui").at(-1)?.[3] ?? "", writable: req.writable, rules: req.extraRules ?? [] });
+      writeFileSync(join(repo, "Orders.xcodeproj.changed"), "x"); // ビルドが何かを書いた体
+      return o.fail ? { exitCode: 65, timedOut: false, output: "** TEST FAILED **", durationMs: 1 } : { exitCode: 0, timedOut: false, output: "** TEST SUCCEEDED **", durationMs: 1 };
+    };
+    const xcresult: XcresultExport = async (_result, out) => {
+      mkdirSync(out, { recursive: true });
+      writeFileSync(join(out, "A1.png"), png(1206, 2622));
+      writeFileSync(join(out, "B2.png"), png(1206, 2622));
+      writeFileSync(
+        join(out, "manifest.json"),
+        JSON.stringify([{ attachments: [{ exportedFileName: "A1.png", suggestedHumanReadableName: "s1-orders_0_007D0F3A-F39F-4E85-B9C3-A7CAC8DF29D3.png" }, { exportedFileName: "B2.png", suggestedHumanReadableName: "s2-detail_1_1234ABCD-0000-0000-0000-000000000000.png" }] }]),
+      );
+    };
+    const outDir = join(home, "tasks", "1", "screens");
+    const base = { home, taskId: 1, worktree: repo, outDir, simctl, exec, xcresult, slots: 1, scheme: "Orders", screens: "OrdersUITests/ScreensUITests" };
+    return { base, calls, runs, repo, outDir };
+  }
+
+  it("ライト・ダークのそれぞれ撮影の UI テストだけを動かし、xcresult の添付を画面の ID ごとに並べる", async () => {
+    const s = setup();
+    const shots = await captureIosScreens(s.base);
+    expect(shots.map((x) => x.file).sort()).toEqual(["s1-orders-iphone-dark.png", "s1-orders-iphone-light.png", "s2-detail-iphone-dark.png", "s2-detail-iphone-light.png"]);
+    for (const x of shots) expect(existsSync(join(s.outDir, x.file))).toBe(true);
+    expect(shots[0]).toMatchObject({ width: 402, device: "iPhone 17 Pro" });
+    expect(s.runs.map((r) => r.appearance)).toEqual(["light", "dark"]);
+    expect(s.runs[0]!.command).toContain("-scheme Orders");
+    expect(s.runs[0]!.command).toContain("id=NEW-UDID");
+    expect(s.runs[0]!.command).toContain("-only-testing:OrdersUITests/ScreensUITests");
+    expect(s.runs[0]!.command).toContain("-derivedDataPath build/DerivedData");
+    expect(s.runs[0]!.rules.join("\n")).toContain("testmanagerd");
+    // 撮影の後は止めて返し、ビルドで変わったものは元に戻す
+    expect(s.calls).toContainEqual(["shutdown", "NEW-UDID"]);
+    expect(existsSync(join(s.repo, "Orders.xcodeproj.changed"))).toBe(false);
+  });
+
+  it("UI テストが失敗したら、出力を添えて撮れなかった印を返す", async () => {
+    const s = setup({ fail: true });
+    const shots = await captureIosScreens(s.base);
+    expect(shots.every((x) => x.error?.includes("TEST FAILED"))).toBe(true);
+  });
+
+  it("撮影の UI テストが設定されていなければ、理由を添えて失敗する", async () => {
+    const s = setup();
+    await expect(captureIosScreens({ ...s.base, screens: null })).rejects.toThrow(/撮影の UI テスト/);
+  });
+});
+
