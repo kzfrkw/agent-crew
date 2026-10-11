@@ -122,7 +122,15 @@ export function toolCommandsFor(ctx: AppContext, repoId: number, task?: Task): T
   const profile = getRepoProfile(ctx.db, repoId) as Profile | null;
   const platform = platformOf(profile);
   if (platform === "web") return undefined;
-  return { platform, commands: { test: task ? testCommandFor(ctx, task, repoId) : (profile?.commands.test ?? null), analyze: profile?.commands.analyze ?? null } };
+  return {
+    platform,
+    commands: {
+      test: task ? testCommandFor(ctx, task, repoId) : (profile?.commands.test ?? null),
+      analyze: profile?.commands.analyze ?? null,
+      // ビルドの確認はネイティブ iOS だけ(Flutter の iOS ビルドは重く、テストで足りる)
+      build: platform === "ios" ? (profile?.commands.build ?? null) : null,
+    },
+  };
 }
 
 const implementer: Handler = async (ctx, task) => {

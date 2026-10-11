@@ -53,7 +53,7 @@ export async function invokeRole(
     return { ok: false, runId: run.id, failure, reason, result };
   };
 
-  const bridge = o.toolCommands ? writeBridge(ctx, run.id, o.cwd, o.toolCommands) : undefined;
+  const bridge = o.toolCommands ? writeBridge(ctx, run.id, o.cwd, o.toolCommands, o.taskId) : undefined;
   const prompt = bridge ? `${o.prompt}\n## テストと静的解析の実行\n- テスト・静的解析は Bash では実行せず、MCP の道具 \`${TOOL_NAME}\`(kind: ${bridge.kinds.join(" / ")})を使ってください。ツールがサンドボックスの中で代わりに実行し、終了コードと出力を返します(Bash の中ではこれらのコマンドは止まります)\n` : o.prompt;
 
   let result: RunResult;
@@ -132,9 +132,19 @@ export async function invokeRole(
 }
 
 /** MCP の橋の設定を実行ディレクトリに書く。サーバーは claude が起動する(agent-crew mcp-exec <設定>) */
-function writeBridge(ctx: AppContext, runId: number, cwd: string, tc: ToolCommands) {
+function writeBridge(ctx: AppContext, runId: number, cwd: string, tc: ToolCommands, taskId: number | undefined) {
   const dir = runDir(ctx.home, runId);
-  const cfg: ToolExecConfig = { cwd, platform: tc.platform, commands: tc.commands, tmpDir: join(dir, "tmp"), dataHome: ctx.home, logPath: join(dir, "tool-commands.jsonl") };
+  const cfg: ToolExecConfig = {
+    cwd,
+    platform: tc.platform,
+    commands: tc.commands,
+    tmpDir: join(dir, "tmp"),
+    dataHome: ctx.home,
+    logPath: join(dir, "tool-commands.jsonl"),
+    taskId,
+    slots: ctx.config.concurrency,
+    deviceType: ctx.config.simulatorDevice,
+  };
   const cfgPath = join(dir, "tool-exec.json");
   writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
   return {

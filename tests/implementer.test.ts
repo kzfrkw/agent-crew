@@ -280,3 +280,48 @@ describe("MCP の橋を渡す役割(Flutter。フェーズ6)", () => {
   });
 });
 
+describe("ネイティブ iOS のテストの再実行と橋(6b)", () => {
+  const test = "xcodebuild test -scheme Orders -destination 'platform=iOS Simulator,id={simulator}' -derivedDataPath build/DerivedData -only-testing:OrdersTests";
+  const iosProfile = { platform: "ios" as const, commands: { install: null, build: "xcodebuild build -scheme Orders", test, start: null, analyze: null, screens: "OrdersUITests/ScreensUITests" }, startUrl: null };
+  const fakeSimctl = () => {
+    const calls: string[][] = [];
+    const simctl = async (args: string[]) => {
+      calls.push(args);
+      if (args.join(" ") === "list devices -j") return JSON.stringify({ devices: {} });
+      if (args.join(" ") === "list runtimes -j") return JSON.stringify({ runtimes: [{ identifier: "rt.iOS-26-4", platform: "iOS", isAvailable: true, version: "26.4", supportedDeviceTypes: [{ name: "iPhone 17", identifier: "x.iPhone-17" }] }] });
+      if (args[0] === "create") return "SIM-9\n";
+      return "";
+    };
+    return { simctl, calls };
+  };
+
+  it("テストの再実行は、シミュレータを借りて {simulator} を置き換えて実行し、終わったら止めて返す。種類 ios の許可で動かす", async () => {
+    const runner = new ScriptedRunner({ planner: plannerReady, implementer: implementer() });
+    const ctx = testContext(runner);
+    const sim = fakeSimctl();
+    ctx.simctl = sim.simctl;
+    const seen: { command: string; platform: string }[] = [];
+    ctx.toolExec = async (_c, req) => {
+      seen.push({ command: req.command, platform: req.platform });
+      return { exitCode: 0, timedOut: false, output: "** TEST SUCCEEDED **", durationMs: 1 };
+    };
+    const { project } = await approvedProject(ctx, iosProfile);
+    const t = newTask(ctx, project.id);
+    await runUntilIdle(ctx);
+    approveTask(ctx, t.id, "plan");
+    await runUntilIdle(ctx);
+    expect(seen[0]).toEqual({ command: test.replace("{simulator}", "SIM-9"), platform: "ios" });
+    expect(sim.calls).toContainEqual(["shutdown", "SIM-9"]);
+    expect(listValidApprovals(ctx.db, t.id).find((a) => a.kind === "tests")).toMatchObject({ result: "approved" });
+    // 報告に残すコマンドは置き換える前のもの(UDID は実行ごとに変わる)
+    expect(readFileSync(join(taskDir(ctx.home, t.id), "verify-report.md"), "utf8")).toContain("id={simulator}");
+    // 実装者には橋を渡し、ビルドも代わりに実行できる
+    const cfg = JSON.parse(readFileSync(runner.calls.find((c) => c.role === "implementer")!.mcpServers!["agent-crew"]!.args.at(-1)!, "utf8"));
+    expect(cfg).toMatchObject({ platform: "ios", taskId: t.id, commands: { test, build: "xcodebuild build -scheme Orders" } });
+    // Claude のサンドボックスは広げない(ビルドはツールが行う)
+    const call = runner.calls.find((c) => c.role === "implementer")!;
+    expect(call.extraWritable ?? []).toEqual([]);
+    expect(call.allowedDomains).not.toContain("pub.dev");
+  });
+});
+

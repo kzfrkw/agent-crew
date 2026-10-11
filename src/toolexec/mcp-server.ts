@@ -3,7 +3,8 @@ import { createInterface } from "node:readline";
 import { homedir } from "node:os";
 import type { Profile } from "../roles/schemas.ts";
 import { defaultDenyRead } from "../browser/app.ts";
-import { findFlutterRoot, runSandboxedCommand, toolchainWritable, type CommandResult } from "./command.ts";
+import { findFlutterRoot, runSandboxedCommand, toolchainRules, toolchainWritable, userTempDir, type CommandResult } from "./command.ts";
+import { SimulatorSession } from "../mobile/session.ts";
 
 /**
  * MCP の橋(設計メモ v0.15、フェーズ6)。エージェントに「プロファイルのテスト/解析のコマンドを、この worktree で実行する」道具だけを渡す。
@@ -13,20 +14,24 @@ import { findFlutterRoot, runSandboxedCommand, toolchainWritable, type CommandRe
  */
 
 export const TOOL_NAME = "run_project_command";
-export const KINDS = ["test", "analyze"] as const;
+export const KINDS = ["test", "analyze", "build"] as const;
 export type Kind = (typeof KINDS)[number];
 
 /** ツールが実行ごとに書く設定(runDir/tool-exec.json) */
 export type ToolExecConfig = {
   cwd: string;
   platform: NonNullable<Profile["platform"]>;
-  commands: Record<Kind, string | null>;
+  commands: Partial<Record<Kind, string | null>>;
   tmpDir: string;
   /** データディレクトリ(資格情報と DB を読めなくするため) */
   dataHome: string;
   /** 実行の記録(1行1件の JSON)。オーケストレーターが実行の後でイベントにする */
   logPath: string;
   timeoutMs?: number;
+  /** シミュレータを借りるときの持ち主と台数・機種(コマンドに {simulator} があるとき。6b) */
+  taskId?: number;
+  slots?: number;
+  deviceType?: string;
 };
 
 type Exec = (req: { cwd: string; command: string; signal?: AbortSignal }) => Promise<CommandResult>;
@@ -82,10 +87,22 @@ export function createMcpHandler(cfg: ToolExecConfig, exec: Exec, signal?: Abort
 export async function serveMcp(configPath: string): Promise<void> {
   const cfg = JSON.parse(readFileSync(configPath, "utf8")) as ToolExecConfig;
   const aborter = new AbortController();
-  const writable = [cfg.cwd, ...toolchainWritable(cfg.platform, { home: homedir(), flutterRoot: findFlutterRoot() })];
+  const writable = [cfg.cwd, ...toolchainWritable(cfg.platform, { home: homedir(), flutterRoot: findFlutterRoot(), userTmp: userTempDir() })];
+  // ネイティブ iOS のテストはシミュレータで動く。最初に要ったときに借り、役割の実行が終わる(標準入力が閉じる)まで借りたままにする
+  const session = new SimulatorSession({ home: cfg.dataHome, taskId: cfg.taskId ?? 0, slots: cfg.slots ?? 1, deviceType: cfg.deviceType });
   const handle = createMcpHandler(
     cfg,
-    (req) => runSandboxedCommand({ cwd: req.cwd, command: req.command, writable, tmpDir: cfg.tmpDir, denyRead: defaultDenyRead(homedir(), cfg.dataHome), timeoutMs: cfg.timeoutMs, signal: req.signal }),
+    async (req) =>
+      runSandboxedCommand({
+        cwd: req.cwd,
+        command: await session.resolve(req.command),
+        writable,
+        tmpDir: cfg.tmpDir,
+        denyRead: defaultDenyRead(homedir(), cfg.dataHome),
+        extraRules: toolchainRules(cfg.platform),
+        timeoutMs: cfg.timeoutMs,
+        signal: req.signal,
+      }),
     aborter.signal,
   );
   const rl = createInterface({ input: process.stdin });
@@ -108,4 +125,5 @@ export async function serveMcp(configPath: string): Promise<void> {
   await new Promise<void>((resolve) => rl.on("close", resolve));
   aborter.abort();
   await queue;
+  await session.close();
 }

@@ -40,6 +40,12 @@ describe("MCP の橋: プロファイルのコマンドだけをツールが代�
     expect(JSON.parse(readFileSync(cfg.logPath, "utf8").trim())).toMatchObject({ kind: "test", command: "flutter test", exitCode: 1 });
   });
 
+  it("ビルドの種類も設定にあれば出す(6b)", async () => {
+    const h = createMcpHandler(config({ commands: { test: "xcodebuild test", analyze: null, build: "xcodebuild build" } }), async () => ({ exitCode: 0, timedOut: false, output: "", durationMs: 1 }));
+    const list = (await h({ jsonrpc: "2.0", id: 2, method: "tools/list" })) as { result: { tools: { inputSchema: { properties: { kind: { enum: string[] } } } }[] } };
+    expect(list.result.tools[0]!.inputSchema.properties.kind.enum).toEqual(["test", "build"]);
+  });
+
   it("設定に無い種類・知らない道具・知らないメソッドはエラー(任意のコマンドは実行できない)", async () => {
     const h = createMcpHandler(config(), async () => ({ exitCode: 0, timedOut: false, output: "", durationMs: 1 }));
     const bad = (await h({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "run_project_command", arguments: { kind: "analyze" } } })) as { result: { isError: boolean } };

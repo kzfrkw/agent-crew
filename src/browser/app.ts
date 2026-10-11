@@ -24,7 +24,8 @@ function variants(path: string): string[] {
   return [...new Set([path, real])];
 }
 
-export function buildAppSandboxProfile(o: { writable: string[]; denyRead: string[] }): string {
+/** extraRules は種類ごとの追加の許可(ネイティブ iOS のテストなど)。後ろの規則が優先されるため最後に置く */
+export function buildAppSandboxProfile(o: { writable: string[]; denyRead: string[]; extraRules?: string[] }): string {
   for (const p of [...o.writable, ...o.denyRead]) if (!SAFE_PATH.test(p)) throw new Error(`サンドボックスのプロファイルに使えないパスです: ${p}`);
   const sub = (p: string) => `(subpath "${p}")`;
   return [
@@ -40,6 +41,7 @@ export function buildAppSandboxProfile(o: { writable: string[]; denyRead: string
     '(allow network-inbound (local ip "localhost:*"))',
     '(allow network-outbound (remote ip "localhost:*"))',
     ...o.denyRead.flatMap(variants).map((p) => `(deny file-read* ${sub(p)})`),
+    ...(o.extraRules ?? []),
   ].join("\n");
 }
 

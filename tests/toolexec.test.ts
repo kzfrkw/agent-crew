@@ -1,7 +1,8 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { runSandboxedCommand, toolchainWritable } from "../src/toolexec/command.ts";
+import { runSandboxedCommand, toolchainRules, toolchainWritable } from "../src/toolexec/command.ts";
+import { buildAppSandboxProfile } from "../src/browser/app.ts";
 import { inAgentSandbox } from "./helpers/env.ts";
 import { tempDir } from "./helpers/gitrepo.ts";
 
@@ -19,6 +20,18 @@ describe("ツールが使う道具の書き込み先(フェーズ6)", () => {
       "/Users/me/.flutter-devtools",
     ]);
     expect(toolchainWritable("flutter", { home: "/Users/me", flutterRoot: null })).toEqual(["/Users/me/.pub-cache", "/Users/me/.dartServer", "/Users/me/.dart-tool", "/Users/me/.flutter", "/Users/me/.flutter-devtools"]);
+  });
+});
+
+describe("ネイティブ iOS の許可(6b)", () => {
+  it("ios はユーザーの一時ディレクトリに書け、testmanagerd のソケットと /dev/ptmx を許す。ほかの種類には足さない", () => {
+    expect(toolchainWritable("ios", { home: "/Users/me", flutterRoot: "/sdk", userTmp: "/var/folders/x/T/" })).toEqual(["/var/folders/x/T/"]);
+    expect(toolchainRules("ios").join("\n")).toContain("testmanagerd");
+    expect(toolchainRules("ios").join("\n")).toContain('(literal "/dev/ptmx")');
+    expect(toolchainRules("web")).toEqual([]);
+    expect(toolchainRules("flutter")).toEqual([]);
+    const profile = buildAppSandboxProfile({ writable: ["/w"], denyRead: [], extraRules: toolchainRules("ios") });
+    expect(profile.trimEnd().endsWith(toolchainRules("ios").at(-1)!)).toBe(true); // 後ろの規則が優先されるので最後に置く
   });
 });
 

@@ -28,10 +28,12 @@ export async function runSandboxedCommand(o: {
   timeoutMs?: number;
   env?: Record<string, string>;
   signal?: AbortSignal;
+  /** sandbox-exec の追加の規則(toolchainRules) */
+  extraRules?: string[];
 }): Promise<CommandResult> {
   mkdirSync(o.tmpDir, { recursive: true });
   const started = Date.now();
-  const profile = buildAppSandboxProfile({ writable: [...o.writable, o.tmpDir], denyRead: o.denyRead ?? [] });
+  const profile = buildAppSandboxProfile({ writable: [...o.writable, o.tmpDir], denyRead: o.denyRead ?? [], extraRules: o.extraRules });
   const child = spawn("/usr/bin/sandbox-exec", ["-p", profile, "/bin/sh", "-c", o.command], {
     cwd: o.cwd,
     env: buildAgentEnv(process.env, { ...(o.env ?? {}), TMPDIR: o.tmpDir }),
@@ -76,12 +78,37 @@ export async function runSandboxedCommand(o: {
   return { exitCode, timedOut, output: output.slice(-OUTPUT_LIMIT), durationMs: Date.now() - started };
 }
 
-/** 種類ごとに、道具が書き込むキャッシュ(Flutter は SDK の bin/cache と、ホームの Dart / Flutter のキャッシュ) */
-export function toolchainWritable(platform: NonNullable<Profile["platform"]>, o: { home: string; flutterRoot: string | null }): string[] {
+/** ユーザーの一時ディレクトリ(Xcode の actool がここへ直接書く。docs/safety.md 8章)。macOS 以外は null */
+export function userTempDir(): string | null {
+  try {
+    return execFileSync("getconf", ["DARWIN_USER_TEMP_DIR"], { encoding: "utf8" }).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 種類ごとに、道具が書き込む場所。Flutter は SDK の bin/cache と、ホームの Dart / Flutter のキャッシュ。
+ * ネイティブ iOS はユーザーの一時ディレクトリ(ビルドの置き場は -derivedDataPath で worktree の中にする)
+ */
+export function toolchainWritable(platform: NonNullable<Profile["platform"]>, o: { home: string; flutterRoot: string | null; userTmp?: string | null }): string[] {
+  if (platform === "ios") return o.userTmp ? [o.userTmp] : [];
   if (platform !== "flutter") return [];
   return [
     ...(o.flutterRoot ? [join(o.flutterRoot, "bin", "cache")] : []),
     ...[".pub-cache", ".dartServer", ".dart-tool", ".flutter", ".flutter-devtools"].map((d) => join(o.home, d)),
+  ];
+}
+
+/**
+ * 種類ごとの sandbox-exec の追加の規則。ネイティブ iOS のテストは、テストを管理するサービス(testmanagerd)の unix ソケットへの接続と、
+ * 疑似端末(/dev/ptmx)の作成が要る(docs/safety.md 9章)。通信は localhost のまま(unix ソケットはこの1つだけ)
+ */
+export function toolchainRules(platform: NonNullable<Profile["platform"]>): string[] {
+  if (platform !== "ios") return [];
+  return [
+    '(allow network-outbound (remote unix-socket (path-regex #"^/private/var/tmp/com\\.apple\\.launchd\\.[^/]+/com\\.apple\\.testmanagerd\\.unix-domain\\.socket$")))',
+    '(allow file-write* (literal "/dev/ptmx"))',
   ];
 }
 
@@ -110,9 +137,10 @@ export const defaultToolExec: ToolExecFn = (ctx, req) =>
   runSandboxedCommand({
     cwd: req.cwd,
     command: req.command,
-    writable: [req.cwd, ...toolchainWritable(req.platform, { home: homedir(), flutterRoot: findFlutterRoot() })],
+    writable: [req.cwd, ...toolchainWritable(req.platform, { home: homedir(), flutterRoot: findFlutterRoot(), userTmp: userTempDir() })],
     tmpDir: req.tmpDir,
     denyRead: defaultDenyRead(homedir(), ctx.home),
+    extraRules: toolchainRules(req.platform),
     timeoutMs: req.timeoutMs,
     signal: req.signal,
   });

@@ -8,6 +8,7 @@ import { orderedTaskRepos } from "./handlers.ts";
 import { invokeRole } from "./invoke.ts";
 import { platformOf } from "./projects.ts";
 import { defaultToolExec } from "../toolexec/command.ts";
+import { SimulatorSession } from "../mobile/session.ts";
 import { taskDir } from "./paths.ts";
 
 export type VerifyResult =
@@ -76,7 +77,16 @@ async function verifyRepo(ctx: AppContext, task: Task, tr: { repoId: number; wor
   const platform = platformOf(getRepoProfile(ctx.db, tr.repoId) as Profile | null);
   if (platform !== "web") {
     const exec = ctx.toolExec ?? defaultToolExec;
-    const res = await exec(ctx, { cwd: tr.worktreePath, command, platform, tmpDir: join(dir, "tmp", `verify-${tr.repoId}`), signal: ctx.stops?.get(task.id)?.signal });
+    // ネイティブ iOS のテストはシミュレータで動く。{simulator} があれば、この実行の間だけ借りる(設計メモ v0.16)
+    const session = new SimulatorSession({ home: ctx.home, taskId: task.id, simctl: ctx.simctl, slots: ctx.config.concurrency, deviceType: ctx.config.simulatorDevice });
+    let res;
+    try {
+      res = await exec(ctx, { cwd: tr.worktreePath, command: await session.resolve(command), platform, tmpDir: join(dir, "tmp", `verify-${tr.repoId}`), signal: ctx.stops?.get(task.id)?.signal });
+    } catch (e) {
+      return { role: tr.role, status: "error", head, detail: `テストの再実行に失敗しました: ${(e as Error).message}` };
+    } finally {
+      await session.close();
+    }
     addEvent(ctx.db, { taskId: task.id, kind: "tool_command", payload: { purpose: "verify", repoId: tr.repoId, command, exitCode: res.exitCode, timedOut: res.timedOut, durationMs: res.durationMs } });
     const passed = res.exitCode === 0 && !res.timedOut;
     addApproval(ctx.db, { taskId: task.id, repoId: tr.repoId, kind: "tests", result: passed ? "approved" : "rejected", commitSha: head });
