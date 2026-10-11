@@ -7,6 +7,7 @@ import { returnTask, takeoverTask, updateBase } from "../orchestrator/handoff.ts
 import { answerTask, approveTask, cancelTask, rejectTask } from "../orchestrator/human.ts";
 import { acquireRunLock, recoverStaleRuns } from "../orchestrator/lock.ts";
 import { nextActions } from "../orchestrator/next-actions.ts";
+import { buildTaskReport } from "../orchestrator/report.ts";
 import { mustProject } from "../orchestrator/projects.ts";
 import { NEEDS_HUMAN, STATE_LABELS } from "../orchestrator/states.ts";
 
@@ -42,10 +43,12 @@ export function registerTaskCommands(program: Command): void {
     .requiredOption("--title <title>", "タイトル")
     .option("--body <text>", "本文(仕様・不具合の内容)")
     .option("--body-file <path>", "本文のファイル(- で標準入力)")
-    .action((o: { project: string; title: string; body?: string; bodyFile?: string }) =>
+    .option("--source-url <url>", "取り込み元のページ(Notion など)の URL。報告(task report)に載る")
+    .action((o: { project: string; title: string; body?: string; bodyFile?: string; sourceUrl?: string }) =>
       withContext((ctx) => {
         const p = mustProject(ctx.db, o.project);
-        const t = createTask(ctx.db, { projectId: p.id, title: o.title, body: readText(o.body, o.bodyFile), sourceKind: o.bodyFile ? "paste" : "local" });
+        if (o.sourceUrl && !/^https?:\/\//.test(o.sourceUrl)) throw new Error("取り込み元の URL は http(s) で指定してください");
+        const t = createTask(ctx.db, { projectId: p.id, title: o.title, body: readText(o.body, o.bodyFile), sourceKind: o.bodyFile || o.sourceUrl ? "paste" : "local", sourceUrl: o.sourceUrl });
         console.log(`作成しました: #${t.id} ${t.title}(agent-crew run で開始します)`);
       }),
     );
@@ -85,6 +88,15 @@ export function registerTaskCommands(program: Command): void {
         for (const e of listEvents(ctx.db, t.id, 10)) {
           console.log(`  ${e.createdAt.slice(11, 19)} ${e.kind.padEnd(14)} ${JSON.stringify(e.payload).slice(0, 120)}`);
         }
+      }),
+    );
+
+  task
+    .command("report <id>")
+    .description("Notion などに貼る報告(概要・受け入れ条件・QA の結果・デザインレビュー・PR の下書き)を Markdown で出す。投稿は人が行う")
+    .action((id: string) =>
+      withContext((ctx) => {
+        console.log(buildTaskReport(ctx, mustTask(ctx, id).id).markdown);
       }),
     );
 

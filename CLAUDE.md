@@ -97,6 +97,7 @@
 - 安全設定の実機検査: `npx agent-crew doctor --probe-sandbox`(claude -p を haiku で1回動かす。利用枠を少し使う。ランナーや安全設定を変えたら必ず実行する)
 - 基本の流れ: `project add <path> --name <n>` → `project approve <n>` → `task create --project <n> --title ... --body-file ...` → `run` → `task approve <id> --kind plan` → `run` → `task approve <id> --kind final` → `run`。人の対応待ちは `task list`(★)と `task show <id>`
 - プロファイルのコマンドの手直し: `project set <n> --start "..." --test "..."`(役割に渡すコマンドの正本は DB。`profile.md` を手で直しても反映されない。`-` で「なし」。`project show` とプロジェクト画面で確認できる)
+- 報告(API を使わない書き戻し): `task report <id>` で Notion などに貼る Markdown を出す(概要・受け入れ条件・QA・デザインレビュー・PR の下書き)。取り込み元の URL は `task create --source-url` で持たせる。投稿は人が行う
 - 人への引き継ぎ: `task takeover <id>` → worktree で作業してコミット → `task return <id>`。ベースへの追従: `task update-base <id>`
 - GUI: `npx agent-crew serve`(http://127.0.0.1:4300/ 。常駐ワーカーがタスクを自動で進め、GUI から承認・回答・停止・引き取り・チケット投入ができる。`--no-worker` で読み取り専用。GUI のビルドが無いか古ければ自動でビルドする。`--no-build` で抑止)。CLI の `run` とはロックで排他する(GUI で一時停止すると CLI の run を使える)
 - GUI のビルド: `npm run build:gui`(`npm install` 時にも `prepare` で実行される。結果は `dist/gui/`)

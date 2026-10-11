@@ -1,8 +1,8 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename, extname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { parse as parseYaml } from "yaml";
 import { appDbPath } from "../app.ts";
+import { splitFrontmatter } from "../util/frontmatter.ts";
 import type { Db } from "../db/connection.ts";
 import {
   costByTask,
@@ -184,17 +184,7 @@ function mediaTypeOf(path: string): ArtifactDetail["mediaType"] {
 }
 
 /** 先頭の frontmatter(--- で囲んだ YAML)を本文から分ける */
-export function splitFrontmatter(text: string): { frontmatter: Record<string, unknown> | null; body: string } {
-  const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
-  if (!m) return { frontmatter: null, body: text };
-  try {
-    const fm = parseYaml(m[1]!);
-    if (fm && typeof fm === "object" && !Array.isArray(fm)) return { frontmatter: fm as Record<string, unknown>, body: text.slice(m[0].length) };
-  } catch {
-    // 壊れた frontmatter はそのまま本文として見せる
-  }
-  return { frontmatter: null, body: text };
-}
+export { splitFrontmatter };
 
 const markdownBody = (text: string | null) => (text === null ? null : splitFrontmatter(text).body);
 

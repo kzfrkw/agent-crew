@@ -53,4 +53,23 @@ describe("task の CLI", () => {
     expect(cli(home, "task", "list").out).not.toContain("#1");
     expect(cli(home, "task", "list", "--all").out).toContain("取り消し");
   }, 60_000);
+
+  it("report: Notion に貼る報告を Markdown で出す(6c)", () => {
+    const home = tempDir("agent-crew-home-");
+    const { repo } = makeRepo();
+    const db = openDb(appDbPath(home));
+    const p = createProject(db, { name: "shop" });
+    const r = addRepo(db, { projectId: p.id, path: repo, role: "main", defaultBranch: "main" });
+    setRepoProfile(db, r.id, PROFILE);
+    setProjectProfile(db, p.id, { profileStatus: "approved", testInfra: "present", profile: PROFILE });
+    db.close();
+    const body = join(home, "body.md");
+    writeFileSync(body, "本文");
+    cli(home, "task", "create", "--project", "shop", "--title", "在庫0を除外", "--body-file", body, "--source-url", "https://www.notion.so/x");
+    const out = cli(home, "task", "report", "1");
+    expect(out.code).toBe(0);
+    expect(out.out).toContain("## 在庫0を除外");
+    expect(out.out).toContain("https://www.notion.so/x");
+    expect(cli(home, "task", "report", "9").code).toBe(1);
+  });
 });
