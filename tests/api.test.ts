@@ -184,6 +184,14 @@ describe("読み取り API", () => {
     ]);
   });
 
+  it("task: Notion に貼る報告(6c)を節ごとに返す", async () => {
+    const s = seed();
+    server = await startServer({ home: s.home, port: 0 });
+    const d = await json<TaskDetail>(`api/tasks/${s.t1.id}`);
+    expect(d.report.sections[0]).toMatchObject({ id: "summary", title: "概要" });
+    expect(d.report.markdown).toContain(`## ${s.t1.title}`);
+  });
+
   it("artifact: 実行時点の写しを返し、Markdown の frontmatter を分ける", async () => {
     const s = seed();
     server = await startServer({ home: s.home, port: 0 });

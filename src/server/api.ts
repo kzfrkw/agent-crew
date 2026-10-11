@@ -30,6 +30,7 @@ import {
 import { latestReason, runActive } from "../orchestrator/engine.ts";
 import { attentionOf, nextActions } from "../orchestrator/next-actions.ts";
 import { projectDir, runDir, taskDir } from "../orchestrator/paths.ts";
+import { buildTaskReport } from "../orchestrator/report.ts";
 import { STATE_LABELS } from "../orchestrator/states.ts";
 import type {
   ArtifactDetail,
@@ -246,6 +247,7 @@ function taskDetail(home: string, db: Db, id: number, operable: boolean): TaskDe
     nextActions: nextActions(db, t),
     runActive: runActive(db, id),
     screenshots: screenshotsOf(home, db, id),
+    report: buildTaskReport(db, id),
     operable,
   };
 }

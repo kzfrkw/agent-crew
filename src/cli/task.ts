@@ -96,7 +96,7 @@ export function registerTaskCommands(program: Command): void {
     .description("Notion などに貼る報告(概要・受け入れ条件・QA の結果・デザインレビュー・PR の下書き)を Markdown で出す。投稿は人が行う")
     .action((id: string) =>
       withContext((ctx) => {
-        console.log(buildTaskReport(ctx, mustTask(ctx, id).id).markdown);
+        console.log(buildTaskReport(ctx.db, mustTask(ctx, id).id).markdown);
       }),
     );
 

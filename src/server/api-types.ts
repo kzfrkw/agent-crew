@@ -138,6 +138,15 @@ export type WorktreeView = { repoRole: string; worktreePath: string; branchName:
 /** device は iOS シミュレータで撮ったときの機種(フェーズ6。そのときは幅の代わりに出す) */
 export type ScreenshotView = { name: string; path: string; width: number; scheme: "light" | "dark"; file: string; device?: string; url: string | null; error?: string };
 
+/** Notion などに貼る報告(6c。投稿は人が行う) */
+export type TaskReportView = {
+  taskId: number;
+  title: string;
+  sourceUrl: string | null;
+  sections: { id: "summary" | "criteria" | "qa" | "design" | "pr"; title: string; markdown: string }[];
+  markdown: string;
+};
+
 export type TaskDetail = {
   task: TaskSummary & { body: string; sourceKind: string; sourceUrl: string | null };
   project: ProjectSummary;
@@ -151,6 +160,7 @@ export type TaskDetail = {
   runActive: boolean;
   /** 最新の撮影の画面(デザインレビューの判断材料。無ければ空) */
   screenshots: ScreenshotView[];
+  report: TaskReportView;
   /** このサーバーで操作できるか(serve --no-worker の読み取り専用なら false。GUI はボタンの代わりに CLI のコマンドを出す) */
   operable: boolean;
 };

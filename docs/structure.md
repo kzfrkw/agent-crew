@@ -40,7 +40,7 @@ flowchart LR
 |-----|----------|----------|
 | `GET /api/overview` | プロジェクト一覧、タスクの要約(状態、実行中の役割、対応待ちの理由、費用の合計)、実行中の実行 | S1 |
 | `GET /api/projects/:id` | プロジェクト、プロファイル、リポジトリ、`decisions.md` の本文、プロジェクト把握担当の実行、タスクの要約 | S5 |
-| `GET /api/tasks/:id` | タスク、worktree、承認(有効/失効)、成果物、実行の一覧、費用と時間の合計、対応待ちの理由、次の CLI コマンド | S2 |
+| `GET /api/tasks/:id` | タスク、worktree、承認(有効/失効)、成果物、実行の一覧、費用と時間の合計、対応待ちの理由、次の CLI コマンド、撮影した画面、報告(Notion に貼る Markdown。節ごと) | S2 |
 | `GET /api/artifacts/:id` | 成果物のメタ情報と本文(テキストなら)、画像なら `/files/` のURL | S3 |
 | `GET /api/runs/:id` | 実行のメタ情報(役割、モデル、状態、判定、要約、エラー、費用、時間)と、生ログのURL | S4 |
 | `GET /api/events?after=&task=&run=&limit=` | イベント(id 昇順)。`after` 以降だけを返す | S1, S2, S4 |

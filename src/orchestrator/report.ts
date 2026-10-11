@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { getTask, listArtifacts, listEvents, listRepos, listRuns, listTaskRepos } from "../db/store.ts";
 import { splitFrontmatter } from "../util/frontmatter.ts";
-import type { AppContext } from "./context.ts";
+import type { Db } from "../db/connection.ts";
 import { STATE_LABELS } from "./states.ts";
 
 /**
@@ -26,15 +26,15 @@ function artifactBody(path: string): string {
   return body.replace(/^\s*# [^\n]*\n+/, "").trim();
 }
 
-export function buildTaskReport(ctx: AppContext, taskId: number): TaskReport {
-  const task = getTask(ctx.db, taskId);
+export function buildTaskReport(db: Db, taskId: number): TaskReport {
+  const task = getTask(db, taskId);
   if (!task) throw new Error(`タスク ${taskId} がありません`);
-  const latest = (kind: string) => listArtifacts(ctx.db, taskId).filter((a) => a.kind === kind && existsSync(a.path)).at(-1);
+  const latest = (kind: string) => listArtifacts(db, taskId).filter((a) => a.kind === kind && existsSync(a.path)).at(-1);
   const sections: ReportSection[] = [];
 
   // 概要
-  const repos = listRepos(ctx.db, task.projectId);
-  const branches = listTaskRepos(ctx.db, taskId).map((tr) => {
+  const repos = listRepos(db, task.projectId);
+  const branches = listTaskRepos(db, taskId).map((tr) => {
     const role = repos.find((r) => r.id === tr.repoId)?.role;
     return repos.length > 1 ? `\`${tr.branchName}\`(${role})` : `\`${tr.branchName}\``;
   });
@@ -51,7 +51,7 @@ export function buildTaskReport(ctx: AppContext, taskId: number): TaskReport {
   });
 
   // 受け入れ条件(QA が合格していればチェック済み)
-  const plan = listEvents(ctx.db, taskId, 1000).filter((e) => e.kind === "plan").at(-1)?.payload as { acceptanceCriteria?: unknown } | undefined;
+  const plan = listEvents(db, taskId, 1000).filter((e) => e.kind === "plan").at(-1)?.payload as { acceptanceCriteria?: unknown } | undefined;
   const criteria = Array.isArray(plan?.acceptanceCriteria) ? plan.acceptanceCriteria.map(String) : [];
   const qa = latest("qa-report");
   if (criteria.length) {
@@ -65,7 +65,7 @@ export function buildTaskReport(ctx: AppContext, taskId: number): TaskReport {
 
   const review = latest("design-review");
   if (review) {
-    const summary = listRuns(ctx.db, { taskId }).filter((r) => r.role === "design_reviewer" && r.state === "succeeded").at(-1)?.summary;
+    const summary = listRuns(db, { taskId }).filter((r) => r.role === "design_reviewer" && r.state === "succeeded").at(-1)?.summary;
     sections.push({ id: "design", title: "デザインレビュー", markdown: [`### デザインレビュー: ${VERDICT_LABELS[review.verdict ?? ""] ?? review.verdict ?? ""}`, "", summary ?? artifactBody(review.path)].join("\n") });
   }
 

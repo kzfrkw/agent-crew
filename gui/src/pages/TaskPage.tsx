@@ -8,6 +8,7 @@ import { SectionHead } from "../components/Panel.tsx";
 import { Pipeline } from "../components/Pipeline.tsx";
 import { RunTable } from "../components/RunTable.tsx";
 import { Screenshots } from "../components/Screenshots.tsx";
+import { Report } from "../components/Report.tsx";
 import { StateBadge, VerdictBadge } from "../components/StateBadge.tsx";
 import { Async, Empty } from "../components/Status.tsx";
 import { useApi, useEvents } from "../lib/api.ts";
@@ -58,6 +59,12 @@ function TaskView({ d, onDone }: { d: TaskDetail; onDone: () => void }) {
               </div>
             </section>
           )}
+          <section>
+            <SectionHead title="報告" note="Notion などに貼る(投稿は人が行う)" />
+            <div className="rounded-lg border bg-card p-4">
+              <Report report={d.report} />
+            </div>
+          </section>
           <section>
             <SectionHead title="実行" note={d.runs.length} />
             <div className="rounded-lg border bg-card">

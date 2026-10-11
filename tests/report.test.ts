@@ -33,7 +33,7 @@ describe("Notion に貼る報告(6c、API なし)", () => {
     artifact("pr-draft", "done", "# 注文の一覧に状態を表示する\n\n## 変更点\n- 状態のラベル\n");
     updateTaskState(ctx.db, t.id, { state: "done" });
 
-    const r = buildTaskReport(ctx, t.id);
+    const r = buildTaskReport(ctx.db, t.id);
     expect(r.sections.map((s) => s.id)).toEqual(["summary", "criteria", "qa", "design", "pr"]);
     const md = (id: string) => r.sections.find((s) => s.id === id)!.markdown;
     expect(md("summary")).toContain("注文の一覧に状態を表示する");
@@ -54,13 +54,13 @@ describe("Notion に貼る報告(6c、API なし)", () => {
   it("まだ無い成果物の節は出さない。QA が終わっていなければ受け入れ条件は未チェック", async () => {
     const { ctx, t } = await setup();
     addEvent(ctx.db, { taskId: t.id, kind: "plan", payload: { acceptanceCriteria: ["a"] } });
-    const r = buildTaskReport(ctx, t.id);
+    const r = buildTaskReport(ctx.db, t.id);
     expect(r.sections.map((s) => s.id)).toEqual(["summary", "criteria"]);
     expect(r.sections[1]!.markdown).toContain("- [ ] a");
   });
 
   it("無いタスクはエラー", async () => {
     const { ctx } = await setup();
-    expect(() => buildTaskReport(ctx, 999)).toThrow(/999/);
+    expect(() => buildTaskReport(ctx.db, 999)).toThrow(/999/);
   });
 });

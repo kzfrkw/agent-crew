@@ -31,7 +31,7 @@ export function CommandLine({ label, command, copy = true }: { label?: string; c
   );
 }
 
-export function CopyButton({ text }: { text: string }) {
+export function CopyButton({ text, label = "コマンドをコピー", children }: { text: string; label?: string; children?: string }) {
   const [done, setDone] = useState(false);
   const copy = async () => {
     try {
@@ -43,9 +43,9 @@ export function CopyButton({ text }: { text: string }) {
     }
   };
   return (
-    <Button type="button" variant="ghost" size="xs" className={cn("text-muted-foreground", done && "text-run")} onClick={copy} aria-label="コマンドをコピー">
+    <Button type="button" variant="ghost" size="xs" className={cn("text-muted-foreground", done && "text-run")} onClick={copy} aria-label={label}>
       {done ? <CheckIcon /> : <CopyIcon />}
-      {done ? "コピーしました" : "コピー"}
+      {done ? "コピーしました" : (children ?? "コピー")}
     </Button>
   );
 }
