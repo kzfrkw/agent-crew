@@ -35,6 +35,7 @@ maxBudgetUsd: 5
   - 先頭で `final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();`、アプリを `pumpWidget` した後に `await binding.convertFlutterSurfaceToImage();` と `pumpAndSettle()`
   - `pubspec.yaml` の dev_dependencies に `integration_test`(sdk: flutter)と `flutter_driver`(sdk: flutter)が要ります。ドライバー(`test_driver/`)はツールが用意するので書かなくてかまいません
   - このテストはシミュレータが要るため、`run_project_command` では実行されません(`flutter test` の対象は `test/` だけ)。正しさは撮影で確かめます
+  - ツールが同じテストをライトとダークの両方で動かすので、ダーク用の画面を別に撮る必要はありません
 
 ## ネイティブ iOS のリポジトリ(プロファイルの種類がネイティブ iOS)
 - テストとビルドは Bash ではなく、MCP の道具 `run_project_command`(kind: test / build)で実行してください(サンドボックスの中ではシミュレータを使えません。ツールがシミュレータを貸し出して代わりに実行します)
@@ -44,6 +45,7 @@ maxBudgetUsd: 5
   - `let app = XCUIApplication(); app.launch()` → 画面を開く(タップなど)→ その画面の要素を `waitForExistence(timeout:)` で待つ → 撮る
   - 撮り方: `let a = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); a.name = "<画面の ID>"; a.lifetime = .keepAlways; add(a)`(名前は `ui-spec.md` の画面の ID。英数字・`-`・`_` だけ)
   - このテストは `run_project_command` の test では実行されません(`-only-testing` で単体テストだけを実行するため)。正しさは撮影で確かめます
+  - ツールが同じテストをライトとダークの両方で動かすので、ダーク用の画面を別に撮る必要はありません
 
 ## impl-notes.md に書くこと
 - テストの失敗を確認したときの出力の要点(Red の証拠)
