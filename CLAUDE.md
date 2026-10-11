@@ -5,7 +5,7 @@
 
 ## 現在地
 
-- 現在のフェーズ: **フェーズ6a(iOS シミュレータの QA と Flutter)に着手(2026-10-11)。** 方針は `docs/design-memo.md` の「v0.15で決めたこと」。フェーズ5まで実装済み
+- 現在のフェーズ: **フェーズ6a(iOS シミュレータの QA と Flutter)まで実装済み(2026-10-11、`npm run e2e:mobile` で一周を確認)。** 方針は `docs/design-memo.md` の「v0.15で決めたこと」。次(書き戻し、Maestro など)は着手前に人間と確認する
 - GUIの設計は `docs/strategy.md` → `scope.md` → `structure.md` → `skeleton.md` → `surface.md`(ギャレットの5階層)。画面を変えるときは該当する層も更新する
 - Notion API連携(書き戻し)、Maestro、ネイティブ(SwiftUI)、Android にはまだ着手しない
 - フェーズ定義は `docs/design-memo.md` の第13章
