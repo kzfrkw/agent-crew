@@ -151,3 +151,49 @@
 - 撮影の待ちを入れた後は、デザインレビューまで通った(approve)。約4.5分
 - 統合の前の確認で「未コミットの変更」により止まった。撮影の `flutter drive` のビルドが pod install を行い、`ios/Runner.xcodeproj/project.pbxproj` などを変え、`ios/Podfile.lock` を作ったため
 - 対策: (1) 撮影の前にきれいだった worktree は、撮影で変わったものを元に戻し、警告のイベントで知らせる。(2) e2e のサンプルは、ビルドの設定(`flutter build ios --config-only`)を済ませてからコミットする
+
+## 2026-10-11T09:15:39.363Z Flutter / iOS シミュレータ(モデル: sonnet)
+
+- 所要時間: 5分
+- 費用(見積もり)の合計: $1.090
+- 撮影: s1-orders-iphone-light.png、s1-orders-iphone-dark.png
+
+| 役割 | モデル | 回数 | 費用 | 秒 |
+|---|---|---|---|---|
+| profiler | sonnet | 1 | $0.09 | 22 |
+| planner | sonnet | 1 | $0.127 | 29 |
+| designer | sonnet | 1 | $0.19 | 57 |
+| implementer | sonnet | 1 | $0.189 | 43 |
+| reviewer | sonnet | 1 | $0.113 | 10 |
+| qa | sonnet | 1 | $0.13 | 16 |
+| design_reviewer | sonnet | 1 | $0.133 | 26 |
+| integrator | sonnet | 1 | $0.118 | 16 |
+
+ツールが代わりに実行したコマンド:
+- [implementer] flutter test → 終了コード 1
+- [implementer] flutter test → 終了コード 1
+- [implementer] flutter analyze → 終了コード 1
+- [implementer] flutter test → 終了コード 0
+- [implementer] flutter analyze → 終了コード 0
+- [テストの再実行] flutter test → 終了コード 0
+- [qa] flutter test → 終了コード 0
+- [qa] flutter analyze → 終了コード 0
+
+- ✓ タスクが完了
+- ✓ デザイナーが動いた(ui-spec.md)
+- ✓ 成果物 plan
+- ✓ 成果物 impl-notes
+- ✓ 成果物 review
+- ✓ 成果物 qa-report
+- ✓ 成果物 design-review
+- ✓ 成果物 pr-draft
+- ✓ テストの再実行はツールが行った(claude を使わない)
+- ✓ エージェントが MCP の橋でテスト/解析を実行した
+- ✓ シミュレータでライト・ダークを撮った
+- ✓ エージェントのコミットに trailer
+- ✓ ローカルブランチ
+- ✓ remote に push されていない
+
+コミット:
+- 注文の一覧に状態ラベル(受付 / 発送済み)を表示する(agent-crew implementer)
+
