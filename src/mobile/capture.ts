@@ -53,6 +53,27 @@ export const defaultDriveExec =
   (req) =>
     runSandboxedCommand({ cwd: req.cwd, command: req.command, env: req.env, writable: req.writable, tmpDir: req.tmpDir, denyRead: defaultDenyRead(homedir(), dataHome), timeoutMs: 20 * 60_000 });
 
+/** git の作業ツリーの変更(porcelain)。git のリポジトリでなければ null */
+function gitStatus(worktree: string): string | null {
+  try {
+    return execFileSync("git", ["status", "--porcelain"], { cwd: worktree, encoding: "utf8" }).trimEnd();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 撮影で変わったものを元に戻す(e2e で発見: flutter drive のビルドが pod install を行い、iOS のプロジェクトのファイルを変えた)。
+ * 撮影の前にきれいだった worktree だけが対象。追跡しているファイルは戻し、新しく増えたファイル(.gitignore の対象を除く)は消す
+ */
+function restoreWorktree(worktree: string): string[] {
+  const changed = (gitStatus(worktree) ?? "").split("\n").filter(Boolean).map((l) => l.slice(3));
+  if (changed.length === 0) return [];
+  execFileSync("git", ["checkout", "--", "."], { cwd: worktree });
+  execFileSync("git", ["clean", "-fdq"], { cwd: worktree });
+  return changed;
+}
+
 /** PNG の幅(IHDR)。読めなければ 0 */
 function pngWidth(path: string): number {
   const fd = openSync(path, "r");
@@ -75,12 +96,16 @@ export async function captureFlutterScreens(o: {
   slots?: number;
   waitMs?: number;
   deviceType?: string;
+  /** 知らせること(撮影で変わったファイルを元に戻した、など)。イベントに残す */
+  onNote?: (message: string) => void;
 }): Promise<Shot[]> {
   if (!existsSync(join(o.worktree, SCREENS_TEST))) {
     throw new Error(`${SCREENS_TEST} がありません(画面を開いて takeScreenshot(<画面の名前>) するテストを、実装者が書く決まりです)`);
   }
   const simctl = o.simctl ?? defaultSimctl;
   const exec = o.exec ?? defaultDriveExec(o.home);
+  // 撮影はコードを変えない。前にきれいだった worktree は、撮影の後で元に戻す
+  const wasClean = gitStatus(o.worktree) === "";
   rmSync(o.outDir, { recursive: true, force: true });
   mkdirSync(o.outDir, { recursive: true });
   mkdirSync(join(o.worktree, "build", "agent_crew"), { recursive: true });
@@ -120,5 +145,9 @@ export async function captureFlutterScreens(o: {
     await shutdownDevice(simctl, lease.udid);
     lease.release();
     rmSync(tmp, { recursive: true, force: true });
+    if (wasClean) {
+      const restored = restoreWorktree(o.worktree);
+      if (restored.length > 0) o.onNote?.(`撮影(ビルド)で変わったファイルを元に戻しました: ${restored.join("、")}(ビルドで変わるファイルは、実装者がコミットしておくと、次からは変わりません)`);
+    }
   }
 }

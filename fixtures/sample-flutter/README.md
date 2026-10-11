@@ -4,4 +4,4 @@ agent-crew の通し確認(フェーズ6、`npm run e2e:mobile`)に使う小さ�
 
 - テスト: `flutter test`、静的解析: `flutter analyze`
 - 画面の撮影: `integration_test/screens_test.dart`(agent-crew が iOS シミュレータで動かす)
-- iOS のプロジェクト(`ios/`)はリポジトリに入れていない。使う前に `flutter create --platforms ios --org dev.agentcrew .` で作る(e2e のスクリプトが行う)
+- iOS のプロジェクト(`ios/`)はリポジトリに入れていない。使う前に `flutter create --platforms ios --org dev.agentcrew .` と `flutter build ios --config-only --simulator --debug`(pod install など)を行う(e2e のスクリプトが行う)

@@ -57,13 +57,15 @@ function state(taskId: number): TaskState {
   }
 }
 
-/** サンプルを一時的な git リポジトリにする(iOS のプロジェクトは flutter create で作る。push 先の bare リポジトリつき) */
+/** サンプルを一時的な git リポジトリにする(iOS のプロジェクトは flutter create で作り、ビルドの設定まで済ませる。push 先の bare リポジトリつき) */
 function sampleRepo(): { repo: string; remote: string } {
   const repo = join(work, "sample-flutter");
   const remote = join(work, "sample-flutter-remote.git");
   cpSync(join(root, "fixtures", "sample-flutter"), repo, { recursive: true });
   execFileSync("flutter", ["create", "--platforms", "ios", "--org", "dev.agentcrew", "--project-name", "sample_flutter", "."], { cwd: repo, stdio: "ignore" });
   for (const f of [".idea", "sample_flutter.iml"]) rmSync(join(repo, f), { recursive: true, force: true });
+  // ビルドの設定(pod install など)を先に済ませてコミットしておく(実際のプロジェクトでは、これらはコミットされている)
+  execFileSync("flutter", ["build", "ios", "--config-only", "--simulator", "--debug"], { cwd: repo, stdio: "ignore" });
   git(work, "init", "-q", "--bare", remote);
   git(repo, "init", "-q", "-b", "main");
   git(repo, "add", ".");

@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ensureDevice, leaseSimulator, type Simctl } from "../src/mobile/simulator.ts";
 import { captureFlutterScreens, type DriveExec } from "../src/mobile/capture.ts";
-import { tempDir } from "./helpers/gitrepo.ts";
+import { git, makeRepo, tempDir } from "./helpers/gitrepo.ts";
 
 /** 1x1 の PNG に、IHDR の幅・高さだけを書いたもの(幅の読み取りの確認用) */
 function png(width: number, height: number): Buffer {
@@ -125,5 +125,38 @@ describe("Flutter の画面の撮影(フェーズ6)", () => {
     expect(shots.length).toBeGreaterThan(0);
     expect(shots.every((x) => x.error?.includes("Failed to build iOS app"))).toBe(true);
     expect(existsSync(join(s.home, "simulators", "slot-1.lock"))).toBe(false);
+  });
+
+  it("撮影の前にきれいだった worktree は、撮影(ビルドの pod install など)で変わったものを元に戻し、戻したものを知らせる", async () => {
+    const s = setup();
+    const { repo } = makeRepo();
+    mkdirSync(join(repo, "integration_test"), { recursive: true });
+    writeFileSync(join(repo, "integration_test", "screens_test.dart"), "// screens");
+    writeFileSync(join(repo, "project.pbxproj"), "original\n");
+    git(repo, "add", ".");
+    git(repo, "commit", "-q", "-m", "app");
+    const exec: DriveExec = async (req) => {
+      writeFileSync(join(repo, "project.pbxproj"), "changed by pod install\n");
+      writeFileSync(join(repo, "Podfile.lock"), "lock\n");
+      return s.exec(req);
+    };
+    const notes: string[] = [];
+    const shots = await captureFlutterScreens({ home: s.home, taskId: 1, worktree: repo, outDir: s.outDir, simctl: s.simctl, exec, slots: 1, onNote: (m) => notes.push(m) });
+    expect(shots.filter((x) => !x.error)).toHaveLength(4);
+    expect(readFileSync(join(repo, "project.pbxproj"), "utf8")).toBe("original\n");
+    expect(existsSync(join(repo, "Podfile.lock"))).toBe(false);
+    expect(git(repo, "status", "--porcelain")).toBe("");
+    expect(notes.join("\n")).toMatch(/project\.pbxproj/);
+    expect(notes.join("\n")).toMatch(/Podfile\.lock/);
+  });
+
+  it("撮影の前から変更があった worktree には手を付けない", async () => {
+    const s = setup();
+    const { repo } = makeRepo();
+    mkdirSync(join(repo, "integration_test"), { recursive: true });
+    writeFileSync(join(repo, "integration_test", "screens_test.dart"), "// screens");
+    writeFileSync(join(repo, "wip.txt"), "人の作業中\n");
+    await captureFlutterScreens({ home: s.home, taskId: 1, worktree: repo, outDir: s.outDir, simctl: s.simctl, exec: s.exec, slots: 1 });
+    expect(existsSync(join(repo, "wip.txt"))).toBe(true);
   });
 });

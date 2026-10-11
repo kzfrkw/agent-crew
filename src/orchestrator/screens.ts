@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { defaultDenyRead, startSandboxedApp, type SandboxedApp } from "../browser/app.ts";
 import { captureScreens, type Shot, type Variant } from "../browser/chrome.ts";
-import { getRepoProfile, listRepos, listTaskRepos, type Task } from "../db/store.ts";
+import { addEvent, getRepoProfile, listRepos, listTaskRepos, type Task } from "../db/store.ts";
 import type { Profile } from "../roles/schemas.ts";
 import type { AppContext, CaptureFn } from "./context.ts";
 import { platformOf, resolveServiceEnv } from "./projects.ts";
@@ -62,7 +62,15 @@ export const captureTaskScreens: CaptureFn = async (ctx, task, o) => {
   if (target?.platform === "flutter") {
     const repoId = listRepos(ctx.db, task.projectId).find((r) => r.role === target.role)!.id;
     const worktree = listTaskRepos(ctx.db, task.id).find((x) => x.repoId === repoId)?.worktreePath ?? o.worktree;
-    return captureFlutterScreens({ home: ctx.home, taskId: task.id, worktree, outDir: o.outDir, slots: ctx.config.concurrency, deviceType: ctx.config.simulatorDevice });
+    return captureFlutterScreens({
+      home: ctx.home,
+      taskId: task.id,
+      worktree,
+      outDir: o.outDir,
+      slots: ctx.config.concurrency,
+      deviceType: ctx.config.simulatorDevice,
+      onNote: (message) => addEvent(ctx.db, { taskId: task.id, kind: "warning", payload: { message } }),
+    });
   }
   const services = servicesFor(ctx, task);
   if (!target || services.length === 0) throw new Error("プロファイルに起動コマンドと確認 URL がありません(agent-crew project set で設定してください)");

@@ -145,3 +145,9 @@
 - 撮影で、ライトの画像に integration_test の起動直後の画面(「Test starting...」)が写った。デザインレビュー担当がそれを見つけて need_human を返した(正しい振る舞い)
 - 原因: iOS では描画が1フレーム遅れることがあり、`pumpAndSettle` の直後に `takeScreenshot` すると前の画面が写ることがある(同じ条件で2回再現を試みたが再現せず、間欠的)
 - 対策: 撮る前に `pumpAndSettle` → 800ms 待つ → `pump` を、同梱サンプルの `screens_test.dart` と実装者の決まりに入れた
+
+## 2026-10-10T23:54Z Flutter / iOS シミュレータ(モデル: sonnet)— 失敗(統合で止まった)
+
+- 撮影の待ちを入れた後は、デザインレビューまで通った(approve)。約4.5分
+- 統合の前の確認で「未コミットの変更」により止まった。撮影の `flutter drive` のビルドが pod install を行い、`ios/Runner.xcodeproj/project.pbxproj` などを変え、`ios/Podfile.lock` を作ったため
+- 対策: (1) 撮影の前にきれいだった worktree は、撮影で変わったものを元に戻し、警告のイベントで知らせる。(2) e2e のサンプルは、ビルドの設定(`flutter build ios --config-only`)を済ませてからコミットする
