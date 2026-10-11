@@ -1,7 +1,8 @@
-# AI開発チーム基盤 設計メモ (v0.15)
+# AI開発チーム基盤 設計メモ (v0.16)
 
 ## 変更履歴
 
+- v0.16: フェーズ6の残りの計画。6b はネイティブ iOS(SwiftUI。テストと撮影は xcodebuild / XCUITest をツールが代わりに実行)、6c は書き戻しを API なしで行う(GUI と CLI に、Notion に貼るための報告の文面を出す)。Maestro と Android は後に回す(14章)
 - v0.15: フェーズ6の計画。まず 6a(iOS シミュレータの QA と Flutter 対応)を縦に通す。Flutter のテスト・解析・ビルドと、シミュレータの操作・撮影はツールが sandbox-exec で代わりに実行する(エージェントには MCP で「決めたコマンドの実行」だけを渡す)。画面の撮影は integration_test のスクリーンショットで行う(14章)
 - v0.14: フェーズ5(複数リポジトリ)の方針を確定。リポジトリの追加と、起動のつなぎ方(環境変数)、計画で変更するリポジトリを決めてから worktree を作る流れ、実装者をリポジトリごとに順に動かすこと(14章)
 - v0.13: 4c(実装後のデザインレビュー)の方針。画面の撮影はツールが管理する(アプリはツールの sandbox-exec の中、Chrome はサンドボックスの外で 127.0.0.1 だけ)。状態 design_reviewing を QA と最終確認の間に足す(デザイナーを動かしたタスクだけ)
@@ -361,6 +362,21 @@ Claude Codeのサンドボックス(Bashコマンドを、OSの機能で囲い�
 - フェーズ1のQAはコマンドとHTTPの確認まで。動作確認は同梱サンプルで行う(9章、13章)
 - 統合担当: git操作(ブランチの確認、ベースへの追従の確認)はコードで行い、LLMはPR本文と変更履歴の下書きだけを担当する
 - worktreeごとの設定ファイル(`config.worktree`)とエージェント用フックは、サンドボックスの中から書き換えられないことを確認した(`docs/safety.md` 5章)
+
+### v0.16で決めたこと(フェーズ6の残り。6b: ネイティブ iOS、6c: 書き戻し)
+- **範囲**: 6b はネイティブ iOS(SwiftUI)の QA と撮影、6c は API を使わない書き戻し。Maestro(Java と Maestro のインストールが要る)と Android(SDK とエミュレータが要る)は後に回す
+- **実機の試験で分かったこと(2026-10-11、`docs/safety.md` 9章)**:
+  - 手で書いた Xcode のプロジェクト(Xcode 16 以降の、フォルダを同期する形式。アプリ・単体テスト・UI テストの3つのターゲットと共有スキーム)を `xcodebuild` が扱える
+  - `xcodebuild test` を sandbox-exec の中で動かすには、worktree とユーザーの一時ディレクトリへの書き込みに加えて、テストを管理するサービス(testmanagerd)の unix ソケットへの接続と、`/dev/ptmx`(疑似端末)への書き込みが要った。`-derivedDataPath build/DerivedData` にすれば、共有の DerivedData への書き込みは要らない
+  - 単体テストもシミュレータで動く(アプリに載せて動かすため)。約12秒
+  - XCUITest で `XCTAttachment(screenshot:)`(`lifetime = .keepAlways`、名前は画面の ID)を残し、`xcrun xcresulttool export attachments` で取り出せる。ステータスバーも写る。撮影の前にシミュレータの外観を切り替えればダークも撮れる。約20秒
+- **プロファイル**: 種類に `ios` を足す。把握担当が `*.xcodeproj` から判定する。コマンドは xcodebuild の1行で、ツールが置き換える印を使う: `{simulator}`(貸し出したシミュレータの UDID)。例: テスト `xcodebuild test -scheme Orders -destination 'platform=iOS Simulator,id={simulator}' -derivedDataPath build/DerivedData -only-testing:OrdersTests`、ビルド `xcodebuild build -scheme Orders -destination 'generic/platform=iOS Simulator' -derivedDataPath build/DerivedData`。撮影は `screens`(UI テストのターゲットとクラス。例 `OrdersUITests/ScreensUITests`)
+- **ツールによる実行**: 6a の MCP の橋とテストの再実行を ios にも使う。コマンドに `{simulator}` があれば、ツールがシミュレータを借りて起動してから実行する(橋では、役割の実行が終わるまで借りたままにし、終わったら止めて返す)。sandbox-exec の許可は種類ごとに足す(ios: ユーザーの一時ディレクトリ、testmanagerd のソケット、`/dev/ptmx`)。橋の道具の種類に build を足す(シミュレータの要らないビルドの確認)
+- **画面の撮影**: 実装者が UI テスト(`<アプリ>UITests/ScreensUITests.swift`)に「画面を開いて、画面の ID の名前でスクリーンショットを添付する」テストを書く。ツールはライト / ダークのそれぞれ `-only-testing:<screens>` で実行し、xcresult から添付を取り出して、画面の ID ごとに並べる。撮影の前にきれいだった worktree は、撮影の後で元に戻す(6a と同じ)
+- **依存**: Swift Package Manager の依存の取得(github などへの通信)は 6b では扱わない(同梱のサンプルは依存なし)。必要になったら、ツールが依存の解決(`xcodebuild -resolvePackageDependencies`)を代わりに行う形を検討する
+- **確認**: 同梱のネイティブのサンプル(`fixtures/sample-ios`。注文の一覧、単体テストと撮影の UI テストあり)で、画面の変更を含むチケットを `npm run e2e:ios` で一周させる
+- **書き戻し(6c。API なし)**: タスクごとに「Notion に貼る報告」を組み立てる: タイトルと元のページの URL、状態、計画の要約(受け入れ条件)、QA の結果(条件ごと)、デザインレビューの判定、PR の下書き、ブランチ。GUI のタスク詳細に、節ごとのコピーと「すべてコピー」、元のページを開くリンクを置く。CLI は `agent-crew task report <id>`。Markdown で出す(Notion に貼ると見出しや表になる)。投稿は人が行う(8.3 のとおり)
+- **段取り**: 6c-1 報告の組み立てと CLI → 6c-2 GUI(骨格・構造の文書も更新)→ 6b-1 プロファイルの ios と置き換えの印、doctor → 6b-2 ツールの実行とテストの再実行、橋(シミュレータの貸し出し)→ 6b-3 XCUITest の撮影 → 6b-4 同梱サンプルと e2e:ios
 
 ### v0.15で決めたこと(フェーズ6の計画。6a: iOS シミュレータの QA と Flutter)
 - **範囲**: 6a は iOS シミュレータでの QA と Flutter 対応を、同梱の Flutter サンプルで一周させるところまで。書き戻し(Notion。会社で API が使えるか未確定)、タップ操作の道具(Maestro。Java が要る)、ネイティブ(SwiftUI)、Android は後に回す

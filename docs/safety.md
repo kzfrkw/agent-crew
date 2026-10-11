@@ -207,3 +207,17 @@ Xcode 26.4、iOS 26.4 のシミュレータ、Flutter 3.41.6 で確認した。
 - ユーザーの一時ディレクトリはほかのアプリの一時ファイルも置かれる場所なので、エージェントのコード(ビルドの処理やテスト)がそこを書き換えられることは受け入れたリスク。ホームの文書や資格情報は読めず、通信は localhost だけのまま
 - アプリのシミュレータへのインストールは CoreSimulator のサービスが行うため、`~/Library/Developer/CoreSimulator` への書き込みは許していない
 - 実機で、専用の端末 `agent-crew-1` を借りて起動 → ライト / ダークのそれぞれ `flutter drive` → 止めて返す、までを確認した(約37秒。2画面 × 2配色)
+
+## 9. 実験の記録: ネイティブ iOS(SwiftUI)のテストと撮影(2026-10-11、6b の前提)
+
+手で書いた Xcode のプロジェクト(アプリ・単体テスト・UI テスト)で確認した。
+
+| 確認したこと | 結果 |
+|---|---|
+| sandbox-exec(書き込みは worktree とユーザーの一時ディレクトリ)の中の `xcodebuild test` | ビルドは通るが、テストの実行で testmanagerd の unix ソケット(`/private/var/tmp/com.apple.launchd.*/com.apple.testmanagerd.unix-domain.socket`)への接続が拒否された |
+| 上に、そのソケットへの接続だけを許す | 疑似端末(`/dev/ptmx`)の作成が拒否された |
+| 上に、`/dev/ptmx` への書き込みを許す | 単体テストと UI テストが通った(約20秒) |
+| `-derivedDataPath build/DerivedData` | 共有の DerivedData への書き込みは不要になった(worktree の中に作る) |
+| XCUITest の `XCTAttachment(screenshot:)` を `xcresulttool export attachments` で取り出す | 取り出せた。名前(画面の ID)は manifest.json の `suggestedHumanReadableName` の先頭に入る。1206×2622、ステータスバーも写る |
+
+方針(設計メモ v0.16): 種類が ios のプロジェクトだけ、sandbox-exec に testmanagerd のソケットへの接続と `/dev/ptmx` を足す。通信は localhost のまま(unix ソケットは testmanagerd の1つだけ)。
