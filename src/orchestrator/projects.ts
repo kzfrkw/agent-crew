@@ -202,7 +202,7 @@ export function mustProject(db: Db, name: string): Project {
   return p;
 }
 
-export type ProfileCommandsPatch = Partial<Record<"install" | "build" | "test" | "start" | "startUrl" | "analyze" | "platform", string>>;
+export type ProfileCommandsPatch = Partial<Record<"install" | "build" | "test" | "start" | "startUrl" | "analyze" | "screens" | "platform", string>>;
 
 /** アプリの種類。種類を持たない古いプロファイルは web(フェーズ6) */
 export function platformOf(profile: Pick<Profile, "platform"> | null | undefined): NonNullable<Profile["platform"]> {
@@ -230,6 +230,7 @@ export function setProfileCommands(ctx: AppContext, name: string, patch: Profile
       test: value(patch.test, current.commands.test),
       start: value(patch.start, current.commands.start),
       analyze: value(patch.analyze, current.commands.analyze ?? null),
+      screens: value(patch.screens, current.commands.screens ?? null),
     },
     startUrl: value(patch.startUrl, current.startUrl),
   });

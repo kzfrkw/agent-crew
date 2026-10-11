@@ -32,6 +32,15 @@ maxBudgetUsd: 3
 - **`flutter test` と `flutter analyze` は Bash で実行しないでください**(このサンドボックスの中では止まります)。MCP の道具 `run_project_command`(kind: test / analyze)を使うと、ツールがサンドボックスの中で代わりに実行し、終了コードと出力を返します。依存の準備(`flutter pub get`)は Bash で実行してかまいません
 - QAの方法には、確かめたい画面と、`integration_test/screens_test.dart`(画面を開いて `takeScreenshot` するテスト)の有無を書いてください
 
+## ネイティブ iOS のリポジトリ(`*.xcodeproj` があり、`pubspec.yaml` は無い)
+- 構造化出力の `profile.platform` を `ios` にしてください
+- スキームとターゲットは `xcodebuild -list` か、プロジェクトのファイルを読んで調べてください。**`xcodebuild test` / `build` は Bash で実行しないでください**(このサンドボックスの中ではシミュレータを使えません。テストはツールが代わりに実行します)
+- コマンドは次の形にしてください(`{simulator}` はツールが貸し出したシミュレータに置き換えます。ビルドの置き場は worktree の中にします):
+  - テスト: `xcodebuild test -scheme <スキーム> -destination 'platform=iOS Simulator,id={simulator}' -derivedDataPath build/DerivedData -only-testing:<単体テストのターゲット>`
+  - ビルド: `xcodebuild build -scheme <スキーム> -destination 'generic/platform=iOS Simulator' -derivedDataPath build/DerivedData`
+  - `screens`: 画面を撮る UI テスト(`<UIテストのターゲット>/ScreensUITests`)。無ければ null。起動と確認URLは null
+- `build/` が `.gitignore` に入っているかを確かめ、入っていなければ `profile.md` に書いてください
+
 ## 成果物
 - `profile.md`: 上記を人が読める形でまとめる(人が確認して承認する)
 - 構造化出力の `profile`: 機械が使う値。コマンドは、リポジトリのルートでそのまま実行できる1行にしてください。無いものは null

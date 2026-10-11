@@ -36,6 +36,15 @@ maxBudgetUsd: 5
   - `pubspec.yaml` の dev_dependencies に `integration_test`(sdk: flutter)と `flutter_driver`(sdk: flutter)が要ります。ドライバー(`test_driver/`)はツールが用意するので書かなくてかまいません
   - このテストはシミュレータが要るため、`run_project_command` では実行されません(`flutter test` の対象は `test/` だけ)。正しさは撮影で確かめます
 
+## ネイティブ iOS のリポジトリ(プロファイルの種類がネイティブ iOS)
+- テストとビルドは Bash ではなく、MCP の道具 `run_project_command`(kind: test / build)で実行してください(サンドボックスの中ではシミュレータを使えません。ツールがシミュレータを貸し出して代わりに実行します)
+- 単体テストは単体テストのターゲットに書き、テスト先行で進めます
+- 新しい Swift のファイルは、ターゲットのフォルダに置けばビルドに入ります(Xcode 16 以降のフォルダを同期する形式)。古い形式のプロジェクトで `project.pbxproj` の編集が要る場合は、`need_human` を返してください
+- `ui-spec.md` があるタスク(画面が変わる)では、プロファイルの「画面を撮る UI テスト」(例: `OrdersUITests/ScreensUITests`)を書いて更新してください。ツールがこれをシミュレータのライト / ダークで動かし、デザインレビューに回します
+  - `let app = XCUIApplication(); app.launch()` → 画面を開く(タップなど)→ その画面の要素を `waitForExistence(timeout:)` で待つ → 撮る
+  - 撮り方: `let a = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); a.name = "<画面の ID>"; a.lifetime = .keepAlways; add(a)`(名前は `ui-spec.md` の画面の ID。英数字・`-`・`_` だけ)
+  - このテストは `run_project_command` の test では実行されません(`-only-testing` で単体テストだけを実行するため)。正しさは撮影で確かめます
+
 ## impl-notes.md に書くこと
 - テストの失敗を確認したときの出力の要点(Red の証拠)
 - 受け入れ条件ごとに、どのテストで確認しているか。テストで確認できない条件は「QAで確認」と明記する

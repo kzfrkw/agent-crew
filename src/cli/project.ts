@@ -25,6 +25,7 @@ function printCommands(p: Profile): void {
     ["テスト", p.commands.test],
     ["起動", p.commands.start],
     ["静的解析", p.commands.analyze ?? null],
+    ["撮影の UI テスト", p.commands.screens ?? null],
     ["確認URL", p.startUrl],
   ] as const) console.log(`    ${label}: ${v ?? "なし"}`);
 }
@@ -152,9 +153,10 @@ export function registerProjectCommands(program: Command): void {
     .option("--start <cmd>", "起動(QA が 127.0.0.1 で起動する)")
     .option("--start-url <url>", "起動後に確認する URL")
     .option("--analyze <cmd>", "静的解析(flutter analyze など)")
-    .option("--platform <kind>", "アプリの種類(web / flutter)")
+    .option("--screens <target>", "ios: 画面を撮る UI テスト(<ターゲット>/<クラス>)")
+    .option("--platform <kind>", "アプリの種類(web / flutter / ios)")
     .option("--role <role>", "直すリポジトリの役目(既定は1つ目)")
-    .action((name: string, o: { install?: string; build?: string; test?: string; start?: string; startUrl?: string; analyze?: string; platform?: string; role?: string }) => {
+    .action((name: string, o: { install?: string; build?: string; test?: string; start?: string; startUrl?: string; analyze?: string; screens?: string; platform?: string; role?: string }) => {
       const ctx = createAppContext();
       try {
         const { role, ...patch } = o;

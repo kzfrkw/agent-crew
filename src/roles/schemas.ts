@@ -7,7 +7,7 @@ import { z } from "zod";
 
 /** プロジェクトプロファイル(リポジトリ単位。フェーズ1は1リポジトリなので全体の項目も含む) */
 export const ProfileSchema = z.object({
-  platform: z.enum(["web", "flutter"]).default("web").describe("アプリの種類。pubspec.yaml があれば flutter(フェーズ6)"),
+  platform: z.enum(["web", "flutter", "ios"]).default("web").describe("アプリの種類。pubspec.yaml があれば flutter、*.xcodeproj のネイティブ iOS アプリなら ios(フェーズ6)"),
   testInfra: z.enum(["present", "insufficient", "none"]).describe("自動テストの基盤があるか"),
   testInfraNotes: z.string().describe("テスト基盤の種類と、不足している点"),
   conventions: z.string().describe("コーディング規約・構成の要点"),
@@ -18,6 +18,7 @@ export const ProfileSchema = z.object({
     test: z.string().nullable().describe("全テストを実行するコマンド。終了コードで合否が分かること"),
     start: z.string().nullable().describe("アプリを起動するコマンド(127.0.0.1 で待ち受けること)"),
     analyze: z.string().nullable().default(null).describe("静的解析のコマンド(flutter analyze など。無ければ null)"),
+    screens: z.string().nullable().default(null).describe("ios: 画面を撮る UI テスト(<UIテストのターゲット>/<クラス>。例 OrdersUITests/ScreensUITests)。無ければ null"),
   }),
   startUrl: z.string().nullable().describe("起動後に確認するURL(http://127.0.0.1:<port>/ など)"),
 });

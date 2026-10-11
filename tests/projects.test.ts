@@ -179,6 +179,26 @@ describe("プロファイルのコマンドの手直し(自己適用で発見)",
     expect(() => setProfileCommands(ctx, "shop", { platform: "android" })).toThrow();
   });
 
+  it("ネイティブ iOS(種類 ios)と、撮影の UI テスト(screens)を持てる。web / flutter / ios 以外は受け付けない(6b)", async () => {
+    const { approvedProject, newTask } = await import("./helpers/project.ts");
+    const { getRepoProfile } = await import("../src/db/store.ts");
+    const { setProfileCommands, platformOf } = await import("../src/orchestrator/projects.ts");
+    const { taskPrompt } = await import("../src/orchestrator/prompts.ts");
+    const ctx = testContext(new ScriptedRunner({}));
+    const { project } = await approvedProject(ctx);
+    const repo = listRepos(ctx.db, project.id)[0]!;
+    const test = "xcodebuild test -scheme Orders -destination 'platform=iOS Simulator,id={simulator}' -derivedDataPath build/DerivedData -only-testing:OrdersTests";
+    setProfileCommands(ctx, "shop", { platform: "ios", test, build: "xcodebuild build -scheme Orders -destination 'generic/platform=iOS Simulator' -derivedDataPath build/DerivedData", screens: "OrdersUITests/ScreensUITests", start: "-", startUrl: "-" });
+    const prof = getRepoProfile(ctx.db, repo.id) as never as { platform: string; commands: Record<string, string | null> };
+    expect(platformOf(prof as never)).toBe("ios");
+    expect(prof.commands).toMatchObject({ test, screens: "OrdersUITests/ScreensUITests" });
+    const prompt = taskPrompt(ctx, newTask(ctx, project.id), "implementer");
+    expect(prompt).toContain("種類: ネイティブ iOS");
+    expect(prompt).toContain("OrdersUITests/ScreensUITests");
+    setProfileCommands(ctx, "shop", { screens: "-" });
+    expect((getRepoProfile(ctx.db, repo.id) as never as { commands: { screens: string | null } }).commands.screens).toBeNull();
+  });
+
   it("プロファイルが無ければ直せない", async () => {
     const { setProfileCommands } = await import("../src/orchestrator/projects.ts");
     const ctx = testContext(new ScriptedRunner({ profiler: () => ({ status: "failed", error: "x" }) }));

@@ -93,8 +93,8 @@ function ProjectView({ d }: { d: ProjectDetail }) {
 }
 
 type ProfileJson = {
-  platform?: "web" | "flutter";
-  commands?: Record<"install" | "build" | "test" | "start", string | null> & { analyze?: string | null };
+  platform?: "web" | "flutter" | "ios";
+  commands?: Record<"install" | "build" | "test" | "start", string | null> & { analyze?: string | null; screens?: string | null };
   startUrl?: string | null;
 } | null;
 
@@ -103,13 +103,14 @@ function ProfileCommands({ name, role, profile, env = {} }: { name: string; role
   const p = profile as ProfileJson;
   if (!p?.commands) return null;
   const rows: [string, string | null | undefined][] = [
-    ...(p.platform === "flutter" ? ([["種類", "Flutter(iOS)"]] as [string, string][]) : []),
+    ...(p.platform === "flutter" ? ([["種類", "Flutter(iOS)"]] as [string, string][]) : p.platform === "ios" ? ([["種類", "ネイティブ iOS"]] as [string, string][]) : []),
     ["依存の準備", p.commands.install],
     ["ビルド", p.commands.build],
     ["テスト", p.commands.test],
     ["起動", p.commands.start],
     ["確認URL", p.startUrl],
     ...(p.commands.analyze ? ([["静的解析", p.commands.analyze]] as [string, string][]) : []),
+    ...(p.commands.screens ? ([["撮影の UI テスト", p.commands.screens]] as [string, string][]) : []),
   ];
   return (
     <div className="rounded-lg border bg-card px-4 py-3">
