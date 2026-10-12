@@ -5,7 +5,7 @@
 
 ## 現在地
 
-- 現在のフェーズ: **フェーズ7(会社での実運用の準備)まで実装済み(2026-10-12、新しい場所への clone から全テストが通ることを確認)。** 方針は `docs/design-memo.md` の「v0.17で決めたこと」。次は会社のリポジトリでの試しの一周(人が `docs/company-checklist.md` に沿って行う)。次のフェーズは着手前に人間と確認する
+- 現在のフェーズ: **フェーズ8(自律の幅を広げる)の計画を確定(2026-10-13)。** 方針は `docs/design-memo.md` の「v0.18で決めたこと」。フェーズ7まで実装済み。会社のリポジトリでの試しの一周は人が `docs/company-checklist.md` に沿って行う
 - GUIの設計は `docs/strategy.md` → `scope.md` → `structure.md` → `skeleton.md` → `surface.md`(ギャレットの5階層)。画面を変えるときは該当する層も更新する
 - Notion API連携、Maestro、Android にはまだ着手しない
 - フェーズ定義は `docs/design-memo.md` の第13章
