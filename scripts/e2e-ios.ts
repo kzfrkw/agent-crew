@@ -129,7 +129,7 @@ async function main(): Promise<void> {
   const { repo, remote } = sampleRepo();
   if (model !== "roles") {
     const names = ["profiler", "planner", "architect", "designer", "implementer", "reviewer", "auditor", "qa", "design_reviewer", "integrator"];
-    writeFileSync(join(home, "config.json"), JSON.stringify({ roles: Object.fromEntries(names.map((r) => [r, { model }])) }, null, 2));
+    writeFileSync(join(home, "config.json"), JSON.stringify({ notify: false, roles: Object.fromEntries(names.map((r) => [r, { model }])) }, null, 2));
   }
 
   cli("project", "add", repo, "--name", "orders-ios");

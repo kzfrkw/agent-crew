@@ -5,6 +5,7 @@ import { requestStop, runnableTasks, stepTask } from "./engine.ts";
 import { acquireRunLock, recoverStaleRuns } from "./lock.ts";
 import { quotaBlock, type QuotaBlock } from "./usage.ts";
 import { sweepFinishedWorktrees } from "./cleanup-worktrees.ts";
+import { notifyHuman } from "./notify.ts";
 
 /**
  * 常駐ワーカー(設計メモ14章 v0.10)。serve の中でオーケストレーターを動かし、進められるタスクを自動で進める。
@@ -127,6 +128,7 @@ export class Worker {
       if (!this.quota || this.quota.until !== quota.until) {
         addEvent(this.ctx.db, { kind: "quota_paused", payload: { reason: quota.reason, until: new Date(quota.until).toISOString() } });
         this.onQuotaPaused?.(quota);
+        notifyHuman(this.ctx, `${quota.reason}。自動実行を一時停止しました(${new Date(quota.until).toLocaleString("ja-JP")} に再開)`);
       }
       this.quota = quota;
       return;

@@ -19,6 +19,8 @@ const ConfigSchema = z.object({
   simulatorDevice: z.string().min(1).optional(),
   /** GUI の「エディタで開く」で起動するコマンド。引数には worktree のパスだけを渡す */
   editor: z.string().min(1).default("code"),
+  /** タスクが人の対応待ちになったとき、利用枠で自動の一時停止に入ったときに macOS の通知を出す(フェーズ7) */
+  notify: z.boolean().default(true),
   limits: z
     .object({
       runTimeoutSec: z.number().int().positive().default(1800),

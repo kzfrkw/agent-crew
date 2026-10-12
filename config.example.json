@@ -4,7 +4,8 @@
   "limits": {
     "runTimeoutSec": 1800,
     "runMaxBudgetUsd": 5,
-    "maxReviewRounds": 3
+    "maxReviewRounds": 3,
+    "pauseAtUtilization": 0.95
   },
   "review": {
     "audit": true
@@ -19,5 +20,6 @@
       "model": "opus"
     }
   },
-  "editor": "code"
+  "editor": "code",
+  "notify": true
 }

@@ -17,6 +17,8 @@ import { branchNameFor, createWorktree, worktreePathFor } from "../git/worktree.
 import type { AppContext } from "./context.ts";
 import { quotaBlock, QuotaError, type QuotaBlock } from "./usage.ts";
 import { releaseTaskWorktrees, sweepFinishedWorktrees } from "./cleanup-worktrees.ts";
+import { notifyHuman } from "./notify.ts";
+import { NEEDS_HUMAN, STATE_LABELS } from "./states.ts";
 import { HANDLERS } from "./handlers.ts";
 import { testGateOpen } from "./projects.ts";
 import { roleForState, transition, type TaskEvent, type TransitionResult } from "./transitions.ts";
@@ -46,6 +48,8 @@ export function applyEvent(ctx: AppContext, taskId: number, event: TaskEvent, re
   if (next.state === "needs_input" || next.state === "failed") {
     addEvent(ctx.db, { taskId, kind: next.state, payload: { reason: reason ?? describeEvent(event) } });
   }
+  // 人の対応待ちになったら知らせる(設計メモ v0.17)
+  if (NEEDS_HUMAN.includes(next.state) && task.state !== next.state) notifyHuman(ctx, `#${taskId} ${STATE_LABELS[next.state]}: ${task.title}`);
   // 完了・取り消しになったら worktree を片付ける(ブランチは残す。設計メモ v0.17)
   if ((next.state === "done" || next.state === "cancelled") && task.state !== next.state) releaseTaskWorktrees(ctx, taskId);
   return next;

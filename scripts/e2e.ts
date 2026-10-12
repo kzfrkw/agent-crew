@@ -80,7 +80,7 @@ function setup(): void {
   git(repo, "remote", "add", "origin", remote);
   if (model !== "roles") {
     const roles = Object.fromEntries(["profiler", "planner", "architect", "designer", "implementer", "reviewer", "auditor", "qa", "design_reviewer", "integrator"].map((r) => [r, { model }]));
-    writeFileSync(join(home, "config.json"), JSON.stringify({ roles }, null, 2));
+    writeFileSync(join(home, "config.json"), JSON.stringify({ notify: false, roles }, null, 2));
   }
 }
 

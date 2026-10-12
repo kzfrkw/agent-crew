@@ -9,9 +9,11 @@ export function testContext(runner: Runner, config: Partial<Config> = {}): AppCo
   return {
     db: openDb(":memory:"),
     home: tempDir("agent-crew-home-"),
-    config: { ...DEFAULT_CONFIG, ...config },
+    // limits などの入れ子は写す(テストで書き換えても既定値に漏れないように)
+    config: { ...DEFAULT_CONFIG, ...config, limits: { ...DEFAULT_CONFIG.limits, ...config.limits }, review: { ...DEFAULT_CONFIG.review, ...config.review }, sandbox: { ...DEFAULT_CONFIG.sandbox, ...config.sandbox } },
     roles: loadRoles(),
     runner,
     gitEnv: gitEnv(),
+    notifier: () => {},
   };
 }

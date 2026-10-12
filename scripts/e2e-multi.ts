@@ -123,7 +123,7 @@ async function main(): Promise<void> {
   const front = sampleRepo("sample-front");
   if (model !== "roles") {
     const names = ["profiler", "planner", "architect", "designer", "implementer", "reviewer", "auditor", "qa", "design_reviewer", "integrator"];
-    writeFileSync(join(home, "config.json"), JSON.stringify({ roles: Object.fromEntries(names.map((r) => [r, { model }])) }, null, 2));
+    writeFileSync(join(home, "config.json"), JSON.stringify({ notify: false, roles: Object.fromEntries(names.map((r) => [r, { model }])) }, null, 2));
   }
 
   // 起動の順は登録の順: API を先に登録する

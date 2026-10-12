@@ -9,6 +9,7 @@ import type { Shot } from "../browser/chrome.ts";
 import type { Task } from "../db/store.ts";
 import type { ToolExecFn } from "../toolexec/command.ts";
 import type { Simctl } from "../mobile/simulator.ts";
+import type { Notifier } from "./notify.ts";
 
 export type ScreenRequest = { path: string; note?: string };
 /** タスクの worktree のアプリを起動して画面を撮り、outDir に PNG を置く(設計メモ v0.13) */
@@ -29,6 +30,8 @@ export type AppContext = {
   toolExec?: ToolExecFn;
   /** xcrun simctl(フェーズ6)。テストでは差し替える。無ければ mobile/simulator の既定 */
   simctl?: Simctl;
+  /** 人の対応待ちの通知(7-3)。テストでは差し替える。無ければ macOS の通知 */
+  notifier?: Notifier;
   /** 進めている最中のタスクの、停止の合図(stepTask が作る。requestStop で鳴らす) */
   stops?: Map<number, AbortController>;
 };
