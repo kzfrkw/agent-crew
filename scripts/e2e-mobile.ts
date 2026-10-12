@@ -131,7 +131,7 @@ async function main(): Promise<void> {
   mkdirSync(home, { recursive: true });
   const { repo, remote } = sampleRepo();
   if (model !== "roles") {
-    const names = ["profiler", "planner", "architect", "designer", "implementer", "reviewer", "auditor", "qa", "design_reviewer", "integrator"];
+    const names = ["profiler", "planner", "architect", "designer", "implementer", "reviewer", "auditor", "qa", "design_reviewer", "integrator", "retrospective"];
     writeFileSync(join(home, "config.json"), JSON.stringify({ notify: false, roles: Object.fromEntries(names.map((r) => [r, { model }])) }, null, 2));
   }
 

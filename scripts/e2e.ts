@@ -79,7 +79,7 @@ function setup(): void {
   git(repo, "commit", "-q", "-m", "init");
   git(repo, "remote", "add", "origin", remote);
   if (model !== "roles") {
-    const roles = Object.fromEntries(["profiler", "planner", "architect", "designer", "implementer", "reviewer", "auditor", "qa", "design_reviewer", "integrator"].map((r) => [r, { model }]));
+    const roles = Object.fromEntries(["profiler", "planner", "architect", "designer", "implementer", "reviewer", "auditor", "qa", "design_reviewer", "integrator", "retrospective"].map((r) => [r, { model }]));
     writeFileSync(join(home, "config.json"), JSON.stringify({ notify: false, roles }, null, 2));
   }
 }
@@ -98,6 +98,7 @@ function report(taskId: number): { summary: string; ok: boolean } {
     const checks = [
       ["タスクが完了", getTask(db, taskId)!.state === "done"],
       ...["plan", "impl-notes", "review", "qa-report", "pr-draft"].map((k) => [`成果物 ${k}`, artifacts.has(k)] as const),
+      ["振り返りが動いた(retro.md。8-5)", artifacts.has("retro")],
       ["ローカルブランチ", git(repo, "branch", "--list", tr.branchName) !== ""],
       ["remote に push されていない", git(remote, "branch", "--list") === ""],
       ["エージェントのコミットに trailer", commits.some((c) => c.agentRole === "implementer")],
@@ -165,6 +166,7 @@ async function main(): Promise<void> {
   cli("run");
   expectState(id, "done");
   cli("task", "show", String(id));
+  cli("task", "retro", String(id));
 
   const { summary, ok } = report(id);
   console.log(`\n${summary}`);

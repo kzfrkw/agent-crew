@@ -145,6 +145,12 @@ export function describeEvent(e: EventView): EventLine {
       return { tone: "neutral", icon: "i", title: "自動承認しない", text: Array.isArray(p.reasons) ? p.reasons.join("、") : "" };
     case "waiting_overlap":
       return { tone: "neutral", icon: "⏳", title: "重なりの待ち", text: String(p.reason ?? "") };
+    case "retro": {
+      const list: P[] = Array.isArray(p.proposals) ? p.proposals : [];
+      return { tone: "neutral", icon: "💡", title: "振り返り", text: list.length ? `提案 ${list.length} 件` : "提案なし", detail: list.map((x) => `${x.target}: ${x.text}`).join("\n") };
+    }
+    case "retro_decision":
+      return { tone: p.adopt ? "success" : "neutral", icon: p.adopt ? "✓" : "×", title: p.adopt ? "振り返りの提案を採用" : "振り返りの提案を却下", text: String(p.text ?? "") };
     case "bounce":
       return { tone: "attention", icon: "↩", title: "差し戻し", text: String(p.summary ?? "") };
     case "tool_command": {

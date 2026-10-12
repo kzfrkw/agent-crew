@@ -4,6 +4,7 @@ import type { AppContext } from "../orchestrator/context.ts";
 import { requestStop } from "../orchestrator/engine.ts";
 import { returnTask, takeoverTask, updateBase } from "../orchestrator/handoff.ts";
 import { answerTask, approveTask, cancelTask, rejectTask } from "../orchestrator/human.ts";
+import { decideRetro } from "../orchestrator/retro.ts";
 import type { Worker } from "../orchestrator/worker.ts";
 import type { ActionRequest, ActionResult, CreateTaskRequest, DesignOptions, TaskSummary, WorkerView } from "./api-types.ts";
 import { HttpError, taskSummaryOf } from "./api.ts";
@@ -61,7 +62,7 @@ async function toggleWorker(ops: Ops, body: unknown): Promise<WorkerView> {
   return workerView(ops.worker);
 }
 
-const ACTIONS = ["approve", "reject", "answer", "stop", "takeover", "return", "cancel", "update_base", "open_editor"];
+const ACTIONS = ["approve", "reject", "answer", "stop", "takeover", "return", "cancel", "update_base", "open_editor", "retro"];
 
 async function act(ops: Ops, taskId: number, body: unknown): Promise<ActionResult> {
   const { ctx, worker } = ops;
@@ -120,6 +121,12 @@ async function act(ops: Ops, taskId: number, body: unknown): Promise<ActionResul
         cancelTask(ctx, taskId);
         message = "取り消しました";
         break;
+      case "retro": {
+        if (typeof req.index !== "number" || typeof req.adopt !== "boolean") throw new HttpError(400, "index(数)と adopt(true / false)を指定してください");
+        decideRetro(ctx, taskId, req.index, req.adopt, { force: true });
+        message = req.adopt ? "採用し、書き足しました" : "却下しました";
+        break;
+      }
       case "update_base":
         message = updateBase(ctx, taskId).message;
         break;

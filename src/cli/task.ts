@@ -8,6 +8,7 @@ import { answerTask, approveTask, cancelTask, rejectTask } from "../orchestrator
 import { acquireRunLock, recoverStaleRuns } from "../orchestrator/lock.ts";
 import { nextActions } from "../orchestrator/next-actions.ts";
 import { buildTaskReport } from "../orchestrator/report.ts";
+import { decideRetro, retroView } from "../orchestrator/retro.ts";
 import { mustProject } from "../orchestrator/projects.ts";
 import { NEEDS_HUMAN, STATE_LABELS } from "../orchestrator/states.ts";
 
@@ -97,6 +98,23 @@ export function registerTaskCommands(program: Command): void {
     .action((id: string) =>
       withContext((ctx) => {
         console.log(buildTaskReport(ctx.db, mustTask(ctx, id).id).markdown);
+      }),
+    );
+
+  task
+    .command("retro <id>")
+    .description("振り返りの提案を見る。--adopt / --reject で採用・却下する(採用したものは規約か decisions.md に書き足す)")
+    .option("--adopt <n>", "採用する提案の番号(複数回指定できる)", (v: string, acc: number[]) => [...acc, Number(v)], [] as number[])
+    .option("--reject <n>", "却下する提案の番号(複数回指定できる)", (v: string, acc: number[]) => [...acc, Number(v)], [] as number[])
+    .action((id: string, o: { adopt: number[]; reject: number[] }) =>
+      withContext((ctx) => {
+        const t = mustTask(ctx, id);
+        for (const n of o.adopt) decideRetro(ctx, t.id, n, true, { force: true });
+        for (const n of o.reject) decideRetro(ctx, t.id, n, false);
+        const view = retroView(ctx.db, t.id);
+        if (!view) return console.log("振り返りはまだありません");
+        const mark = { pending: "未決", adopted: "採用", rejected: "却下" };
+        for (const p of view.proposals) console.log(`[${p.index}] ${mark[p.status]}  ${p.target === "conventions" ? "規約" : "設計判断"}: ${p.text}`);
       }),
     );
 

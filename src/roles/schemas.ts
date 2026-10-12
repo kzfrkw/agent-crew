@@ -95,7 +95,14 @@ const QaExtra = z.object({
     .describe("UI 仕様(ui-spec.md)があるとき、変更された画面を撮るためのパスの一覧。なければ省く"),
 });
 
+const RetrospectiveExtra = z.object({
+  proposals: z
+    .array(z.object({ target: z.enum(["conventions", "decisions"]).describe("規約(conventions)か設計判断(decisions)か"), text: z.string().describe("書き足す内容(1文)") }))
+    .describe("提案(多くても5つ)。無ければ空配列"),
+});
+
 export const EXTRA_SCHEMAS: Record<string, z.ZodObject> = {
+  retrospective: RetrospectiveExtra,
   qa: QaExtra,
   architect: DesignExtra,
   designer: DesignExtra,

@@ -34,6 +34,7 @@ import { attentionOf, nextActions } from "../orchestrator/next-actions.ts";
 import { projectDir, runDir, taskDir } from "../orchestrator/paths.ts";
 import { buildTaskReport } from "../orchestrator/report.ts";
 import { getUsage } from "../orchestrator/usage.ts";
+import { retroView } from "../orchestrator/retro.ts";
 import { STATE_LABELS } from "../orchestrator/states.ts";
 import type {
   ArtifactDetail,
@@ -266,6 +267,7 @@ function taskDetail(home: string, db: Db, id: number, operable: boolean): TaskDe
     runActive: runActive(db, id),
     screenshots: screenshotsOf(home, db, id),
     report: buildTaskReport(db, id),
+    retro: retroView(db, id),
     parent: t.parentId === null ? null : { id: t.parentId, title: getTask(db, t.parentId)?.title ?? "" },
     children: listChildren(db, id).map((c) => ({ id: c.id, title: c.title, seq: c.seq ?? 0, state: c.state, stateLabel: STATE_LABELS[c.state] })),
     operable,

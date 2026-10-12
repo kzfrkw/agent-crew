@@ -64,8 +64,8 @@ describe("loadRoles", () => {
 describe("同梱の役割定義", () => {
   const roles = loadRoles(defaultRolesDir());
 
-  it("役割がそろっている(フェーズ4で設計者・デザイナー・デザインレビュー担当を追加)", () => {
-    expect([...roles.keys()].sort()).toEqual(["architect", "auditor", "design_reviewer", "designer", "implementer", "integrator", "planner", "profiler", "qa", "reviewer", "verifier"]);
+  it("役割がそろっている(フェーズ4で設計者・デザイナー・デザインレビュー担当、フェーズ8で振り返り担当を追加)", () => {
+    expect([...roles.keys()].sort()).toEqual(["architect", "auditor", "design_reviewer", "designer", "implementer", "integrator", "planner", "profiler", "qa", "retrospective", "reviewer", "verifier"]);
   });
 
   it("判定の列挙値が状態遷移と一致している", () => {

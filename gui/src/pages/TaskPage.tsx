@@ -9,6 +9,7 @@ import { Pipeline } from "../components/Pipeline.tsx";
 import { RunTable } from "../components/RunTable.tsx";
 import { Screenshots } from "../components/Screenshots.tsx";
 import { Report } from "../components/Report.tsx";
+import { RetroPanel } from "../components/Retro.tsx";
 import { StateBadge, VerdictBadge } from "../components/StateBadge.tsx";
 import { Async, Empty } from "../components/Status.tsx";
 import { useApi, useEvents } from "../lib/api.ts";
@@ -77,6 +78,18 @@ function TaskView({ d, onDone }: { d: TaskDetail; onDone: () => void }) {
               <SectionHead title="撮影した画面" note="実装後のデザインレビューの材料" />
               <div className="rounded-lg border bg-card p-4">
                 <Screenshots shots={d.screenshots} />
+              </div>
+            </section>
+          )}
+          {d.retro && (
+            <section>
+              <SectionHead title="振り返りの提案" note="採用すると、規約か設計判断ログ(decisions.md)に書き足します" />
+              <div className="rounded-lg border bg-card px-4 py-1">
+                {d.operable ? (
+                  <RetroPanel taskId={t.id} retro={d.retro} onDone={onDone} />
+                ) : (
+                  <p className="text-xs text-muted-foreground">agent-crew task retro {t.id} --adopt &lt;番号&gt; で採用します</p>
+                )}
               </div>
             </section>
           )}

@@ -20,6 +20,8 @@ export type ActionRequest =
   | { action: "takeover" }
   | { action: "return" }
   | { action: "cancel" }
+  /** 振り返りの提案を採用・却下する(8-5) */
+  | { action: "retro"; index: number; adopt: boolean }
   | { action: "update_base" }
   | { action: "open_editor" };
 
@@ -169,6 +171,8 @@ export type TaskDetail = {
   /** 最新の撮影の画面(デザインレビューの判断材料。無ければ空) */
   screenshots: ScreenshotView[];
   report: TaskReportView;
+  /** 振り返りの提案と人の判断(8-5)。振り返りが無ければ null */
+  retro: { proposals: { index: number; target: "conventions" | "decisions"; text: string; status: "pending" | "adopted" | "rejected" }[] } | null;
   /** 分割の親(8-2)。子でなければ null */
   parent: { id: number; title: string } | null;
   /** 分割した子タスク(順番どおり)。親でなければ空 */

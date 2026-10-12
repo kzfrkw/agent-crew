@@ -159,16 +159,22 @@ export function registerProjectCommands(program: Command): void {
     .option("--platform <kind>", "アプリの種類(web / flutter / ios)")
     .option("--role <role>", "直すリポジトリの役目(既定は1つ目)")
     .option("--auto-approve-plan <on|off>", "小さなタスクの計画の承認を自動で行う(条件は設計メモ v0.18。既定 off)")
-    .action((name: string, o: { install?: string; build?: string; test?: string; start?: string; startUrl?: string; analyze?: string; screens?: string; platform?: string; role?: string; autoApprovePlan?: string }) => {
+    .option("--retrospective <on|off>", "完了したタスクの振り返り(規約・設計判断の提案)を動かす(既定 on)")
+    .action((name: string, o: { install?: string; build?: string; test?: string; start?: string; startUrl?: string; analyze?: string; screens?: string; platform?: string; role?: string; autoApprovePlan?: string; retrospective?: string }) => {
       const ctx = createAppContext();
       try {
-        const { role, autoApprovePlan, ...patch } = o;
+        const { role, autoApprovePlan, retrospective, ...patch } = o;
+        if (retrospective !== undefined) {
+          if (!["on", "off"].includes(retrospective)) throw new Error("--retrospective は on か off で指定してください");
+          setProjectSettings(ctx, name, { retrospective: retrospective === "on" });
+          console.log(`振り返り: ${retrospective}`);
+        }
         if (autoApprovePlan !== undefined) {
           if (!["on", "off"].includes(autoApprovePlan)) throw new Error("--auto-approve-plan は on か off で指定してください");
           setProjectSettings(ctx, name, { autoApprovePlan: autoApprovePlan === "on" });
           console.log(`小さなタスクの計画の自動承認: ${autoApprovePlan}`);
         }
-        if (Object.values(patch).every((v) => v === undefined) && autoApprovePlan !== undefined) return;
+        if (Object.values(patch).every((v) => v === undefined) && (autoApprovePlan !== undefined || retrospective !== undefined)) return;
         const p = setProfileCommands(ctx, name, patch, role);
         console.log(`直しました: ${name}`);
         printCommands(p);
@@ -223,7 +229,7 @@ export function registerProjectCommands(program: Command): void {
         const p = mustProject(ctx.db, name);
         console.log(`${p.name}  プロファイル: ${p.profileStatus}  テスト基盤: ${p.testInfra}${p.allowWithoutTests ? "(例外を許可済み)" : ""}`);
         console.log(`データ: ${projectDir(ctx.home, p.id)}`);
-        console.log(`小さなタスクの計画の自動承認: ${getProjectSettings(ctx.db, p.id).autoApprovePlan ? "on" : "off"}`);
+        console.log(`小さなタスクの計画の自動承認: ${getProjectSettings(ctx.db, p.id).autoApprovePlan ? "on" : "off"}  振り返り: ${getProjectSettings(ctx.db, p.id).retrospective === false ? "off" : "on"}`);
         for (const r of listRepos(ctx.db, p.id)) {
           console.log(`  [${r.role}] ${r.path}(既定ブランチ: ${r.defaultBranch})`);
           const prof = getRepoProfile(ctx.db, r.id) as Profile | null;

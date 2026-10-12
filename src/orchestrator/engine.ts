@@ -21,6 +21,7 @@ import { releaseTaskWorktrees, sweepFinishedWorktrees } from "./cleanup-worktree
 import { notifyHuman } from "./notify.ts";
 import { recordBounce } from "./bounce.ts";
 import { appStageBusy, overlapBlocker } from "./overlap.ts";
+import { markRetroPending, retroPending, runRetro } from "./retro.ts";
 import { decideAutoApprove } from "./auto-approve.ts";
 import { approveTask } from "./human.ts";
 import { NEEDS_HUMAN, STATE_LABELS } from "./states.ts";
@@ -58,6 +59,8 @@ export function applyEvent(ctx: AppContext, taskId: number, event: TaskEvent, re
   if (!o.quiet && NEEDS_HUMAN.includes(next.state) && task.state !== next.state) notifyHuman(ctx, `#${taskId} ${STATE_LABELS[next.state]}: ${task.title}`);
   // 分割の子が完了・取り消しになったら、親に知らせる(8-2)
   if (task.parentId !== null && task.state !== next.state && (next.state === "done" || next.state === "cancelled")) notifyParent(ctx, task.parentId, next.state, task);
+  // 完了したら振り返りを待つ印を付ける(8-5)
+  if (next.state === "done" && task.state !== "done") markRetroPending(ctx, task);
   // 完了・取り消しになったら worktree を片付ける(ブランチは残す。設計メモ v0.17)
   if ((next.state === "done" || next.state === "cancelled") && task.state !== next.state) releaseTaskWorktrees(ctx, taskId);
   return next;
@@ -102,6 +105,8 @@ export function latestNeedsInputReason(db: Db, taskId: number): string | undefin
 /** エージェントが進められるタスク */
 export function runnableTasks(ctx: AppContext): Task[] {
   return listTasks(ctx.db).filter((t) => {
+    // 完了したタスクの振り返り(8-5。状態は変えない)
+    if (t.state === "done") return retroPending(ctx.db, t.id) && !(ctx.stops?.has(t.id) ?? false);
     if (t.state === "queued") {
       // 分割の子は順に進める: 前の子が完了するまで始めない(8-2)
       if (t.parentId !== null && (t.seq ?? 1) > 1) {
@@ -173,6 +178,10 @@ async function stepTaskInner(ctx: AppContext, taskId: number, signal: AbortSigna
     return true;
   };
   try {
+    if (task.state === "done") {
+      if (retroPending(ctx.db, taskId)) await runRetro(ctx, task);
+      return;
+    }
     if (task.state === "queued") {
       // 複数リポジトリのプロジェクトは、計画で変更するリポジトリを決めてから worktree を作る(設計メモ v0.14)
       if (listRepos(ctx.db, task.projectId).length === 1) ensureWorktrees(ctx, task);

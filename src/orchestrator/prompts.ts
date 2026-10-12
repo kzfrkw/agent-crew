@@ -22,7 +22,7 @@ import { projectDir, taskDir } from "./paths.ts";
 import type { Role } from "./transitions.ts";
 
 /** 状態に結びつく役割と、レビュワーの内部で動く監査担当 */
-export type PromptRole = Role | "auditor";
+export type PromptRole = Role | "auditor" | "retrospective";
 
 /** タスクの役割に共通の入力(チケット、作業場所、参照するファイル)と、役割ごとの今回やること */
 export function taskPrompt(ctx: AppContext, task: Task, role: PromptRole, extra: string[] = []): string {
@@ -118,6 +118,10 @@ const ROLE_INSTRUCTIONS: Record<PromptRole, string[]> = {
   reviewer: [
     "- ベースからの差分をレビューし、成果物ディレクトリに `review.md` を書いてください。指摘には重大度(must / should / nit)を付けてください",
     "- `design.md` / `ui-spec.md` があれば、実装がそれと食い違っていないかも確認してください",
+  ],
+  retrospective: [
+    "- このタスクの記録を読み、次のタスクで同じ指摘や手戻りを繰り返さないための提案を、成果物ディレクトリの `retro.md` と構造化出力の `proposals` に書いてください。コードは変更しないでください",
+    "- 今の規約(プロファイル)と設計判断ログ(decisions.md)にすでにあるものは提案しないでください",
   ],
   auditor: ["- 下の Must 指摘を、実際のコードを読んで1件ずつ検証し、成果物ディレクトリに `audit.md` を書いてください。コードは変更しないでください"],
   qa: [
