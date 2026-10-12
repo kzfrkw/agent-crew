@@ -8,7 +8,7 @@ const good: ProbeObservation = {
   runStatus: "succeeded",
   results: {
     rc_inside: "0", rc_outside: "1", rc_ssh: "1", token: "", github_code: "000", npm_code: "200",
-    rc_commit: "0", rc_push: "1", rc_hookcfg: "255",
+    rc_commit: "0", rc_push: "1", rc_hookcfg: "255", rc_protected: "1",
   },
   insideFileExists: true,
   outsideFileExists: false,
@@ -22,7 +22,9 @@ const good: ProbeObservation = {
   denials: [
     { tool: "Bash", input: { command: "git push origin HEAD" } },
     { tool: "Write", input: { file_path: "/x/outside-write.txt" } },
+    { tool: "Read", input: { file_path: "/x/wt/protected/secret.txt" } },
   ],
+  protectedReadByModel: false,
 };
 
 const levels = (o: ProbeObservation) => Object.fromEntries(evaluateProbe(o).map((r) => [r.id, r.level]));
@@ -53,6 +55,12 @@ describe("evaluateProbe", () => {
   it("push が remote に届いたり、deny が効かなかったらエラー", () => {
     expect(levels({ ...good, remoteUpdated: true })["probe:push-hook"]).toBe("error");
     expect(levels({ ...good, denials: good.denials.filter((d) => d.tool !== "Bash") })["probe:push-deny"]).toBe("error");
+  });
+
+  it("読ませないパス(7-4)を Bash で読めたり、Read が拒否されなかったり、中身がモデルに見えたらエラー", () => {
+    expect(levels({ ...good, results: { ...good.results, rc_protected: "0" } })["probe:protect-bash"]).toBe("error");
+    expect(levels({ ...good, denials: good.denials.filter((d) => d.tool !== "Read") })["probe:protect-read"]).toBe("error");
+    expect(levels({ ...good, protectedReadByModel: true })["probe:protect-read"]).toBe("error");
   });
 
   it("リポジトリ側のフックが動いたらエラー", () => {

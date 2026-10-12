@@ -221,3 +221,9 @@ Xcode 26.4、iOS 26.4 のシミュレータ、Flutter 3.41.6 で確認した。
 | XCUITest の `XCTAttachment(screenshot:)` を `xcresulttool export attachments` で取り出す | 取り出せた。名前(画面の ID)は manifest.json の `suggestedHumanReadableName` の先頭に入る。1206×2622、ステータスバーも写る |
 
 方針(設計メモ v0.16): 種類が ios のプロジェクトだけ、sandbox-exec に testmanagerd のソケットへの接続と `/dev/ptmx` を足す。通信は localhost のまま(unix ソケットは testmanagerd の1つだけ)。
+
+## 10. 読ませないパス(2026-10-12、7-4)
+
+- プロジェクトのリポジトリごとに、エージェントに読ませないパスを `agent-crew project protect <名前> --add <相対パス>` で足せる(正本は DB。リポジトリには書かない)
+- 効かせ方: 各 worktree とリポジトリの本体の実体のパスにして、(1) Claude の権限の deny(`Read` / `Edit` / `Write` の `//<パス>` と `//<パス>/**`)、(2) サンドボックスの資格情報の deny(`sandbox.credentials.files`。Bash からの読み取りも止まる)、(3) ツールの sandbox-exec(テストの再実行、MCP の橋、撮影、アプリの起動)の読み取りの deny
+- 実機の検査(`doctor --probe-sandbox`)に項目を足した: `protected/secret.txt` を読ませないパスにして、Bash の `cat` が失敗すること(probe:protect-bash)、Read ツールが拒否されること、中身がモデルの出力やログに現れないこと(probe:protect-read)。2026-10-12 に全項目が通った($0.04)
