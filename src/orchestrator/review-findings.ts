@@ -6,7 +6,8 @@ import type { FindingSchema, Judgment } from "../roles/schemas.ts";
  * 指摘の重さ(Must があるか)と、監査で却下されたか、は状態遷移の判断材料なので、LLM の言い回しではなくここで決める。
  */
 
-export type Finding = z.infer<typeof FindingSchema>;
+/** repeated は古い記録や台本では無いことがあるため、省略できる形にする */
+export type Finding = z.input<typeof FindingSchema>;
 
 /** Must の指摘の位置(findings 全体の中での添字) */
 export function mustIndexes(findings: Finding[]): number[] {

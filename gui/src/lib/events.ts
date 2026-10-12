@@ -139,6 +139,8 @@ export function describeEvent(e: EventView): EventLine {
         detail: shots.map((s) => `${s.file}${s.error ? `: ${s.error}` : ""}`).join("\n"),
       };
     }
+    case "bounce":
+      return { tone: "attention", icon: "↩", title: "差し戻し", text: String(p.summary ?? "") };
     case "tool_command": {
       const sec = Math.round(Number(p.durationMs ?? 0) / 1000);
       const ok = p.exitCode === 0 && !p.timedOut;

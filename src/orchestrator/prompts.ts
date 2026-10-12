@@ -12,6 +12,7 @@ export function profilerPrompt(o: { projectName: string; repoPath: string; workt
 `;
 }
 
+import { lastBounce } from "./bounce.ts";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { getProject, getRepoProfile, listRepos, listTaskRepos, type Task } from "../db/store.ts";
@@ -91,6 +92,9 @@ export function taskPrompt(ctx: AppContext, task: Task, role: PromptRole, extra:
           `- 起動: ${profile.commands.start ?? "なし"}(確認URL: ${profile.startUrl ?? "なし"})`,
           "",
         ]
+      : []),
+    ...(role === "implementer" && task.reviewRounds > 0 && lastBounce(ctx.db, task.id)
+      ? ["## 直近の差し戻しの理由(最優先で解消する。同じ理由で2回差し戻されると人に回ります)", `- ${lastBounce(ctx.db, task.id)!.summary}`, ""]
       : []),
     "## 今回やること",
     ...ROLE_INSTRUCTIONS[role],

@@ -64,11 +64,11 @@ describe("レビュワー", () => {
 
   it("テストの再実行が失敗したら、レビューせずに実装者へ差し戻す", async () => {
     const { ctx, t, runner } = await implemented({ verifier: verifier(false), reviewer: review("approve") });
-    // 差し戻し → 実装 → 再実行失敗 … を上限まで繰り返して needs_input
+    // 差し戻し → 実装 → 再実行失敗。同じ失敗が2回続いたので、上限を待たずに needs_input(8-3)
     expect(getTask(ctx.db, t.id)).toMatchObject({ state: "needs_input", heldFromState: "implementing" });
     expect(runner.rolesCalled()).not.toContain("reviewer");
-    expect(runner.rolesCalled().filter((r) => r === "implementer")).toHaveLength(4);
-    expect(latestNeedsInputReason(ctx.db, t.id)).toBeDefined();
+    expect(runner.rolesCalled().filter((r) => r === "implementer")).toHaveLength(2);
+    expect(latestNeedsInputReason(ctx.db, t.id)).toContain("同じ理由で2回");
   });
 
   it("changes_requested で実装者に戻り、実装者は review.md を読む", async () => {

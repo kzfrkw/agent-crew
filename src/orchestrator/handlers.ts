@@ -14,9 +14,11 @@ import type { Shot } from "../browser/chrome.ts";
 import { platformOf, resolveServiceEnv } from "./projects.ts";
 import { applyAudit, checkReviewConsistency, mustIndexes, type Finding } from "./review-findings.ts";
 import { taskPrompt } from "./prompts.ts";
+import { testFailureKey, type BounceInfo } from "./bounce.ts";
 import type { Role, TaskEvent } from "./transitions.ts";
 
-export type HandlerOutcome = { event: TaskEvent; reason?: string };
+/** bounce は差し戻しの理由の要点(8-3。同じ理由が続いたら人に回す) */
+export type HandlerOutcome = { event: TaskEvent; reason?: string; bounce?: BounceInfo };
 export type Handler = (ctx: AppContext, task: Task) => Promise<HandlerOutcome>;
 
 /** 役割の実行結果を、状態遷移の出来事にする */
@@ -239,7 +241,10 @@ async function auditMusts(
 const reviewer: Handler = async (ctx, task) => {
   const v = await verifyTests(ctx, task);
   if (v.status === "error") return { event: { type: "run_error", reason: v.reason }, reason: `verifier: ${v.reason}` };
-  if (v.status === "failed") return { event: { type: "tests_failed" }, reason: `テストの再実行が失敗しました(詳細: ${v.reportPath})` };
+  if (v.status === "failed") {
+    const key = testFailureKey(v.output ?? "");
+    return { event: { type: "tests_failed" }, reason: `テストの再実行が失敗しました(詳細: ${v.reportPath})`, bounce: { source: "tests", key, summary: `テストの再実行の失敗: ${key.split("\n").slice(0, 3).join(" / ").slice(0, 200)}` } };
+  }
 
   const trs = orderedTaskRepos(ctx, task);
   const tr = trs[0]!;
@@ -296,7 +301,8 @@ const reviewer: Handler = async (ctx, task) => {
     approve();
     return outcomeOf(r, "reviewer", `${dir}/review.md`);
   }
-  if (r.verdict !== "changes_requested" || !ctx.config.review.audit) return outcomeOf(r, "reviewer", `${dir}/review.md`);
+  if (r.verdict !== "changes_requested") return outcomeOf(r, "reviewer", `${dir}/review.md`);
+  if (!ctx.config.review.audit) return { ...outcomeOf(r, "reviewer", `${dir}/review.md`), bounce: reviewBounce(findings) };
 
   const audited = await auditMusts(ctx, task, { cwd: tr.worktreePath, dir, findings, reviewRunId: r.runId });
   if (audited === "overturned") {
@@ -309,8 +315,19 @@ const reviewer: Handler = async (ctx, task) => {
   if (audited === "need_human") {
     return { event: { type: "verdict", role: "reviewer", verdict: "need_human" }, reason: `auditor が人の判断を求めています(詳細: ${dir}/audit.md)` };
   }
-  return outcomeOf(r, "reviewer", `${dir}/review.md`);
+  return { ...outcomeOf(r, "reviewer", `${dir}/review.md`), bounce: reviewBounce(findings) };
 };
+
+/** レビューの差し戻しの要点: Must 指摘の見出しの集合。レビュワーが「前回と同じ」と判定したものがあれば繰り返し */
+function reviewBounce(findings: Finding[]): BounceInfo {
+  const musts = findings.filter((f) => f.severity === "must");
+  return {
+    source: "review",
+    key: musts.map((f) => `${f.file}: ${f.title}`).sort().join("\n"),
+    summary: `レビューの Must 指摘: ${musts.map((f) => f.title).join(" / ").slice(0, 200)}`,
+    repeated: musts.some((f) => f.repeated),
+  };
+}
 
 /** QAでアプリを起動するポート。並行するタスク同士でぶつからないよう、タスクごとに変える */
 export function qaPortFor(taskId: number): number {
@@ -381,7 +398,12 @@ const qa: Handler = async (ctx, task) => {
     const screens = r.extra.screens as ScreenRequest[] | undefined;
     if (screens?.length) addEvent(ctx.db, { taskId: task.id, runId: r.runId, kind: "qa_screens", payload: { screens } });
   }
-  return outcomeOf(r, "qa", `${dir}/qa-report.md`);
+  const out = outcomeOf(r, "qa", `${dir}/qa-report.md`);
+  if (r.ok && r.verdict === "failed") {
+    const failed = ((r.extra.failedCriteria ?? []) as string[]).map((c) => c.trim()).filter(Boolean);
+    return { ...out, bounce: { source: "qa", key: [...failed].sort().join("\n"), summary: `QA で不合格の条件: ${failed.join(" / ").slice(0, 200)}` } };
+  }
+  return out;
 };
 
 /**

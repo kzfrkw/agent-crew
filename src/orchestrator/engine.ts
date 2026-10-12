@@ -18,6 +18,7 @@ import type { AppContext } from "./context.ts";
 import { quotaBlock, QuotaError, type QuotaBlock } from "./usage.ts";
 import { releaseTaskWorktrees, sweepFinishedWorktrees } from "./cleanup-worktrees.ts";
 import { notifyHuman } from "./notify.ts";
+import { recordBounce } from "./bounce.ts";
 import { NEEDS_HUMAN, STATE_LABELS } from "./states.ts";
 import { HANDLERS } from "./handlers.ts";
 import { testGateOpen } from "./projects.ts";
@@ -62,6 +63,7 @@ function describeEvent(e: TaskEvent): string {
     case "limit_exceeded":
     case "run_error":
     case "fail":
+    case "repeated_failure":
       return e.reason;
     default:
       return e.type;
@@ -146,8 +148,17 @@ async function stepTaskInner(ctx: AppContext, taskId: number, signal: AbortSigna
     const role = roleForState(task.state);
     const handler = role ? HANDLERS[role] : undefined;
     if (!handler) return;
-    const { event, reason } = await handler(ctx, task);
+    const { event, reason, bounce } = await handler(ctx, task);
     if (stoppedIfAborted()) return;
+    // 同じ理由の差し戻しが続いたら、上限を待たずに人に回す(設計メモ v0.18)
+    if (bounce) {
+      const { repeated } = recordBounce(ctx.db, taskId, bounce);
+      if (repeated) {
+        const why = `同じ理由で2回差し戻されました。人の判断が必要です(${bounce.summary})`;
+        applyEvent(ctx, taskId, { type: "repeated_failure", reason: why }, why);
+        return;
+      }
+    }
     applyEvent(ctx, taskId, event, reason);
   } catch (e) {
     if (stoppedIfAborted()) return;

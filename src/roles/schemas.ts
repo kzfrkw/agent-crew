@@ -56,6 +56,7 @@ export const FindingSchema = z.object({
   title: z.string().describe("指摘の見出し(1文)"),
   detail: z.string().describe("何がなぜ問題か。Must は、具体的な失敗の筋書き(入力 → 結果)を含める"),
   suggestion: z.string().describe("直し方"),
+  repeated: z.boolean().default(false).describe("前回の review.md にあった指摘が、まだ直っていないか(同じ指摘の繰り返し)"),
 });
 
 const ReviewerExtra = z.object({
@@ -81,6 +82,7 @@ const DesignExtra = z.object({
 
 /** QA: 実装後のデザインレビューで撮ってほしい画面(ui-spec.md の画面。UI を伴うタスクのとき) */
 const QaExtra = z.object({
+  failedCriteria: z.array(z.string()).default([]).describe("不合格だった受け入れ条件(plan.md の文言のまま)。合格なら空配列"),
   screens: z
     .array(z.object({ path: z.string().describe("起動 URL からのパス(例: /tasks/1)"), note: z.string().describe("何の画面か") }))
     .optional()

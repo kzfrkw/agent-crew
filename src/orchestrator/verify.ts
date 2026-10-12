@@ -12,7 +12,7 @@ import { SimulatorSession } from "../mobile/session.ts";
 import { taskDir } from "./paths.ts";
 
 export type VerifyResult =
-  | { status: "passed" | "failed"; command: string; cached?: boolean; reportPath: string }
+  | { status: "passed" | "failed"; command: string; cached?: boolean; reportPath: string; output?: string }
   | { status: "skipped"; reportPath: string }
   | { status: "error"; reason: string };
 
@@ -57,7 +57,7 @@ export async function verifyTests(ctx: AppContext, task: Task): Promise<VerifyRe
   const ran = results.filter((r) => r.status !== "skipped");
   if (ran.length === 0) return { status: "skipped", reportPath };
   const command = ran.map((r) => (multi ? `[${r.role}] ${r.command}` : r.command)).join(" / ");
-  if (results.some((r) => r.status === "failed")) return { status: "failed", command, reportPath };
+  if (results.some((r) => r.status === "failed")) return { status: "failed", command, reportPath, output: results.filter((r) => r.status === "failed").map((r) => r.detail).join("\n") };
   return { status: "passed", command, cached: ran.every((r) => r.cached) || undefined, reportPath };
 }
 

@@ -106,6 +106,8 @@ describe("describeEvent", () => {
     expect(describeEvent(ev("tool_result", { isError: true, content: "1 failed" })).tone).toBe("danger");
     expect(describeEvent(ev("needs_input", { reason: "質問" }))).toMatchObject({ tone: "attention", text: "質問" });
     expect(describeEvent(ev("run_failed", { role: "qa", reason: "時間切れ" })).tone).toBe("danger");
+    // 差し戻しの理由(8-3)
+    expect(describeEvent(ev("bounce", { source: "tests", key: "k", summary: "テストの再実行の失敗: × 在庫" }))).toMatchObject({ tone: "attention", title: "差し戻し", text: "テストの再実行の失敗: × 在庫" });
     // ツールが代わりに実行したコマンド(フェーズ6)
     expect(describeEvent(ev("tool_command", { purpose: "verify", command: "flutter test", exitCode: 0, timedOut: false, durationMs: 5300 }))).toMatchObject({ tone: "success", title: "テストの再実行(ツール)", text: "flutter test — 成功(5秒)" });
     expect(describeEvent(ev("tool_command", { purpose: "verify", command: "flutter test", exitCode: 1, timedOut: false, durationMs: 800 }))).toMatchObject({ tone: "danger", text: "flutter test — 失敗(終了コード 1、1秒)" });

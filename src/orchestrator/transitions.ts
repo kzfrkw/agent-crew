@@ -69,6 +69,8 @@ export type TaskEvent =
   /** ベースの取り込みで衝突した。人が解決する */
   | { type: "base_conflict"; reason: string }
   | { type: "cancel" }
+  /** 同じ理由の差し戻しが続いた(8-3)。上限を待たずに人に回す */
+  | { type: "repeated_failure"; reason: string }
   /** 人が実行中の役割を止めた。その段で人の判断を待つ */
   | { type: "stopped" };
 
@@ -143,6 +145,10 @@ export function transition(t: TaskSnapshot, e: TaskEvent, c: TransitionContext):
       if (e.role === "qa" && e.verdict === "passed" && t.design?.designer) return to("design_reviewing");
       return to(outcome!.to);
     }
+
+    case "repeated_failure":
+      if (!["reviewing", "qa", "design_reviewing"].includes(t.state)) fail("差し戻しの段ではありません");
+      return to("needs_input", { heldFromState: "implementing", reviewRounds: t.reviewRounds + 1 });
 
     case "tests_failed":
       if (t.state !== "reviewing") fail("テストの再確認は実装の直後(reviewing)に行います");
