@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { getTask, listRuns, startRun } from "../src/db/store.ts";
 import { approveTask } from "../src/orchestrator/human.ts";
 import { Worker } from "../src/orchestrator/worker.ts";
+import { recordUsage } from "../src/orchestrator/usage.ts";
+import { queryEvents } from "../src/db/store.ts";
 import type { RunSpec } from "../src/runner/types.ts";
 import { testContext } from "./helpers/context.ts";
 import { approvedProject, newTask } from "./helpers/project.ts";
@@ -142,5 +144,22 @@ describe("常駐ワーカー", () => {
     worker = undefined;
     expect(getTask(ctx.db, t.id)!.state).toBe("needs_input");
     expect(existsSync(join(ctx.home, "run.lock"))).toBe(false);
+  });
+
+  it("利用枠の上限の間は新しい役割を起動せず、状態に理由と再開の時刻を出す。リセットの時刻を過ぎたら自動で動く(7-1)", async () => {
+    const runner = new ScriptedRunner({ planner: plannerReady });
+    const ctx = testContext(runner);
+    const { project } = await approvedProject(ctx);
+    const t = newTask(ctx, project.id);
+    const reset = Date.now() + 400;
+    recordUsage(ctx.db, { status: "allowed", unifiedWindows: { five_hour: { utilization: 0.97, resetsAt: reset / 1000 } } });
+    worker = new Worker(ctx, { pollMs: 30 });
+    worker.start();
+    await new Promise((r) => setTimeout(r, 150));
+    expect(runner.calls).toHaveLength(0);
+    expect(worker.status().quota).toMatchObject({ window: "five_hour" });
+    expect(queryEvents(ctx.db, { limit: 100 }).filter((e) => e.kind === "quota_paused")).toHaveLength(1); // 何度も記録しない
+    await waitFor(() => getTask(ctx.db, t.id)!.state === "awaiting_plan_approval", 3000);
+    expect(worker.status().quota).toBeUndefined();
   });
 });

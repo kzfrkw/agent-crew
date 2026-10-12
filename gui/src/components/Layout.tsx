@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { UsageMeter } from "./Usage.tsx";
 import { PlusIcon } from "lucide-react";
 import type { Overview, WorkerView } from "../../../src/server/api-types.ts";
 import { postJson, useApi } from "../lib/api.ts";
@@ -55,6 +56,7 @@ export function Layout({ children, projectId }: { children: ReactNode; projectId
             </Link>
           </Button>
           <span className="flex-1 max-sm:hidden" />
+          {overview.data && <UsageMeter usage={overview.data.usage} quota={overview.data.worker.quota} />}
           {overview.data && <WorkerSwitch worker={overview.data.worker} onChange={overview.reload} />}
           <Tooltip>
             <TooltipTrigger asChild>

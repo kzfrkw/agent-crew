@@ -19,6 +19,7 @@ import {
   updateTaskState,
 } from "../src/db/store.ts";
 import type { ArtifactDetail, EventsPage, Overview, ProjectDetail, RunDetail, TaskDetail } from "../src/server/api-types.ts";
+import { recordUsage } from "../src/orchestrator/usage.ts";
 import { startServer, type RunningServer } from "../src/server/server.ts";
 import { tempDir } from "./helpers/gitrepo.ts";
 
@@ -97,6 +98,19 @@ async function json<T>(path: string): Promise<T> {
 }
 
 describe("読み取り API", () => {
+  it("overview: 利用枠の最新の値(窓ごとの使用率とリセット)を返す。記録が無ければ null(7-1)", async () => {
+    const s = seed();
+    server = await startServer({ home: s.home, port: 0 });
+    expect((await json<Overview>("api/overview")).usage).toBeNull();
+    await server.close();
+    const db = openDb(appDbPath(s.home));
+    recordUsage(db, { status: "allowed", unifiedWindows: { five_hour: { utilization: 0.32, resetsAt: 1791631800 }, seven_day: { utilization: 0.18, resetsAt: 1792040400 } } });
+    db.close();
+    server = await startServer({ home: s.home, port: 0 });
+    const o = await json<Overview>("api/overview");
+    expect(o.usage).toMatchObject({ status: "allowed", windows: [{ key: "five_hour", label: "5時間", utilization: 0.32, resetsAt: 1791631800000 }, { key: "seven_day", label: "7日", utilization: 0.18 }] });
+  });
+
   it("overview: プロジェクト、タスクの要約(対応待ちの種類と理由、実行中の役割)、実行中の実行", async () => {
     const s = seed();
     server = await startServer({ home: s.home, port: 0 });

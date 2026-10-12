@@ -15,6 +15,7 @@ import {
 import { installAgentHooks } from "../git/hooks.ts";
 import { branchNameFor, createWorktree, worktreePathFor } from "../git/worktree.ts";
 import type { AppContext } from "./context.ts";
+import { quotaBlock, QuotaError, type QuotaBlock } from "./usage.ts";
 import { HANDLERS } from "./handlers.ts";
 import { testGateOpen } from "./projects.ts";
 import { roleForState, transition, type TaskEvent, type TransitionResult } from "./transitions.ts";
@@ -143,6 +144,11 @@ async function stepTaskInner(ctx: AppContext, taskId: number, signal: AbortSigna
     applyEvent(ctx, taskId, event, reason);
   } catch (e) {
     if (stoppedIfAborted()) return;
+    // 利用枠で止まったら、状態を変えずに待つ(リセットの後に同じ段をやり直す)
+    if (e instanceof QuotaError) {
+      addEvent(ctx.db, { taskId, kind: "quota_wait", payload: { reason: e.block.reason, until: new Date(e.block.until).toISOString() } });
+      return;
+    }
     const reason = `オーケストレーターのエラー: ${(e as Error).message}`;
     const current = getTask(ctx.db, taskId)!;
     try {
@@ -154,13 +160,19 @@ async function stepTaskInner(ctx: AppContext, taskId: number, signal: AbortSigna
 }
 
 /** 進められるタスクが無くなるまで、同時実行数の上限を守って進める */
-export async function runUntilIdle(ctx: AppContext, o: { maxSteps?: number; onStep?: (taskId: number) => void } = {}): Promise<{ steps: number }> {
+export async function runUntilIdle(ctx: AppContext, o: { maxSteps?: number; onStep?: (taskId: number) => void } = {}): Promise<{ steps: number; quota?: QuotaBlock }> {
   // フックは全worktreeで共有するので、ツールの更新が既存のworktreeにも効くよう毎回書き直す
   installAgentHooks(ctx.home);
   const active = new Map<number, Promise<void>>();
   let steps = 0;
   const maxSteps = o.maxSteps ?? 500;
   for (;;) {
+    // 利用枠の上限の間は新しい段を始めない。実行中のものが終わるのを待って、理由を返す
+    const quota = quotaBlock(ctx);
+    if (quota) {
+      await Promise.all(active.values());
+      return { steps, quota };
+    }
     for (const t of runnableTasks(ctx)) {
       if (active.size >= ctx.config.concurrency) break;
       if (active.has(t.id)) continue;

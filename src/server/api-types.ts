@@ -47,7 +47,11 @@ export type NextAction = {
   optionsNote?: string;
 };
 
-export type WorkerView = { state: "running" | "paused" | "locked" | "disabled"; active: number[] };
+/** quota は利用枠による自動の一時停止(7-1。リセットの時刻を過ぎたら自動で動く) */
+export type WorkerView = { state: "running" | "paused" | "locked" | "disabled"; active: number[]; quota?: { until: number; window: string; reason: string } };
+
+/** 利用枠の最新の値(7-1。claude の rate_limit から) */
+export type UsageView = { status: string; updatedAt: number; windows: { key: string; label: string; utilization: number; resetsAt: number }[] };
 
 export type CreateTaskRequest = { projectId: number; title: string; body: string; sourceUrl?: string };
 
@@ -104,6 +108,7 @@ export type TaskSummary = {
 
 export type Overview = {
   worker: WorkerView;
+  usage: UsageView | null;
   projects: ProjectSummary[];
   tasks: TaskSummary[];
   running: (RunSummary & { taskTitle: string | null })[];

@@ -3,6 +3,7 @@ import { installAgentHooks } from "../git/hooks.ts";
 import type { AppContext } from "./context.ts";
 import { requestStop, runnableTasks, stepTask } from "./engine.ts";
 import { acquireRunLock, recoverStaleRuns } from "./lock.ts";
+import { quotaBlock, type QuotaBlock } from "./usage.ts";
 
 /**
  * 常駐ワーカー(設計メモ14章 v0.10)。serve の中でオーケストレーターを動かし、進められるタスクを自動で進める。
@@ -12,7 +13,8 @@ import { acquireRunLock, recoverStaleRuns } from "./lock.ts";
  */
 
 export type WorkerState = "running" | "paused" | "locked";
-export type WorkerStatus = { state: WorkerState; active: number[] };
+/** quota は利用枠による自動の一時停止(人の一時停止とは別。リセットの時刻を過ぎたら自動で動く) */
+export type WorkerStatus = { state: WorkerState; active: number[]; quota?: QuotaBlock };
 
 /** 同じタスクを短い間に何度も進めていたら、状態遷移がループしているとみなして休ませる */
 const LOOP_WINDOW_MS = 60_000;
@@ -28,6 +30,10 @@ export class Worker {
   private timer: NodeJS.Timeout | undefined;
   private closed = false;
   private idleWaiters: (() => void)[] = [];
+  private quota: QuotaBlock | undefined;
+
+  /** 利用枠で自動の一時停止に入ったとき(通知などに使う。7-3) */
+  onQuotaPaused?: (q: QuotaBlock) => void;
 
   constructor(ctx: AppContext, o: { pollMs?: number } = {}) {
     this.ctx = ctx;
@@ -41,7 +47,7 @@ export class Worker {
   }
 
   status(): WorkerStatus {
-    return { state: this.state, active: [...this.active.keys()] };
+    return { state: this.state, active: [...this.active.keys()], ...(this.quota ? { quota: this.quota } : {}) };
   }
 
   /** 人の操作の直後などに、すぐ見直す */
@@ -103,6 +109,25 @@ export class Worker {
       this.lock();
     }
     if (this.state !== "running") return;
+    // 利用枠の上限の間は新しい役割を起動しない。止め始めと再開を1回ずつ記録する(設計メモ v0.17)
+    let quota: QuotaBlock | null;
+    try {
+      quota = quotaBlock(this.ctx);
+    } catch {
+      return;
+    }
+    if (quota) {
+      if (!this.quota || this.quota.until !== quota.until) {
+        addEvent(this.ctx.db, { kind: "quota_paused", payload: { reason: quota.reason, until: new Date(quota.until).toISOString() } });
+        this.onQuotaPaused?.(quota);
+      }
+      this.quota = quota;
+      return;
+    }
+    if (this.quota) {
+      addEvent(this.ctx.db, { kind: "quota_resumed", payload: {} });
+      this.quota = undefined;
+    }
     let tasks;
     try {
       tasks = runnableTasks(this.ctx);

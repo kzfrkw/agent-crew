@@ -24,6 +24,8 @@ const ConfigSchema = z.object({
       runTimeoutSec: z.number().int().positive().default(1800),
       runMaxBudgetUsd: z.number().positive().default(5),
       maxReviewRounds: z.number().int().positive().default(3),
+      /** 利用枠(5時間・7日の窓)の使用率がこれ以上なら、新しい役割を起動しない(フェーズ7) */
+      pauseAtUtilization: z.number().min(0).max(1).default(0.95),
     })
     .prefault({}),
   review: z

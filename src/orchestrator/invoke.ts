@@ -7,6 +7,7 @@ import type { RunResult } from "../runner/types.ts";
 import type { AppContext } from "./context.ts";
 import { runDir } from "./paths.ts";
 import { cleanupStrayProcesses } from "../runner/cleanup.ts";
+import { isQuotaFailure, quotaBlock, QuotaError, recordUsage } from "./usage.ts";
 import { TOOL_NAME, type ToolExecConfig } from "../toolexec/mcp-server.ts";
 import { findFlutterRoot, toolchainWritable } from "../toolexec/command.ts";
 import { homedir } from "node:os";
@@ -42,6 +43,9 @@ export async function invokeRole(
 ): Promise<InvokeResult> {
   const role = ctx.roles.get(o.roleName);
   if (!role) throw new Error(`役割 ${o.roleName} が定義されていません`);
+  // 利用枠の上限の間は起動しない(1つの段で何度も起動する役割もあるため、ここでも確かめる。設計メモ v0.17)
+  const blocked = quotaBlock(ctx);
+  if (blocked) throw new QuotaError(blocked);
   const run = startRun(ctx.db, { taskId: o.taskId, projectId: o.projectId, role: role.name, model: role.model });
   mkdirSync(runDir(ctx.home, run.id), { recursive: true });
   // 前回の成果物は消さずに残す(読み返して追記できるように)。今回の実行で更新されたかは更新時刻の変化で判定する
@@ -57,6 +61,7 @@ export async function invokeRole(
   const prompt = bridge ? `${o.prompt}\n## テストと静的解析の実行\n- テスト・静的解析は Bash では実行せず、MCP の道具 \`${TOOL_NAME}\`(kind: ${bridge.kinds.join(" / ")})を使ってください。ツールがサンドボックスの中で代わりに実行し、終了コードと出力を返します(Bash の中ではこれらのコマンドは止まります)\n` : o.prompt;
 
   let result: RunResult;
+  let sawRejected = false;
   const startedAt = Date.now();
   try {
     result = await ctx.runner.run(
@@ -83,7 +88,13 @@ export async function invokeRole(
         ...(o.toolCommands ? { extraWritable: toolchainWritable(o.toolCommands.platform, { home: homedir(), flutterRoot: findFlutterRoot() }) } : {}),
         signal: o.taskId === undefined ? undefined : ctx.stops?.get(o.taskId)?.signal,
       },
-      (e) => addEvent(ctx.db, { taskId: o.taskId, runId: run.id, kind: e.kind, payload: e.payload }),
+      (e) => {
+        addEvent(ctx.db, { taskId: o.taskId, runId: run.id, kind: e.kind, payload: e.payload });
+        if (e.kind === "rate_limit") {
+          recordUsage(ctx.db, e.payload);
+          if ((e.payload as { status?: unknown } | undefined)?.status === "rejected") sawRejected = true;
+        }
+      },
     );
   } catch (e) {
     await cleanup(ctx, o, role.name, run.id, startedAt);
@@ -94,6 +105,11 @@ export async function invokeRole(
   if (bridge) recordBridge(ctx, o.taskId, run.id, role.name, bridge.logPath);
 
   if (result.status === "cancelled") return fail("cancelled", result.error ?? "人が停止しました", result, "cancelled");
+  // 利用枠の上限で止まった役割は失敗にしない。実行は中止として記録し、タスクは同じ状態のまま待つ(設計メモ v0.17)
+  if (result.status !== "succeeded" && isQuotaFailure(result.error, sawRejected)) {
+    finishRun(ctx.db, run.id, { state: "cancelled", error: `利用枠: ${result.error ?? "上限"}`, sessionId: result.sessionId, costUsd: result.costUsd });
+    throw new QuotaError(quotaBlock(ctx) ?? { until: Date.now() + 15 * 60_000, window: "unknown", reason: "利用枠の上限に達しました" });
+  }
   if (result.status === "timeout") return fail("limit", result.error ?? "時間の上限を超えました", result, "timeout");
   if (result.status !== "succeeded") {
     const reason = result.error ?? "実行に失敗しました";

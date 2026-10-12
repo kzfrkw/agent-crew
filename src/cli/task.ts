@@ -200,12 +200,13 @@ export function registerTaskCommands(program: Command): void {
       try {
         const stale = recoverStaleRuns(ctx.db);
         if (stale) console.error(`前回中断された実行を ${stale} 件、失敗として記録しました`);
-        const { steps } = await runUntilIdle(ctx, {
+        const { steps, quota } = await runUntilIdle(ctx, {
           onStep: (id) => {
             const t = getTask(ctx.db, id)!;
             console.error(`#${id} ${STATE_LABELS[t.state]}: ${t.title}`);
           },
         });
+        if (quota) console.log(`⏸ ${quota.reason}。新しい役割を起動しません(${new Date(quota.until).toLocaleString("ja-JP")} 以降に agent-crew run で再開できます)`);
         console.log(`処理しました(${steps}段)。人の対応が必要なタスク:`);
         const waiting = listTasks(ctx.db).filter((t) => NEEDS_HUMAN.includes(t.state));
         for (const t of waiting) console.log(line(ctx, t));

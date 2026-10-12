@@ -470,3 +470,13 @@ export function invalidateApprovals(db: Db, taskId: number, kinds: ApprovalKind[
   const t = now();
   for (const k of kinds) stmt.run(t, taskId, k);
 }
+
+/** ツール全体の小さな状態(フェーズ7。利用枠の最新の値など) */
+export function getAppState<T>(db: Db, key: string): T | null {
+  const r = db.prepare("SELECT value_json FROM app_state WHERE key = ?").get(key) as { value_json: string } | undefined;
+  return r ? (JSON.parse(r.value_json) as T) : null;
+}
+
+export function setAppState(db: Db, key: string, value: unknown): void {
+  db.prepare("INSERT INTO app_state (key, value_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at").run(key, JSON.stringify(value), now());
+}

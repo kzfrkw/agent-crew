@@ -120,4 +120,12 @@ export const MIGRATIONS: string[] = [
   `
   ALTER TABLE tasks ADD COLUMN repos_json TEXT;
   `,
+  // v5(フェーズ7): ツール全体の小さな状態(利用枠の最新の値など)。key ごとに JSON
+  `
+  CREATE TABLE app_state (
+    key TEXT PRIMARY KEY,
+    value_json TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  `,
 ];

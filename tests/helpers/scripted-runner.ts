@@ -2,7 +2,9 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { RunEvent, RunResult, RunSpec, Runner } from "../../src/runner/types.ts";
 
-export type Script = (spec: RunSpec, call: number) => Partial<RunResult> | void | Promise<Partial<RunResult> | void>;
+/** events は、実行中に流れる出来事(rate_limit など)の代わり */
+export type ScriptResult = Partial<RunResult> & { events?: RunEvent[] };
+export type Script = (spec: RunSpec, call: number) => ScriptResult | void | Promise<ScriptResult | void>;
 
 /** 役割ごとに台本どおり動く偽のランナー(利用枠を使わずにオーケストレーターを試す) */
 export class ScriptedRunner implements Runner {
@@ -21,7 +23,8 @@ export class ScriptedRunner implements Runner {
     const n = this.counts.get(spec.role) ?? 0;
     this.counts.set(spec.role, n + 1);
     onEvent({ kind: "init", payload: { role: spec.role } });
-    const r = (await script(spec, n)) ?? {};
+    const { events = [], ...r } = (await script(spec, n)) ?? {};
+    for (const e of events) onEvent(e);
     return { status: "succeeded", models: ["fake"], permissionDenials: [], bashResults: [], durationMs: 1, costUsd: 0.01, sessionId: `s-${spec.role}-${n}`, ...r };
   }
 

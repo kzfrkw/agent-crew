@@ -85,6 +85,7 @@ flowchart LR
 - 操作は CLI と同じ関数(`src/orchestrator/human.ts`、`handoff.ts`)を呼ぶ。状態遷移の正しさは `transitions.ts` が決め、不正なら 409 と理由を返す
 - 「次の操作」(`next-actions.ts`)が、ボタンが送る `ActionRequest` も持つ。GUI は状態とボタンの対応を持たない
 - `GET /api/overview` に `worker`(`running` / `paused` / `locked`(CLI の run が実行中)/ `disabled`)を足す
+- フェーズ7: `GET /api/overview` に `usage`(利用枠の窓ごとの使用率とリセットの時刻)、`worker.quota`(利用枠による自動の一時停止の理由と再開の時刻)を足す
 
 ## 常駐ワーカー(G1・G2・G5)
 

@@ -120,6 +120,7 @@ describe("TaskTable の狭い画面", () => {
 describe("App(ダッシュボード)", () => {
   const overview: Overview = {
     worker: { state: "disabled", active: [] },
+    usage: null,
     projects: [{ id: 1, name: "shop", profileStatus: "approved", testInfra: "present", allowWithoutTests: false }],
     tasks: [
       task({ id: 7, title: "検索を追加", running: { id: 9, role: "implementer", model: "sonnet", startedAt: "2026-10-09T00:00:00.000Z" } }),

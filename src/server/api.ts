@@ -31,6 +31,7 @@ import { latestReason, runActive } from "../orchestrator/engine.ts";
 import { attentionOf, nextActions } from "../orchestrator/next-actions.ts";
 import { projectDir, runDir, taskDir } from "../orchestrator/paths.ts";
 import { buildTaskReport } from "../orchestrator/report.ts";
+import { getUsage } from "../orchestrator/usage.ts";
 import { STATE_LABELS } from "../orchestrator/states.ts";
 import type {
   ArtifactDetail,
@@ -45,6 +46,7 @@ import type {
   TaskDetail,
   TaskSummary,
   WorkerView,
+  UsageView,
 } from "./api-types.ts";
 import { fileUrl } from "./files.ts";
 
@@ -198,7 +200,7 @@ export function taskSummaryOf(db: Db, id: number): TaskSummary | undefined {
 }
 
 function emptyOverview(): Omit<Overview, "worker"> {
-  return { projects: [], tasks: [], running: [], stateLabels: STATE_LABELS };
+  return { projects: [], tasks: [], running: [], stateLabels: STATE_LABELS, usage: null };
 }
 
 function overview(db: Db): Omit<Overview, "worker"> {
@@ -211,6 +213,19 @@ function overview(db: Db): Omit<Overview, "worker"> {
     tasks: tasks.map((t) => taskSummary(db, t, running, costs)),
     running: listRuns(db, { state: "running" }).map((r) => ({ ...runSummary(r), taskTitle: r.taskId === null ? null : (titles.get(r.taskId) ?? null) })),
     stateLabels: STATE_LABELS,
+    usage: usageView(db),
+  };
+}
+
+const WINDOW_LABELS: Record<string, string> = { five_hour: "5時間", seven_day: "7日" };
+
+function usageView(db: Db): UsageView | null {
+  const u = getUsage(db);
+  if (!u) return null;
+  return {
+    status: u.status,
+    updatedAt: u.updatedAt,
+    windows: (["five_hour", "seven_day"] as const).flatMap((key) => (u.windows[key] ? [{ key, label: WINDOW_LABELS[key]!, ...u.windows[key]! }] : [])),
   };
 }
 
