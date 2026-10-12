@@ -10,6 +10,7 @@ import {
   listTaskRepos,
   listTasks,
   updateTaskState,
+  listChildren,
   type Task,
 } from "../db/store.ts";
 import { installAgentHooks } from "../git/hooks.ts";
@@ -54,9 +55,22 @@ export function applyEvent(ctx: AppContext, taskId: number, event: TaskEvent, re
   }
   // 人の対応待ちになったら知らせる(設計メモ v0.17)
   if (!o.quiet && NEEDS_HUMAN.includes(next.state) && task.state !== next.state) notifyHuman(ctx, `#${taskId} ${STATE_LABELS[next.state]}: ${task.title}`);
+  // 分割の子が完了・取り消しになったら、親に知らせる(8-2)
+  if (task.parentId !== null && task.state !== next.state && (next.state === "done" || next.state === "cancelled")) notifyParent(ctx, task.parentId, next.state, task);
   // 完了・取り消しになったら worktree を片付ける(ブランチは残す。設計メモ v0.17)
   if ((next.state === "done" || next.state === "cancelled") && task.state !== next.state) releaseTaskWorktrees(ctx, taskId);
   return next;
+}
+
+function notifyParent(ctx: AppContext, parentId: number, state: "done" | "cancelled", child: Task): void {
+  const parent = getTask(ctx.db, parentId);
+  if (parent?.state !== "split") return;
+  if (state === "cancelled") {
+    const reason = `子タスク #${child.id}(${child.title})が取り消されました。続けるか(回答)、親を取り消すかを決めてください`;
+    applyEvent(ctx, parentId, { type: "child_cancelled", reason }, reason);
+    return;
+  }
+  if (listChildren(ctx.db, parentId).every((c) => c.id === child.id || c.state === "done")) applyEvent(ctx, parentId, { type: "children_done" }, "子タスクがすべて完了しました");
 }
 
 function describeEvent(e: TaskEvent): string {
@@ -88,11 +102,24 @@ export function latestNeedsInputReason(db: Db, taskId: number): string | undefin
 export function runnableTasks(ctx: AppContext): Task[] {
   return listTasks(ctx.db).filter((t) => {
     if (t.state === "queued") {
+      // 分割の子は順に進める: 前の子が完了するまで始めない(8-2)
+      if (t.parentId !== null && (t.seq ?? 1) > 1) {
+        const prev = listChildren(ctx.db, t.parentId).find((c) => c.seq === (t.seq ?? 1) - 1);
+        if (prev && prev.state !== "done") return false;
+      }
       return getProject(ctx.db, t.projectId)?.profileStatus === "approved" && testGateOpen(ctx.db, t.id);
     }
     const role = roleForState(t.state);
     return role !== null && HANDLERS[role] !== undefined && !runActive(ctx.db, t.id);
   });
+}
+
+/** タスクのベース: 分割の2つ目以降の子は、前の子のブランチ。それ以外はリポジトリの既定ブランチ(8-2) */
+export function baseRefFor(ctx: AppContext, task: Task, repo: { id: number; defaultBranch: string }): string {
+  if (task.parentId === null || (task.seq ?? 1) <= 1) return repo.defaultBranch;
+  const prev = listChildren(ctx.db, task.parentId).find((c) => c.seq === (task.seq ?? 1) - 1);
+  const tr = prev ? listTaskRepos(ctx.db, prev.id).find((x) => x.repoId === repo.id) : undefined;
+  return tr?.branchName ?? repo.defaultBranch;
 }
 
 /** タスクのworktreeを用意する(プロジェクトの全リポジトリ。フェーズ1は1つ) */
@@ -104,7 +131,7 @@ export function ensureWorktrees(ctx: AppContext, task: Task, roles?: string[]): 
   for (const repo of repos) {
     if (existing.has(repo.id)) continue;
     const worktreePath = worktreePathFor(ctx.home, { project: project.name, taskId: task.id, repoRole: repo.role });
-    const { baseSha } = createWorktree({ home: ctx.home, repoPath: repo.path, worktreePath, branch, base: repo.defaultBranch, env: ctx.gitEnv });
+    const { baseSha } = createWorktree({ home: ctx.home, repoPath: repo.path, worktreePath, branch, base: baseRefFor(ctx, task, repo), env: ctx.gitEnv });
     attachRepoToTask(ctx.db, { taskId: task.id, repoId: repo.id, worktreePath, branchName: branch, baseSha });
   }
 }

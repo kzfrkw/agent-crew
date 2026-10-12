@@ -14,6 +14,7 @@ import type { Shot } from "../browser/chrome.ts";
 import { platformOf, resolveServiceEnv } from "./projects.ts";
 import { applyAudit, checkReviewConsistency, mustIndexes, type Finding } from "./review-findings.ts";
 import { taskPrompt } from "./prompts.ts";
+import { baseRefFor } from "./engine.ts";
 import { testFailureKey, type BounceInfo } from "./bounce.ts";
 import type { Role, TaskEvent } from "./transitions.ts";
 
@@ -255,7 +256,7 @@ const reviewer: Handler = async (ctx, task) => {
   // 複数リポジトリでは、全リポジトリの差分をまとめて1人がレビューする(契約との整合を横断で確かめる。設計メモ v0.14)
   const perRepo = trs.map((x) => {
     const repo = getRepo(ctx.db, x.repoId)!;
-    const base = mergeBase(x.worktreePath, repo.defaultBranch, ctx.gitEnv);
+    const base = mergeBase(x.worktreePath, baseRefFor(ctx, task, repo), ctx.gitEnv);
     const diff = diffFromBase(x.worktreePath, base, ctx.gitEnv);
     return {
       ...x,
@@ -468,7 +469,7 @@ const integrator: Handler = async (ctx, task) => {
     if (!containsRef(tr.worktreePath, repo.defaultBranch, ctx.gitEnv)) {
       return stop(`${where}ベース(${repo.defaultBranch})が進んでいます。agent-crew task update-base ${task.id} で追従してください`);
     }
-    const base = mergeBase(tr.worktreePath, repo.defaultBranch, ctx.gitEnv);
+    const base = mergeBase(tr.worktreePath, baseRefFor(ctx, task, repo), ctx.gitEnv);
     items.push({ tr, repo, head, base, commits: commitsSince(tr.worktreePath, base, ctx.gitEnv), stat: diffStat(tr.worktreePath, base, ctx.gitEnv) });
   }
   writeFileSync(join(dir, "diffstat.txt"), items.map((x) => (multi ? `# [${x.tr.role}]\n${x.stat}` : x.stat)).join("\n\n"));
@@ -479,7 +480,7 @@ const integrator: Handler = async (ctx, task) => {
     artifactsDir: dir,
     prompt: taskPrompt(ctx, task, "integrator", [
       ...items.flatMap((x) => [
-        `- ${multi ? `[${x.tr.role}] ` : ""}ブランチ: ${x.tr.branchName}(ベース: ${x.repo.defaultBranch}、リポジトリ: ${x.repo.path})`,
+        `- ${multi ? `[${x.tr.role}] ` : ""}ブランチ: ${x.tr.branchName}(ベース: ${baseRefFor(ctx, task, x.repo)}、リポジトリ: ${x.repo.path})`,
         "  - コミット:",
         ...x.commits.map((c) => `    - ${c.sha.slice(0, 12)} ${c.subject}(${c.agentRole ? `agent-crew ${c.agentRole}` : `人: ${c.author}`})`),
       ]),

@@ -44,6 +44,8 @@ export function ActionPanel({
   const [choices, setChoices] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(optionActions.flatMap((a) => a.options!.map((o) => [o.key, o.value]))),
   );
+  // 計画の承認での「分割して進める」(8-2)
+  const [split, setSplit] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState<NextAction | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +56,7 @@ export function ActionPanel({
   const send = async (a: NextAction) => {
     const text = a.input ? (values[a.input.field] ?? "") : "";
     const design = a.options?.length && !compact ? Object.fromEntries(a.options.map((o) => [o.key, choices[o.key] ?? o.value])) : undefined;
-    const body = { ...a.request, ...(a.input ? { [a.input.field]: text } : {}), ...(design ? { design } : {}) } as ActionRequest;
+    const body = { ...a.request, ...(a.input ? { [a.input.field]: text } : {}), ...(design ? { design } : {}), ...(a.split && split ? { split: true } : {}) } as ActionRequest;
     setBusy(true);
     try {
       const r = await postJson<ActionResult>(`/api/tasks/${taskId}/actions`, body);
@@ -114,6 +116,14 @@ export function ActionPanel({
             ))}
           </div>
           {a.optionsNote && <p className="m-0 text-xs text-muted-foreground">{a.optionsNote}</p>}
+          {a.split && (
+            <label className="mt-1 inline-flex cursor-pointer items-start gap-1.5 text-xs">
+              <input type="checkbox" className="mt-0.5 accent-foreground" checked={split} onChange={(e) => setSplit(e.target.checked)} disabled={busy} />
+              <span>
+                子タスク {a.split.count} 個に分割して進める({a.split.titles.join(" → ")})
+              </span>
+            </label>
+          )}
         </fieldset>
       ))}
       <div className="flex flex-wrap items-center gap-2">

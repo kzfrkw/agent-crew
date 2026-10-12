@@ -109,13 +109,14 @@ export function registerTaskCommands(program: Command): void {
     .option("--no-design", "計画の承認: 設計者を動かさない")
     .option("--ui", "計画の承認: デザイナーを動かす(UI を伴う)")
     .option("--no-ui", "計画の承認: デザイナーを動かさない")
-    .action((id: string, o: { kind: "plan" | "design" | "final"; comment?: string; design?: boolean; ui?: boolean }) =>
+    .option("--split", "計画の承認: プランナーの案どおりに子タスクに分割して進める(8-2)")
+    .action((id: string, o: { kind: "plan" | "design" | "final"; comment?: string; design?: boolean; ui?: boolean; split?: boolean }) =>
       withContext((ctx) => {
         const t = mustTask(ctx, id);
         const override = o.kind === "plan" && (o.design !== undefined || o.ui !== undefined)
           ? { architect: o.design ?? t.design.architect, designer: o.ui ?? t.design.designer }
           : undefined;
-        approveTask(ctx, t.id, o.kind, o.comment, override);
+        approveTask(ctx, t.id, o.kind, o.comment, override, { split: o.split });
         console.log(`承認しました: #${id}(${STATE_LABELS[getTask(ctx.db, Number(id))!.state]})`);
       }),
     );

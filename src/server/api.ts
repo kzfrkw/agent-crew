@@ -12,6 +12,7 @@ import {
   getProjectWiring,
   getRepoProfile,
   getRepoProtect,
+  listChildren,
   getRun,
   getTask,
   listAllApprovals,
@@ -265,6 +266,8 @@ function taskDetail(home: string, db: Db, id: number, operable: boolean): TaskDe
     runActive: runActive(db, id),
     screenshots: screenshotsOf(home, db, id),
     report: buildTaskReport(db, id),
+    parent: t.parentId === null ? null : { id: t.parentId, title: getTask(db, t.parentId)?.title ?? "" },
+    children: listChildren(db, id).map((c) => ({ id: c.id, title: c.title, seq: c.seq ?? 0, state: c.state, stateLabel: STATE_LABELS[c.state] })),
     operable,
   };
 }

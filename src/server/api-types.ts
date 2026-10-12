@@ -13,7 +13,7 @@ export type Attention = "approve_plan" | "approve_design" | "approve_final" | "a
 /** 人の操作(POST /api/tasks/:id/actions の本文)。CLI と同じ関数を通す */
 export type ActionRequest =
   /** design は計画の承認だけ。設計の段で動かす役割の、人による上書き */
-  | { action: "approve"; kind: "plan" | "design" | "final"; comment?: string; design?: DesignOptions }
+  | { action: "approve"; kind: "plan" | "design" | "final"; comment?: string; design?: DesignOptions; split?: boolean }
   | { action: "reject"; kind: "plan" | "design" | "final"; comment: string }
   | { action: "answer"; message: string }
   | { action: "stop" }
@@ -45,6 +45,8 @@ export type NextAction = {
   options?: { key: keyof DesignOptions; label: string; value: boolean }[];
   /** options の判断材料(プランナーの理由など) */
   optionsNote?: string;
+  /** 計画の承認で選べる「分割して進める」(8-2。プランナーが分割を提案したときだけ)。選んだら request.split を true にして送る */
+  split?: { count: number; titles: string[] };
 };
 
 /** quota は利用枠による自動の一時停止(7-1。リセットの時刻を過ぎたら自動で動く) */
@@ -167,6 +169,10 @@ export type TaskDetail = {
   /** 最新の撮影の画面(デザインレビューの判断材料。無ければ空) */
   screenshots: ScreenshotView[];
   report: TaskReportView;
+  /** 分割の親(8-2)。子でなければ null */
+  parent: { id: number; title: string } | null;
+  /** 分割した子タスク(順番どおり)。親でなければ空 */
+  children: { id: number; title: string; seq: number; state: TaskState; stateLabel: string }[];
   /** このサーバーで操作できるか(serve --no-worker の読み取り専用なら false。GUI はボタンの代わりに CLI のコマンドを出す) */
   operable: boolean;
 };

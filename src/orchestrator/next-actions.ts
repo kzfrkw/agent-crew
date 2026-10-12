@@ -67,7 +67,9 @@ export function nextActions(db: Db, task: Pick<Task, "id" | "state"> & { design?
     case "awaiting_plan_approval": {
       const [approve, reject] = approval("plan", "plan.md ");
       const design = task.design ?? { architect: false, designer: false };
-      const reason = (listEvents(db, id, 1000).filter((e) => e.kind === "plan").at(-1)?.payload as { design?: { reason?: string } } | undefined)?.design?.reason;
+      const plan = listEvents(db, id, 1000).filter((e) => e.kind === "plan").at(-1)?.payload as { design?: { reason?: string }; split?: { title: string }[] } | undefined;
+      const reason = plan?.design?.reason;
+      const split = (plan?.split ?? []).filter((s) => s.title?.trim());
       return [
         {
           ...approve!,
@@ -76,6 +78,7 @@ export function nextActions(db: Db, task: Pick<Task, "id" | "state"> & { design?
             { key: "designer", label: "デザイナーを動かす(ui-spec.md、UI を伴う変更)", value: design.designer },
           ],
           optionsNote: reason ? `プランナーの判断: ${reason}` : undefined,
+          ...(split.length >= 2 ? { split: { count: split.length, titles: split.map((s) => s.title) } } : {}),
         },
         reject!,
       ];

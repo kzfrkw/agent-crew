@@ -134,6 +134,10 @@ export type Task = {
   design: { architect: boolean; designer: boolean };
   /** 計画で決まった、変更するリポジトリの役目(実装する順。フェーズ5)。1リポジトリのプロジェクトでは null */
   repos: string[] | null;
+  /** 分割された親タスク(フェーズ8)。親でなければ null */
+  parentId: number | null;
+  /** 子タスクの順番(1から)。子でなければ null */
+  seq: number | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -152,22 +156,29 @@ const toTask = (r: Row): Task => ({
   reviewRounds: r.review_rounds as number,
   design: { architect: r.design_architect === 1, designer: r.design_designer === 1 },
   repos: r.repos_json ? (JSON.parse(r.repos_json as string) as string[]) : null,
+  parentId: (r.parent_id as number | null) ?? null,
+  seq: (r.seq as number | null) ?? null,
   createdAt: r.created_at as string,
   updatedAt: r.updated_at as string,
 });
 
 export function createTask(
   db: Db,
-  t: { projectId: number; title: string; body: string; sourceKind?: Task["sourceKind"]; sourceUrl?: string; kind?: Task["kind"] },
+  t: { projectId: number; title: string; body: string; sourceKind?: Task["sourceKind"]; sourceUrl?: string; kind?: Task["kind"]; parentId?: number; seq?: number },
 ): Task {
   const ts = now();
   const { lastInsertRowid } = db
     .prepare(
-      `INSERT INTO tasks (project_id, title, body, source_kind, source_url, kind, state, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?)`,
+      `INSERT INTO tasks (project_id, title, body, source_kind, source_url, kind, state, parent_id, seq, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?)`,
     )
-    .run(t.projectId, t.title, t.body, t.sourceKind ?? "local", t.sourceUrl ?? null, t.kind ?? "normal", ts, ts);
+    .run(t.projectId, t.title, t.body, t.sourceKind ?? "local", t.sourceUrl ?? null, t.kind ?? "normal", t.parentId ?? null, t.seq ?? null, ts, ts);
   return getTask(db, Number(lastInsertRowid))!;
+}
+
+/** 分割された親の子タスク(順番どおり。フェーズ8) */
+export function listChildren(db: Db, parentId: number): Task[] {
+  return (db.prepare("SELECT * FROM tasks WHERE parent_id = ? ORDER BY seq").all(parentId) as Row[]).map(toTask);
 }
 
 export function getTask(db: Db, id: number): Task | undefined {

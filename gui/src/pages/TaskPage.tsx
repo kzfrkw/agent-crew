@@ -36,6 +36,11 @@ function TaskView({ d, onDone }: { d: TaskDetail; onDone: () => void }) {
       <Meta>
         <StateBadge task={t} />
         {t.kind === "test_infra" && <span>テスト基盤整備</span>}
+        {d.parent && (
+          <span>
+            分割の親: <Link to={paths.task(d.parent.id)}>#{d.parent.id} {d.parent.title}</Link>
+          </span>
+        )}
         <span>差し戻し {t.reviewRounds} 回</span>
         <span>作成 {formatDateTime(t.createdAt)}</span>
         <span>更新 {formatDateTime(t.updatedAt)}</span>
@@ -45,6 +50,22 @@ function TaskView({ d, onDone }: { d: TaskDetail; onDone: () => void }) {
 
       <div className="mt-6 grid grid-cols-1 items-start gap-6 min-[880px]:grid-cols-[minmax(0,1fr)_320px]">
         <div className="flex min-w-0 flex-col gap-6">
+          {d.children.length > 0 && (
+            <section>
+              <SectionHead title="子タスク" note="分割して順に進めます(2つ目以降は前の子のブランチがベース)" />
+              <ol className="m-0 flex list-none flex-col divide-y rounded-lg border bg-card p-0">
+                {d.children.map((c) => (
+                  <li key={c.id} className="flex items-center gap-3 px-4 py-2 text-sm">
+                    <span className="text-xs text-muted-foreground tabular-nums">{c.seq}</span>
+                    <Link to={paths.task(c.id)} className="min-w-0 flex-1 truncate">
+                      #{c.id} {c.title}
+                    </Link>
+                    <span className="text-xs whitespace-nowrap text-muted-foreground">{c.stateLabel}</span>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
           <section>
             <SectionHead title="成果物" />
             <div className="rounded-lg border bg-card">

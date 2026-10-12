@@ -148,3 +148,32 @@ describe("チケット投入", () => {
     expect(posts()).toEqual([]);
   });
 });
+
+describe("計画の承認で分割して進める(8-2)", () => {
+  it("分割の案があれば選べ、選ぶと split: true を送る", async () => {
+    const { render, screen, fireEvent, waitFor } = await import("@testing-library/react");
+    const { ActionPanel } = await import("./ActionPanel.tsx");
+    const fetchMock = vi.fn(async (_u: string, init?: RequestInit) => new Response(JSON.stringify({ message: "ok", task: {} }), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <ActionPanel
+        taskId={1}
+        actions={[
+          {
+            kind: "approve",
+            label: "承認する",
+            command: null,
+            request: { action: "approve", kind: "plan" },
+            primary: true,
+            options: [{ key: "architect", label: "設計者", value: false }],
+            split: { count: 2, titles: ["API", "画面"] },
+          },
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText(/子タスク 2 個に分割して進める/));
+    fireEvent.click(screen.getByRole("button", { name: "承認する" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(JSON.parse(String(fetchMock.mock.calls[0]![1]!.body))).toMatchObject({ action: "approve", kind: "plan", split: true });
+  });
+});

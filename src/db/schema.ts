@@ -136,4 +136,9 @@ export const MIGRATIONS: string[] = [
   `
   ALTER TABLE projects ADD COLUMN settings_json TEXT;
   `,
+  // v8(フェーズ8): チケットの分割。子タスクの親と、子の順番(1から)
+  `
+  ALTER TABLE tasks ADD COLUMN parent_id INTEGER REFERENCES tasks(id);
+  ALTER TABLE tasks ADD COLUMN seq INTEGER;
+  `,
 ];

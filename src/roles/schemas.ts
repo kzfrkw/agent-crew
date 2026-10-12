@@ -41,6 +41,10 @@ const PlannerExtra = z.object({
     .describe("複数リポジトリのプロジェクトのときだけ: 変更するリポジトリの役目を、実装する順に(例: [\"backend\", \"frontend\"])。1リポジトリなら省く"),
   size: z.enum(["small", "medium", "large"]).default("medium").describe("規模。small: 数ファイル・1つの関心ごと、medium: それより大きいが1タスクで済む、large: 分けたほうがよい"),
   expectedFiles: z.array(z.string()).default([]).describe("変更する見込みのファイル(リポジトリのルートからの相対パス。テストも含む)"),
+  split: z
+    .array(z.object({ title: z.string(), body: z.string().describe("子タスクの本文(やること・受け入れ条件の要点)") }))
+    .default([])
+    .describe("size が large のときだけ: 子タスクの案(2〜5個。実装する順)。それ以外は空配列"),
 });
 
 const ImplementerExtra = z.object({

@@ -12,6 +12,8 @@ export const TASK_STATES = [
   "awaiting_final_approval",
   "integrating",
   "done",
+  /** 分割した親。子タスクがすべて完了するのを待つ(フェーズ8) */
+  "split",
   "needs_input",
   "human_working",
   "failed",
@@ -34,6 +36,7 @@ export const STATE_LABELS: Record<TaskState, string> = {
   awaiting_final_approval: "最終確認待ち",
   integrating: "統合中",
   done: "完了",
+  split: "分割済み(子タスクの完了待ち)",
   needs_input: "人の回答待ち",
   human_working: "人が作業中",
   failed: "失敗",

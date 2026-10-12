@@ -89,7 +89,7 @@ async function act(ops: Ops, taskId: number, body: unknown): Promise<ActionResul
           if (typeof d?.architect !== "boolean" || typeof d?.designer !== "boolean") throw new HttpError(400, "design は { architect, designer } を true / false で指定してください");
           design = { architect: d.architect, designer: d.designer };
         }
-        approveTask(ctx, taskId, kind(), comment, design);
+        approveTask(ctx, taskId, kind(), comment, design, { split: req.split === true });
         message = "承認しました";
         break;
       }

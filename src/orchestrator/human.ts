@@ -1,6 +1,7 @@
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { addApproval, getTask, listTaskRepos } from "../db/store.ts";
+import { addApproval, createTask, getTask, listEvents, listRepos, listTaskRepos } from "../db/store.ts";
+import { releaseTaskWorktrees } from "./cleanup-worktrees.ts";
 import { headSha } from "../git/worktree.ts";
 import type { AppContext } from "./context.ts";
 import { applyEvent, ensureWorktrees } from "./engine.ts";
@@ -18,9 +19,46 @@ export function appendHumanNote(ctx: AppContext, taskId: number, heading: string
 }
 
 /** design は計画の承認のときだけ使う(設計の段で動かす役割の、人による上書き) */
-export function approveTask(ctx: AppContext, taskId: number, kind: "plan" | "design" | "final", comment?: string, design?: DesignPlan): void {
+/** プランナーが返した分割の案(8-2) */
+export function splitProposal(ctx: AppContext, taskId: number): { title: string; body: string }[] {
+  const plan = listEvents(ctx.db, taskId, 2000).filter((e) => e.kind === "plan").at(-1)?.payload as { split?: { title: string; body: string }[] } | undefined;
+  return (plan?.split ?? []).filter((s) => s.title?.trim());
+}
+
+/**
+ * 計画を分割して承認する(8-2): 子タスクを作り、親は分割済みにする。1リポジトリのプロジェクトだけ。
+ * 親の worktree は使わないので片付ける(子がそれぞれ worktree を作る)
+ */
+function approveSplit(ctx: AppContext, taskId: number, comment?: string): void {
+  const task = getTask(ctx.db, taskId)!;
+  const items = splitProposal(ctx, taskId);
+  if (items.length < 2) throw new Error("分割の案がありません(プランナーが2つ以上の子タスクを提案したときだけ分割できます)");
+  if (listRepos(ctx.db, task.projectId).length > 1) throw new Error("複数リポジトリのプロジェクトのタスクは分割できません");
+  applyEvent(ctx, taskId, { type: "split" });
+  addApproval(ctx.db, { taskId, kind: "plan", result: "approved", comment: comment ?? "分割して進める" });
+  items.forEach((s, i) =>
+    createTask(ctx.db, {
+      projectId: task.projectId,
+      title: s.title,
+      body: `${s.body.trim()}\n\n---\n親タスク #${task.id}「${task.title}」を分割した ${i + 1}/${items.length} 番目です。親の計画: ${join(taskDir(ctx.home, task.id), "plan.md")}${i > 0 ? "\n前の子タスクのブランチをベースに作業します。" : ""}`,
+      sourceKind: task.sourceKind,
+      sourceUrl: task.sourceUrl ?? undefined,
+      parentId: task.id,
+      seq: i + 1,
+    }),
+  );
+  releaseTaskWorktrees(ctx, taskId);
+  if (comment) appendHumanNote(ctx, taskId, "計画の承認コメント(分割)", comment);
+}
+
+export function approveTask(ctx: AppContext, taskId: number, kind: "plan" | "design" | "final", comment?: string, design?: DesignPlan, o: { split?: boolean } = {}): void {
   const task = getTask(ctx.db, taskId);
   if (!task) throw new Error(`タスク ${taskId} がありません`);
+  if (o.split) {
+    if (kind !== "plan") throw new Error("分割できるのは計画の承認だけです");
+    approveSplit(ctx, taskId, comment);
+    return;
+  }
   if (kind === "plan" && task.repos && task.state === "awaiting_plan_approval") {
     // 複数リポジトリ: 2つ以上を変えるなら設計者は必須(人も外せない)。選ばれたリポジトリだけ worktree を作る(設計メモ v0.14)
     if (task.repos.length > 1) design = { ...(design ?? task.design), architect: true };

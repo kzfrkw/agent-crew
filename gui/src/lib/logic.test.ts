@@ -90,6 +90,15 @@ describe("pipelineOf", () => {
   });
 });
 
+describe("パイプライン(分割済み。8-2)", () => {
+  it("分割済みの親は、計画の承認までが済み、その先は未着手", async () => {
+    const { pipelineOf } = await import("./pipeline.ts");
+    const st = pipelineOf("split", null).map((s) => s.status);
+    expect(st.slice(0, 2)).toEqual(["done", "done"]);
+    expect(st.slice(2).every((x) => x === "todo" || x === "skipped")).toBe(true);
+  });
+});
+
 describe("describeEvent", () => {
   const ev = (kind: string, payload: unknown) => ({ id: 1, taskId: 1, runId: 2, kind, payload, createdAt: "2026-10-09T00:00:00.000Z" });
 

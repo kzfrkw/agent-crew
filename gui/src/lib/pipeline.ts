@@ -31,6 +31,11 @@ function skipped(state: TaskState, design: DesignOptions): boolean {
 }
 
 export function pipelineOf(state: TaskState, heldFrom: TaskState | null, design: DesignOptions = { architect: false, designer: false }): Stage[] {
+  // 分割済みの親(8-2): 計画の承認までは済み、その先は子タスクで進む
+  if (state === "split" || (HOLD[state] && heldFrom === "split")) {
+    const plan = STAGES.findIndex((s) => s.state === "awaiting_plan_approval");
+    return STAGES.map((s, i) => ({ ...s, status: i <= plan ? "done" : skipped(s.state, design) ? "skipped" : "todo" }));
+  }
   const hold = HOLD[state];
   const at = state === "done" ? STAGES.length : STAGES.findIndex((s) => s.state === (hold ? heldFrom : state));
   return STAGES.map((s, i) => ({

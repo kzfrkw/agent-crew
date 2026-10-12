@@ -69,6 +69,12 @@ export type TaskEvent =
   /** ベースの取り込みで衝突した。人が解決する */
   | { type: "base_conflict"; reason: string }
   | { type: "cancel" }
+  /** 計画の承認で、人が分割して進めることを選んだ(8-2) */
+  | { type: "split" }
+  /** 分割した子タスクがすべて完了した */
+  | { type: "children_done" }
+  /** 分割した子タスクが取り消された。人が判断する */
+  | { type: "child_cancelled"; reason: string }
   /** 同じ理由の差し戻しが続いた(8-3)。上限を待たずに人に回す */
   | { type: "repeated_failure"; reason: string }
   /** 人が実行中の役割を止めた。その段で人の判断を待つ */
@@ -145,6 +151,18 @@ export function transition(t: TaskSnapshot, e: TaskEvent, c: TransitionContext):
       if (e.role === "qa" && e.verdict === "passed" && t.design?.designer) return to("design_reviewing");
       return to(outcome!.to);
     }
+
+    case "split":
+      if (t.state !== "awaiting_plan_approval") fail("分割できるのは計画の承認待ちだけです");
+      return to("split");
+
+    case "children_done":
+      if (t.state !== "split") fail("分割済みではありません");
+      return to("done");
+
+    case "child_cancelled":
+      if (t.state !== "split") fail("分割済みではありません");
+      return to("needs_input", { heldFromState: "split" });
 
     case "repeated_failure":
       if (!["reviewing", "qa", "design_reviewing"].includes(t.state)) fail("差し戻しの段ではありません");

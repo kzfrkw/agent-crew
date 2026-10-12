@@ -198,6 +198,19 @@ describe("読み取り API", () => {
     ]);
   });
 
+  it("task: 分割の親と子(8-2)を返す", async () => {
+    const s = seed();
+    const db = openDb(appDbPath(s.home));
+    const child = createTask(db, { projectId: s.t1.projectId, title: "子1", body: "b", parentId: s.t1.id, seq: 1 });
+    db.close();
+    server = await startServer({ home: s.home, port: 0 });
+    const parent = await json<TaskDetail>(`api/tasks/${s.t1.id}`);
+    expect(parent.children).toEqual([{ id: child.id, title: "子1", seq: 1, state: "queued", stateLabel: "待機" }]);
+    expect(parent.parent).toBeNull();
+    const c = await json<TaskDetail>(`api/tasks/${child.id}`);
+    expect(c.parent).toEqual({ id: s.t1.id, title: s.t1.title });
+  });
+
   it("task: Notion に貼る報告(6c)を節ごとに返す", async () => {
     const s = seed();
     server = await startServer({ home: s.home, port: 0 });
