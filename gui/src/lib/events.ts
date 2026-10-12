@@ -143,6 +143,8 @@ export function describeEvent(e: EventView): EventLine {
       return { tone: "success", icon: "✓", title: "計画の自動承認", text: "小さなタスクの条件を満たしたため、計画を自動で承認しました" };
     case "auto_approve_skipped":
       return { tone: "neutral", icon: "i", title: "自動承認しない", text: Array.isArray(p.reasons) ? p.reasons.join("、") : "" };
+    case "waiting_overlap":
+      return { tone: "neutral", icon: "⏳", title: "重なりの待ち", text: String(p.reason ?? "") };
     case "bounce":
       return { tone: "attention", icon: "↩", title: "差し戻し", text: String(p.summary ?? "") };
     case "tool_command": {

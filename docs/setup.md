@@ -34,7 +34,7 @@ npx agent-crew doctor         # 前提の検査。エラー(✗)が無いこと
 設定とデータはリポジトリの外、`~/.agent-team/` に置く(`AGENT_CREW_HOME` で変えられる)。設定ファイルは `~/.agent-team/config.json`。項目は `config.example.json` を参照。よく変えるもの:
 
 - `roles.<役割>.model`: 役割ごとのモデル(例: プランナーだけ opus)
-- `concurrency`: 同時に進めるタスクの数(1〜2)
+- `concurrency`: 同時に進めるタスクの数(1〜2)。2 にしても、変更するファイルが重なるタスクは先のタスクが終わるまで実装を待つ(フェーズ8)。利用枠の消費は速くなる
 - `limits.pauseAtUtilization`: 利用枠の使用率がこれ以上なら自動で一時停止(既定 0.95)
 - `notify`: 人の対応待ちを macOS の通知で知らせる(既定 true)
 - `sandbox.allowedDomains`: エージェントが通信してよいドメイン(既定は registry.npmjs.org)

@@ -20,6 +20,7 @@ import { quotaBlock, QuotaError, type QuotaBlock } from "./usage.ts";
 import { releaseTaskWorktrees, sweepFinishedWorktrees } from "./cleanup-worktrees.ts";
 import { notifyHuman } from "./notify.ts";
 import { recordBounce } from "./bounce.ts";
+import { appStageBusy, overlapBlocker } from "./overlap.ts";
 import { decideAutoApprove } from "./auto-approve.ts";
 import { approveTask } from "./human.ts";
 import { NEEDS_HUMAN, STATE_LABELS } from "./states.ts";
@@ -110,7 +111,10 @@ export function runnableTasks(ctx: AppContext): Task[] {
       return getProject(ctx.db, t.projectId)?.profileStatus === "approved" && testGateOpen(ctx.db, t.id);
     }
     const role = roleForState(t.state);
-    return role !== null && HANDLERS[role] !== undefined && !runActive(ctx.db, t.id);
+    if (role === null || HANDLERS[role] === undefined || runActive(ctx.db, t.id)) return false;
+    // 変更するファイルが、先に進んでいるタスクと重なるなら、実装を始めない(8-4)
+    // 確認 URL のポートでアプリを起動する段は、同じプロジェクトで1つずつ
+    return !overlapBlocker(ctx.db, t) && !appStageBusy(ctx.db, t, ctx.stops?.keys() ?? []);
   });
 }
 
@@ -231,6 +235,8 @@ export async function runUntilIdle(ctx: AppContext, o: { maxSteps?: number; onSt
     for (const t of runnableTasks(ctx)) {
       if (active.size >= ctx.config.concurrency) break;
       if (active.has(t.id)) continue;
+      // 同じ回で先に始めたタスクと、アプリを起動する段がぶつからないか(8-4)
+      if (appStageBusy(ctx.db, t, active.keys())) continue;
       if (++steps > maxSteps) throw new Error(`処理の上限(${maxSteps}回)に達しました。状態遷移がループしていないか確認してください`);
       o.onStep?.(t.id);
       active.set(t.id, stepTask(ctx, t.id).finally(() => active.delete(t.id)));

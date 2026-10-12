@@ -6,6 +6,7 @@ import { acquireRunLock, recoverStaleRuns } from "./lock.ts";
 import { quotaBlock, type QuotaBlock } from "./usage.ts";
 import { sweepFinishedWorktrees } from "./cleanup-worktrees.ts";
 import { notifyHuman } from "./notify.ts";
+import { appStageBusy } from "./overlap.ts";
 
 /**
  * 常駐ワーカー(設計メモ14章 v0.10)。serve の中でオーケストレーターを動かし、進められるタスクを自動で進める。
@@ -146,6 +147,7 @@ export class Worker {
     for (const t of tasks) {
       if (this.active.size >= this.ctx.config.concurrency) break;
       if (this.active.has(t.id) || this.looping(t.id)) continue;
+      if (appStageBusy(this.ctx.db, t, this.active.keys())) continue;
       const p = stepTask(this.ctx, t.id).finally(() => {
         this.active.delete(t.id);
         if (this.active.size === 0) for (const w of this.idleWaiters.splice(0)) w();
