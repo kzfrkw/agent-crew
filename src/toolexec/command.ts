@@ -129,6 +129,8 @@ export type ToolExecRequest = {
   tmpDir: string;
   timeoutMs?: number;
   signal?: AbortSignal;
+  /** プロジェクトの読ませないパス(絶対パス。7-4) */
+  denyRead?: string[];
 };
 /** テストでは差し替える(AppContext.toolExec) */
 export type ToolExecFn = (ctx: AppContext, req: ToolExecRequest) => Promise<CommandResult>;
@@ -139,7 +141,7 @@ export const defaultToolExec: ToolExecFn = (ctx, req) =>
     command: req.command,
     writable: [req.cwd, ...toolchainWritable(req.platform, { home: homedir(), flutterRoot: findFlutterRoot(), userTmp: userTempDir() })],
     tmpDir: req.tmpDir,
-    denyRead: defaultDenyRead(homedir(), ctx.home),
+    denyRead: [...defaultDenyRead(homedir(), ctx.home), ...(req.denyRead ?? [])],
     extraRules: toolchainRules(req.platform),
     timeoutMs: req.timeoutMs,
     signal: req.signal,

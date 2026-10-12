@@ -57,6 +57,16 @@ describe("buildRunSettings", () => {
     expect(() => buildRunSettings({ ...base, write: "worktree", extraWritable: ["rel/path"] })).toThrow();
   });
 
+  it("読ませないパス(7-4)は、Read / Edit / Write の deny と、サンドボックスの資格情報の deny(Bash からの読み取り)に入る", () => {
+    const s = buildRunSettings({ ...base, write: "worktree", denyRead: ["/h/worktrees/p/1/main/config/prod.yml", "/h/worktrees/p/1/main/secrets"] });
+    for (const t of ["Read", "Edit", "Write"]) {
+      expect(s.permissions.deny).toContain(`${t}(//h/worktrees/p/1/main/secrets)`);
+      expect(s.permissions.deny).toContain(`${t}(//h/worktrees/p/1/main/secrets/**)`);
+    }
+    expect(s.sandbox.credentials.files).toContainEqual({ path: "/h/worktrees/p/1/main/config/prod.yml", mode: "deny" });
+    expect(() => buildRunSettings({ ...base, write: "worktree", denyRead: ["rel"] })).toThrow();
+  });
+
   it("相対パスは受け付けない", () => {
     expect(() => buildRunSettings({ ...base, worktree: "rel/wt", write: "worktree" })).toThrow(/絶対パス/);
   });

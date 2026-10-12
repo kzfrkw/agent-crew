@@ -68,8 +68,10 @@ export function buildRunSettings(o: {
   extraAllow?: string[];
   /** Bash から追加で書ける場所(道具のキャッシュ)。Edit/Write の許可には足さない */
   extraWritable?: string[];
+  /** 読ませないパス(絶対パス。7-4)。Read / Edit / Write の deny と、サンドボックスの資格情報の deny に入れる */
+  denyRead?: string[];
 }): RunSettings {
-  for (const p of [o.worktree, o.artifactsDir, ...(o.extraWritable ?? [])]) {
+  for (const p of [o.worktree, o.artifactsDir, ...(o.extraWritable ?? []), ...(o.denyRead ?? [])]) {
     if (!isAbsolute(p)) throw new Error(`絶対パスが必要です: ${p}`);
   }
   const wt = withAlias(o.worktree, o.aliases?.worktree);
@@ -79,7 +81,7 @@ export function buildRunSettings(o: {
   return {
     disableAllHooks: true,
     permissions: {
-      deny: [...DENY],
+      deny: [...DENY, ...(o.denyRead ?? []).flatMap((p) => (["Read", "Edit", "Write"] as const).flatMap((t) => [`${t}(/${p})`, `${t}(/${p}/**)`]))],
       allow: ["Read", "Grep", "Glob", "Bash", ...writable.flatMap((p) => [under("Edit", p), under("Write", p)]), ...(o.extraAllow ?? [])],
     },
     sandbox: {
@@ -94,7 +96,7 @@ export function buildRunSettings(o: {
         ? { allowedDomains: [...o.allowedDomains, "localhost", "127.0.0.1"], strictAllowlist: true, allowLocalBinding: true }
         : { allowedDomains: [...o.allowedDomains], strictAllowlist: true },
       credentials: {
-        files: CREDENTIAL_FILES.map((path) => ({ path, mode: "deny" as const })),
+        files: [...CREDENTIAL_FILES, ...(o.denyRead ?? [])].map((path) => ({ path, mode: "deny" as const })),
         envVars: CREDENTIAL_ENV.map((name) => ({ name, mode: "deny" as const })),
       },
     },

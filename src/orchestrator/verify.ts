@@ -6,7 +6,7 @@ import type { Profile } from "../roles/schemas.ts";
 import type { AppContext } from "./context.ts";
 import { orderedTaskRepos } from "./handlers.ts";
 import { invokeRole } from "./invoke.ts";
-import { platformOf } from "./projects.ts";
+import { platformOf, protectedPathsFor } from "./projects.ts";
 import { defaultToolExec } from "../toolexec/command.ts";
 import { SimulatorSession } from "../mobile/session.ts";
 import { taskDir } from "./paths.ts";
@@ -81,7 +81,14 @@ async function verifyRepo(ctx: AppContext, task: Task, tr: { repoId: number; wor
     const session = new SimulatorSession({ home: ctx.home, taskId: task.id, simctl: ctx.simctl, slots: ctx.config.concurrency, deviceType: ctx.config.simulatorDevice });
     let res;
     try {
-      res = await exec(ctx, { cwd: tr.worktreePath, command: await session.resolve(command), platform, tmpDir: join(dir, "tmp", `verify-${tr.repoId}`), signal: ctx.stops?.get(task.id)?.signal });
+      res = await exec(ctx, {
+        cwd: tr.worktreePath,
+        command: await session.resolve(command),
+        platform,
+        tmpDir: join(dir, "tmp", `verify-${tr.repoId}`),
+        signal: ctx.stops?.get(task.id)?.signal,
+        denyRead: protectedPathsFor(ctx, { taskId: task.id }),
+      });
     } catch (e) {
       return { role: tr.role, status: "error", head, detail: `テストの再実行に失敗しました: ${(e as Error).message}` };
     } finally {

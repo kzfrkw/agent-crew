@@ -32,6 +32,8 @@ export type ToolExecConfig = {
   taskId?: number;
   slots?: number;
   deviceType?: string;
+  /** プロジェクトの読ませないパス(絶対パス。7-4) */
+  denyRead?: string[];
 };
 
 type Exec = (req: { cwd: string; command: string; signal?: AbortSignal }) => Promise<CommandResult>;
@@ -98,7 +100,7 @@ export async function serveMcp(configPath: string): Promise<void> {
         command: await session.resolve(req.command),
         writable,
         tmpDir: cfg.tmpDir,
-        denyRead: defaultDenyRead(homedir(), cfg.dataHome),
+        denyRead: [...defaultDenyRead(homedir(), cfg.dataHome), ...(cfg.denyRead ?? [])],
         extraRules: toolchainRules(cfg.platform),
         timeoutMs: cfg.timeoutMs,
         signal: req.signal,

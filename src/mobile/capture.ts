@@ -36,7 +36,7 @@ Future<void> main() => integrationDriver(
 `;
 
 /** extraRules は種類ごとの sandbox-exec の追加の規則(ネイティブ iOS のテスト。toolchainRules) */
-export type DriveExec = (req: { cwd: string; command: string; env: Record<string, string>; writable: string[]; tmpDir: string; extraRules?: string[] }) => Promise<CommandResult>;
+export type DriveExec = (req: { cwd: string; command: string; env: Record<string, string>; writable: string[]; tmpDir: string; extraRules?: string[]; denyRead?: string[] }) => Promise<CommandResult>;
 
 /** ビルドと撮影で書き込む場所(worktree と撮影先のほか) */
 function buildWritable(): string[] {
@@ -53,7 +53,7 @@ function buildWritable(): string[] {
 export const defaultDriveExec =
   (dataHome: string): DriveExec =>
   (req) =>
-    runSandboxedCommand({ cwd: req.cwd, command: req.command, env: req.env, writable: req.writable, tmpDir: req.tmpDir, denyRead: defaultDenyRead(homedir(), dataHome), extraRules: req.extraRules, timeoutMs: 20 * 60_000 });
+    runSandboxedCommand({ cwd: req.cwd, command: req.command, env: req.env, writable: req.writable, tmpDir: req.tmpDir, denyRead: [...defaultDenyRead(homedir(), dataHome), ...(req.denyRead ?? [])], extraRules: req.extraRules, timeoutMs: 20 * 60_000 });
 
 /** git の作業ツリーの変更(porcelain)。git のリポジトリでなければ null */
 function gitStatus(worktree: string): string | null {
@@ -100,6 +100,8 @@ export async function captureFlutterScreens(o: {
   deviceType?: string;
   /** 知らせること(撮影で変わったファイルを元に戻した、など)。イベントに残す */
   onNote?: (message: string) => void;
+  /** プロジェクトの読ませないパス(7-4) */
+  denyRead?: string[];
 }): Promise<Shot[]> {
   if (!existsSync(join(o.worktree, SCREENS_TEST))) {
     throw new Error(`${SCREENS_TEST} がありません(画面を開いて takeScreenshot(<画面の名前>) するテストを、実装者が書く決まりです)`);
@@ -127,6 +129,7 @@ export async function captureFlutterScreens(o: {
         env: { AGENT_CREW_SHOTS_DIR: raw },
         writable: [o.worktree, o.outDir, raw, ...buildWritable()],
         tmpDir: join(tmp, `drive-${scheme}`),
+        denyRead: o.denyRead,
       });
       const files = existsSync(raw) ? readdirSync(raw).filter((f) => f.endsWith(".png")).sort() : [];
       if (r.exitCode !== 0 || r.timedOut || files.length === 0) {
@@ -184,6 +187,7 @@ export async function captureIosScreens(o: {
   waitMs?: number;
   deviceType?: string;
   onNote?: (message: string) => void;
+  denyRead?: string[];
 }): Promise<Shot[]> {
   if (!o.screens) throw new Error("撮影の UI テストがプロファイルにありません(agent-crew project set <名前> --screens <UIテストのターゲット>/ScreensUITests で設定してください)");
   const simctl = o.simctl ?? defaultSimctl;
@@ -209,6 +213,7 @@ export async function captureIosScreens(o: {
         writable: [o.worktree, tmp, ...toolchainWritable("ios", { home: homedir(), flutterRoot: null, userTmp: userTempDir() })],
         tmpDir: join(tmp, `run-${scheme}`),
         extraRules: toolchainRules("ios"),
+        denyRead: o.denyRead,
       });
       const raw = join(tmp, `raw-${scheme}`);
       let entries: { file: string; name: string }[] = [];

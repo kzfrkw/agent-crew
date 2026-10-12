@@ -1,7 +1,7 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { getProjectByName, listRepos, listTasks, createTask } from "../src/db/store.ts";
+import { getProjectByName, listRepos, listTasks, createTask, listTaskRepos } from "../src/db/store.ts";
 import { approveProfile, registerProject, testGateOpen, reprofileProject } from "../src/orchestrator/projects.ts";
 import { answer, ScriptedRunner } from "./helpers/scripted-runner.ts";
 import { testContext } from "./helpers/context.ts";
@@ -71,6 +71,28 @@ describe("registerProject", () => {
     const r2 = await reprofileProject(ctx, "shop");
     expect(r2.ok).toBe(true);
     expect(getProjectByName(ctx.db, "shop")!.profileStatus).toBe("draft");
+  });
+});
+
+describe("読ませないパス(7-4)", () => {
+  it("リポジトリごとに足し・外せる。相対パスだけ(.. や絶対パスは不可)。役割の実行と、ツールの実行に渡る", async () => {
+    const { approvedProject, newTask } = await import("./helpers/project.ts");
+    const { protectPaths, protectedPathsFor } = await import("../src/orchestrator/projects.ts");
+    const { runUntilIdle } = await import("../src/orchestrator/engine.ts");
+    const runner = new ScriptedRunner({ planner: answer("plan.md", "ready", { acceptanceCriteria: ["a"], testFirstException: false, design: { architect: false, designer: false, reason: "r" } }) });
+    const ctx = testContext(runner);
+    const { project, repo } = await approvedProject(ctx);
+    expect(protectPaths(ctx, "shop", { add: ["config/production.yml", "secrets/"] })).toEqual(["config/production.yml", "secrets"]);
+    expect(protectPaths(ctx, "shop", { add: ["secrets"], remove: ["config/production.yml"] })).toEqual(["secrets"]);
+    expect(() => protectPaths(ctx, "shop", { add: ["../x"] })).toThrow(/相対パス/);
+    expect(() => protectPaths(ctx, "shop", { add: ["/etc/passwd"] })).toThrow(/相対パス/);
+    const t = newTask(ctx, project.id);
+    await runUntilIdle(ctx);
+    const call = runner.calls.find((c) => c.role === "planner")!;
+    // 本体とタスクの worktree の両方の実体のパス
+    expect(call.denyRead).toEqual(expect.arrayContaining([join(realpathSync(repo), "secrets")]));
+    const wt = listTaskRepos(ctx.db, t.id)[0]!.worktreePath;
+    expect(protectedPathsFor(ctx, { taskId: t.id })).toContain(join(wt, "secrets"));
   });
 });
 

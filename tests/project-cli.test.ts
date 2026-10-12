@@ -34,6 +34,12 @@ describe("agent-crew project", () => {
     const show = cli(home, "project", "show", "shop");
     expect(show.out).toContain(repo);
 
+    // 読ませないパス(7-4)
+    expect(cli(home, "project", "protect", "shop", "--add", "secrets/", "--add", "config/prod.yml").out).toContain("secrets");
+    expect(cli(home, "project", "show", "shop").out).toContain("読ませないパス: secrets、config/prod.yml");
+    expect(cli(home, "project", "protect", "shop", "--remove", "secrets").out).not.toContain("secrets");
+    expect(cli(home, "project", "protect", "shop", "--add", "../x").code).toBe(1);
+
     const approve = cli(home, "project", "approve", "shop");
     expect(approve.code).toBe(1);
     expect(approve.out).toContain("プロファイルがありません");

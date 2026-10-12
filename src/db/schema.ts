@@ -128,4 +128,8 @@ export const MIGRATIONS: string[] = [
     updated_at TEXT NOT NULL
   );
   `,
+  // v6(フェーズ7): リポジトリごとの、エージェントに読ませないパス(リポジトリのルートからの相対パス。JSON の配列)
+  `
+  ALTER TABLE repos ADD COLUMN protect_json TEXT;
+  `,
 ];

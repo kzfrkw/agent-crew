@@ -80,7 +80,7 @@ function ProjectView({ d }: { d: ProjectDetail }) {
             ))}
           </div>
           {d.repos.map((r) => (
-            <ProfileCommands key={r.id} name={p.name} role={d.repos.length > 1 ? r.role : undefined} profile={r.profile ?? d.profile} env={r.env} />
+            <ProfileCommands key={r.id} name={p.name} role={d.repos.length > 1 ? r.role : undefined} profile={r.profile ?? d.profile} env={r.env} protect={r.protect} />
           ))}
           <div className="rounded-lg border bg-card">
             <h3 className="mt-0 mb-0 px-4 pt-3 text-xs font-semibold text-muted-foreground">プロジェクト把握担当の実行</h3>
@@ -99,7 +99,7 @@ type ProfileJson = {
 } | null;
 
 /** 役割に渡すコマンド。正本は DB のプロファイル(profile.md を手で直しても反映されない)ので、直し方を添える */
-function ProfileCommands({ name, role, profile, env = {} }: { name: string; role?: string; profile: unknown; env?: Record<string, string> }) {
+function ProfileCommands({ name, role, profile, env = {}, protect = [] }: { name: string; role?: string; profile: unknown; env?: Record<string, string>; protect?: string[] }) {
   const p = profile as ProfileJson;
   if (!p?.commands) return null;
   const rows: [string, string | null | undefined][] = [
@@ -133,6 +133,18 @@ function ProfileCommands({ name, role, profile, env = {} }: { name: string; role
           ))}
         </div>
       )}
+      <div className="mt-2 text-xs">
+        <span className="text-muted-foreground">読ませないパス: </span>
+        {protect.length > 0 ? (
+          protect.map((p) => (
+            <code key={p} className="mr-2 font-mono break-all">
+              {p}
+            </code>
+          ))
+        ) : (
+          <span className="text-subtle-foreground">なし(agent-crew project protect {name} --add &lt;パス&gt; で足せる)</span>
+        )}
+      </div>
       <p className="mt-2 mb-0 text-xs text-muted-foreground">
         直すとき: <code className="font-mono break-all">agent-crew project set {name}{role ? ` --role ${role}` : ""} --start "..."</code>(profile.md を直しても反映されません)
       </p>

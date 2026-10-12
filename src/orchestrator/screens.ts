@@ -6,7 +6,7 @@ import { captureScreens, type Shot, type Variant } from "../browser/chrome.ts";
 import { addEvent, getRepoProfile, listRepos, listTaskRepos, type Task } from "../db/store.ts";
 import type { Profile } from "../roles/schemas.ts";
 import type { AppContext, CaptureFn } from "./context.ts";
-import { platformOf, resolveServiceEnv } from "./projects.ts";
+import { platformOf, protectedPathsFor, resolveServiceEnv } from "./projects.ts";
 import { captureFlutterScreens, captureIosScreens } from "../mobile/capture.ts";
 
 /**
@@ -79,6 +79,7 @@ export const captureTaskScreens: CaptureFn = async (ctx, task, o) => {
         slots: ctx.config.concurrency,
         deviceType: ctx.config.simulatorDevice,
         onNote,
+        denyRead: protectedPathsFor(ctx, { taskId: task.id }),
       });
     }
     return captureFlutterScreens({
@@ -89,6 +90,7 @@ export const captureTaskScreens: CaptureFn = async (ctx, task, o) => {
       slots: ctx.config.concurrency,
       deviceType: ctx.config.simulatorDevice,
       onNote,
+      denyRead: protectedPathsFor(ctx, { taskId: task.id }),
     });
   }
   const services = servicesFor(ctx, task);
@@ -113,7 +115,7 @@ export const captureTaskScreens: CaptureFn = async (ctx, task, o) => {
           env: s.env,
           writable,
           tmpDir: join(tmp, `app-${s.role}`),
-          denyRead: defaultDenyRead(homedir(), ctx.home),
+          denyRead: [...defaultDenyRead(homedir(), ctx.home), ...protectedPathsFor(ctx, { taskId: task.id })],
         }),
       );
     }

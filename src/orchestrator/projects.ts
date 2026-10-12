@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import {
   addRepo,
   createProject,
@@ -8,13 +8,16 @@ import {
   getProjectByName,
   getProjectWiring,
   getRepoProfile,
+  getRepoProtect,
   getTask,
   listRepos,
+  listTaskRepos,
   listTasks,
   setAllowWithoutTests,
   setProjectProfile,
   setProjectWiring,
   setRepoProfile,
+  setRepoProtect,
   type Project,
   type Repo,
   type Wiring,
@@ -203,6 +206,50 @@ export function mustProject(db: Db, name: string): Project {
 }
 
 export type ProfileCommandsPatch = Partial<Record<"install" | "build" | "test" | "start" | "startUrl" | "analyze" | "screens" | "platform", string>>;
+
+/**
+ * エージェントに読ませないパスを足す・外す(設計メモ v0.17、7-4)。リポジトリのルートからの相対パスだけ。正本は DB(リポジトリには書かない)
+ */
+export function protectPaths(ctx: AppContext, name: string, o: { add?: string[]; remove?: string[] }, role?: string): string[] {
+  const project = mustProject(ctx.db, name);
+  const repos = listRepos(ctx.db, project.id);
+  const repo = role === undefined ? repos[0] : repos.find((r) => r.role === role);
+  if (!repo) throw new Error(`プロジェクト ${name} に役目 ${role} のリポジトリがありません`);
+  const norm = (p: string) => {
+    const v = p.trim().replace(/\/+$/, "").replace(/^\.\//, "");
+    if (!v || isAbsolute(v) || v.split("/").includes("..") || /["\\\n\r\0]/.test(v)) throw new Error(`読ませないパスはリポジトリのルートからの相対パスで指定してください: ${p}`);
+    return v;
+  };
+  const remove = new Set((o.remove ?? []).map(norm));
+  const next = [...new Set([...getRepoProtect(ctx.db, repo.id).filter((p) => !remove.has(p)), ...(o.add ?? []).map(norm)])];
+  setRepoProtect(ctx.db, repo.id, next);
+  return next;
+}
+
+/**
+ * 役割の実行に渡す、読ませないパス(絶対パス)。タスクならタスクの worktree と各リポジトリの本体(プランナーは本体を読む)、
+ * プロジェクト把握担当なら調査用 worktree(cwd)と本体。実体のパスにそろえる(サンドボックスは実体のパスで照合する)
+ */
+export function protectedPathsFor(ctx: AppContext, o: { taskId?: number; projectId?: number; cwd?: string }): string[] {
+  const task = o.taskId === undefined ? undefined : getTask(ctx.db, o.taskId);
+  const projectId = task?.projectId ?? o.projectId;
+  if (projectId === undefined) return [];
+  const real = (p: string) => {
+    try {
+      return realpathSync(p);
+    } catch {
+      return p;
+    }
+  };
+  const out: string[] = [];
+  for (const repo of listRepos(ctx.db, projectId)) {
+    const rel = getRepoProtect(ctx.db, repo.id);
+    if (rel.length === 0) continue;
+    const roots = [repo.path, ...(task ? listTaskRepos(ctx.db, task.id).filter((tr) => tr.repoId === repo.id).map((tr) => tr.worktreePath) : o.cwd ? [o.cwd] : [])];
+    for (const root of roots) for (const p of rel) out.push(join(real(root), p));
+  }
+  return [...new Set(out)];
+}
 
 /** アプリの種類。種類を持たない古いプロファイルは web(フェーズ6) */
 export function platformOf(profile: Pick<Profile, "platform"> | null | undefined): NonNullable<Profile["platform"]> {

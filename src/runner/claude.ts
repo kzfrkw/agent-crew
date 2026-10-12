@@ -41,6 +41,7 @@ export class ClaudeRunner implements Runner {
       aliases: { worktree: resolve(spec.cwd), artifactsDir: resolve(spec.artifactsDir) },
       extraAllow: spec.extraAllowedTools,
       extraWritable: spec.extraWritable,
+      denyRead: spec.denyRead,
     });
     writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
     let mcpConfigPath: string | undefined;

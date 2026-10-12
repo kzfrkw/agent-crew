@@ -325,3 +325,26 @@ describe("ネイティブ iOS のテストの再実行と橋(6b)", () => {
   });
 });
 
+describe("読ませないパスはツールの実行にも渡る(7-4)", () => {
+  it("テストの再実行と MCP の橋の sandbox-exec にも、読ませないパスを渡す", async () => {
+    const { protectPaths } = await import("../src/orchestrator/projects.ts");
+    const runner = new ScriptedRunner({ planner: plannerReady, implementer: implementer() });
+    const ctx = testContext(runner);
+    const seen: string[][] = [];
+    ctx.toolExec = async (_c, req) => {
+      seen.push(req.denyRead ?? []);
+      return { exitCode: 0, timedOut: false, output: "ok", durationMs: 1 };
+    };
+    const { project } = await approvedProject(ctx, { platform: "flutter" as const, commands: { install: null, build: null, test: "flutter test", start: null, analyze: null }, startUrl: null });
+    protectPaths(ctx, "shop", { add: ["secrets"] });
+    const t = newTask(ctx, project.id);
+    await runUntilIdle(ctx);
+    approveTask(ctx, t.id, "plan");
+    await runUntilIdle(ctx);
+    const wt = listTaskRepos(ctx.db, t.id)[0]!.worktreePath;
+    expect(seen[0]).toContain(join(wt, "secrets"));
+    const cfg = JSON.parse(readFileSync(runner.calls.find((c) => c.role === "implementer")!.mcpServers!["agent-crew"]!.args.at(-1)!, "utf8"));
+    expect(cfg.denyRead).toContain(join(wt, "secrets"));
+  });
+});
+

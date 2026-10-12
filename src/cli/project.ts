@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { getProjectByName, getProjectWiring, getRepoProfile, listProjects, listRepos, listTasks } from "../db/store.ts";
+import { getProjectByName, getProjectWiring, getRepoProfile, getRepoProtect, listProjects, listRepos, listTasks } from "../db/store.ts";
 import type { Profile } from "../roles/schemas.ts";
 import { createAppContext } from "../orchestrator/context.ts";
 import { projectDir } from "../orchestrator/paths.ts";
@@ -7,6 +7,7 @@ import {
   addRepository,
   approveProfile,
   mustProject,
+  protectPaths,
   registerProject,
   repoProfileDir,
   reprofileProject,
@@ -172,6 +173,26 @@ export function registerProjectCommands(program: Command): void {
     });
 
   project
+    .command("protect <name>")
+    .description("エージェントに読ませないパス(鍵、本番の設定、顧客データなど。リポジトリのルートからの相対パス)を足す・外す。指定が無ければ一覧")
+    .option("--add <path>", "足す(複数回指定できる)", (v: string, acc: string[]) => [...acc, v], [] as string[])
+    .option("--remove <path>", "外す(複数回指定できる)", (v: string, acc: string[]) => [...acc, v], [] as string[])
+    .option("--role <role>", "対象のリポジトリの役目(既定は1つ目)")
+    .action((name: string, o: { add: string[]; remove: string[]; role?: string }) => {
+      const ctx = createAppContext();
+      try {
+        const list = protectPaths(ctx, name, { add: o.add, remove: o.remove }, o.role);
+        console.log(`読ませないパス(${name}${o.role ? ` [${o.role}]` : ""}): ${list.length ? list.join("、") : "なし"}`);
+        console.log("  エージェントの Read / Edit / Write と Bash、ツールが動かすアプリ・テストのどれからも読めなくします(効き方は agent-crew doctor --probe-sandbox で確かめられます)");
+      } catch (e) {
+        console.error((e as Error).message);
+        process.exitCode = 1;
+      } finally {
+        ctx.db.close();
+      }
+    });
+
+  project
     .command("list")
     .description("プロジェクトの一覧(名前、プロファイル、テスト基盤、タスク数)")
     .action(() => {
@@ -201,6 +222,8 @@ export function registerProjectCommands(program: Command): void {
           else console.log("  (プロファイルなし)");
           const env = getProjectWiring(ctx.db, p.id)[r.role];
           if (env && Object.keys(env).length) console.log(`  起動のつなぎ方: ${Object.entries(env).map(([k, v]) => `${k}=${v}`).join(" ")}`);
+          const protect = getRepoProtect(ctx.db, r.id);
+          console.log(`  読ませないパス: ${protect.length ? protect.join("、") : "なし(agent-crew project protect で足せる)"}`);
         }
         for (const t of listTasks(ctx.db, { projectId: p.id })) console.log(`  #${t.id} ${t.state.padEnd(24)} ${t.title}`);
       } finally {

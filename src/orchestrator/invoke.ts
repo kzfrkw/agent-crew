@@ -8,6 +8,7 @@ import type { AppContext } from "./context.ts";
 import { runDir } from "./paths.ts";
 import { cleanupStrayProcesses } from "../runner/cleanup.ts";
 import { isQuotaFailure, quotaBlock, QuotaError, recordUsage } from "./usage.ts";
+import { protectedPathsFor } from "./projects.ts";
 import { TOOL_NAME, type ToolExecConfig } from "../toolexec/mcp-server.ts";
 import { findFlutterRoot, toolchainWritable } from "../toolexec/command.ts";
 import { homedir } from "node:os";
@@ -83,6 +84,7 @@ export async function invokeRole(
         maxBudgetUsd: Math.min(role.maxBudgetUsd, ctx.config.limits.runMaxBudgetUsd),
         allowedDomains: o.toolCommands?.platform === "flutter" ? [...new Set([...ctx.config.sandbox.allowedDomains, ...FLUTTER_DOMAINS])] : ctx.config.sandbox.allowedDomains,
         extraEnv: o.extraEnv,
+        denyRead: protectedPathsFor(ctx, { taskId: o.taskId, projectId: o.projectId, cwd: o.cwd }),
         ...(bridge ? { mcpServers: bridge.servers, extraAllowedTools: [MCP_TOOL] } : {}),
         // 依存の準備(flutter pub get)は Bash で行うため、道具のキャッシュに書けるようにする(設計メモ v0.15)
         ...(o.toolCommands ? { extraWritable: toolchainWritable(o.toolCommands.platform, { home: homedir(), flutterRoot: findFlutterRoot() }) } : {}),
@@ -160,6 +162,7 @@ function writeBridge(ctx: AppContext, runId: number, cwd: string, tc: ToolComman
     taskId,
     slots: ctx.config.concurrency,
     deviceType: ctx.config.simulatorDevice,
+    denyRead: protectedPathsFor(ctx, { taskId, cwd }),
   };
   const cfgPath = join(dir, "tool-exec.json");
   writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));

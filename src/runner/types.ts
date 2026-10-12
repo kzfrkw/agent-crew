@@ -37,6 +37,8 @@ export type RunSpec = {
    * MCP サーバーは Claude のサンドボックスの外で動くため、ツール自身が書いたものだけを渡す
    */
   mcpServers?: Record<string, { command: string; args: string[] }>;
+  /** 読ませないパス(絶対パス。プロジェクトの設定から。7-4) */
+  denyRead?: string[];
   /** Bash から追加で書ける場所(道具のキャッシュ。Flutter の SDK の bin/cache、~/.pub-cache など。フェーズ6) */
   extraWritable?: string[];
   /** 追加で許可する道具(MCP の道具。mcp__<サーバー>__<道具>) */

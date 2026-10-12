@@ -480,3 +480,13 @@ export function getAppState<T>(db: Db, key: string): T | null {
 export function setAppState(db: Db, key: string, value: unknown): void {
   db.prepare("INSERT INTO app_state (key, value_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at").run(key, JSON.stringify(value), now());
 }
+
+/** リポジトリの、エージェントに読ませないパス(相対パス。7-4) */
+export function getRepoProtect(db: Db, repoId: number): string[] {
+  const r = db.prepare("SELECT protect_json FROM repos WHERE id = ?").get(repoId) as { protect_json: string | null } | undefined;
+  return r?.protect_json ? (JSON.parse(r.protect_json) as string[]) : [];
+}
+
+export function setRepoProtect(db: Db, repoId: number, paths: string[]): void {
+  db.prepare("UPDATE repos SET protect_json = ? WHERE id = ?").run(JSON.stringify(paths), repoId);
+}
