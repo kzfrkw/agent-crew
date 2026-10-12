@@ -111,3 +111,30 @@ describe("doctor のチェック", () => {
     expect(find(runChecks(probe()), "tool:xcodebuild").level).toBe("ok");
   });
 });
+
+describe("登録済みのリポジトリの点検(7-5)", () => {
+  it("リポジトリ側の .claude/settings.json と .mcp.json があることを知らせ、読ませないパスが無ければ設定を勧める", async () => {
+    const { repoChecks } = await import("../src/doctor/index.ts");
+    const { openDb } = await import("../src/db/connection.ts");
+    const { addRepo, createProject, setRepoProtect } = await import("../src/db/store.ts");
+    const { makeRepo } = await import("./helpers/gitrepo.ts");
+    const { mkdirSync, writeFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const db = openDb(":memory:");
+    const { repo } = makeRepo();
+    mkdirSync(join(repo, ".claude"));
+    writeFileSync(join(repo, ".claude", "settings.json"), "{}");
+    writeFileSync(join(repo, ".mcp.json"), "{}");
+    const p = createProject(db, { name: "shop" });
+    const r = addRepo(db, { projectId: p.id, path: repo, role: "main", defaultBranch: "main" });
+    const ids = (rs: { id: string; message: string }[]) => rs.map((x) => x.id);
+    const rs = repoChecks(db);
+    expect(ids(rs)).toEqual(expect.arrayContaining(["repo:shop/main:claude-settings", "repo:shop/main:mcp", "repo:shop/main:protect"]));
+    expect(rs.find((x) => x.id === "repo:shop/main:claude-settings")!.message).toContain("読み込みません");
+    setRepoProtect(db, r.id, ["secrets"]);
+    expect(repoChecks(db).find((x) => x.id === "repo:shop/main:protect")!.message).toContain("secrets");
+    // リポジトリが見つからなければエラー
+    db.prepare("UPDATE repos SET path = '/nope/x' WHERE id = ?").run(r.id);
+    expect(repoChecks(db).find((x) => x.id === "repo:shop/main")!.level).toBe("error");
+  });
+});
