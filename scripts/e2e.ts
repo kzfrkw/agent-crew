@@ -92,7 +92,8 @@ function report(taskId: number): { summary: string; ok: boolean } {
       .all() as { role: string; model: string; n: number; cost: number; sec: number }[];
     const total = rows.reduce((a, r) => a + (r.cost ?? 0), 0);
     const tr = listTaskRepos(db, taskId)[0]!;
-    const commits = commitsSince(tr.worktreePath, tr.baseSha, process.env);
+    // 完了したタスクの worktree は片付けられているので、リポジトリの本体でブランチを読む(7-2)
+    const commits = commitsSince(repo, tr.baseSha, process.env, tr.branchName);
     const artifacts = new Set(listArtifacts(db, taskId).map((a) => a.kind));
     const checks = [
       ["タスクが完了", getTask(db, taskId)!.state === "done"],

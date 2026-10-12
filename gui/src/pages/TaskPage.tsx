@@ -91,7 +91,9 @@ function TaskView({ d, onDone }: { d: TaskDetail; onDone: () => void }) {
                   <dt className="text-muted-foreground">リポジトリ</dt>
                   <dd className="m-0">{w.repoRole}</dd>
                   <dt className="text-muted-foreground">パス</dt>
-                  <dd className="m-0 font-mono break-all">{w.worktreePath}</dd>
+                  <dd className="m-0 font-mono break-all">
+                    {w.removed ? <span className="font-sans text-muted-foreground">片付け済み(ブランチは残っています)</span> : w.worktreePath}
+                  </dd>
                   <dt className="text-muted-foreground">ブランチ</dt>
                   <dd className="m-0 font-mono break-all">{w.branchName}</dd>
                 </dl>

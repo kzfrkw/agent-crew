@@ -4,6 +4,7 @@ import type { AppContext } from "./context.ts";
 import { requestStop, runnableTasks, stepTask } from "./engine.ts";
 import { acquireRunLock, recoverStaleRuns } from "./lock.ts";
 import { quotaBlock, type QuotaBlock } from "./usage.ts";
+import { sweepFinishedWorktrees } from "./cleanup-worktrees.ts";
 
 /**
  * 常駐ワーカー(設計メモ14章 v0.10)。serve の中でオーケストレーターを動かし、進められるタスクを自動で進める。
@@ -90,6 +91,12 @@ export class Worker {
     if (stale) addEvent(this.ctx.db, { kind: "warning", payload: { message: `前回中断された実行を ${stale} 件、失敗として記録しました` } });
     // フックは全worktreeで共有するので、ツールの更新が既存のworktreeにも効くよう起動ごとに書き直す
     installAgentHooks(this.ctx.home);
+    // すでに終わったタスクの worktree と、古い一時ディレクトリを片付ける(設計メモ v0.17)
+    try {
+      sweepFinishedWorktrees(this.ctx);
+    } catch (e) {
+      addEvent(this.ctx.db, { kind: "warning", payload: { message: `片付けに失敗しました: ${(e as Error).message}` } });
+    }
   }
 
   private unlock(): void {

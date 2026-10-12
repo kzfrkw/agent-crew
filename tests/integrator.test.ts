@@ -3,7 +3,10 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { getProject, getRepoProfile, getTask, listEvents, listRepos } from "../src/db/store.ts";
 import { latestNeedsInputReason, runUntilIdle } from "../src/orchestrator/engine.ts";
-import { approveTask } from "../src/orchestrator/human.ts";
+import { approveTask, cancelTask } from "../src/orchestrator/human.ts";
+import { sweepFinishedWorktrees } from "../src/orchestrator/cleanup-worktrees.ts";
+import { listTaskRepos } from "../src/db/store.ts";
+import { mkdirSync, utimesSync } from "node:fs";
 import { taskDir } from "../src/orchestrator/paths.ts";
 import { testGateOpen } from "../src/orchestrator/projects.ts";
 import type { RunSpec } from "../src/runner/types.ts";
@@ -109,3 +112,47 @@ describe("統合担当", () => {
     expect(testGateOpen(ctx.db, normal.id)).toBe(true);
   });
 });
+
+describe("終わったタスクの worktree の片付け(7-2)", () => {
+  it("完了したら worktree を消す。ブランチは残る(push はリポジトリの本体から行える)", async () => {
+    const { ctx, t, repo } = await finalApproved();
+    const tr = listTaskRepos(ctx.db, t.id)[0]!;
+    expect(existsSync(tr.worktreePath)).toBe(true);
+    await runUntilIdle(ctx);
+    expect(getTask(ctx.db, t.id)!.state).toBe("done");
+    expect(existsSync(tr.worktreePath)).toBe(false);
+    expect(git(repo, "branch", "--list", tr.branchName)).not.toBe("");
+    expect(listEvents(ctx.db, t.id, 100).some((e) => e.kind === "worktree_removed")).toBe(true);
+  });
+
+  it("取り消したら消す。未コミットの変更があれば消さずに警告する", async () => {
+    const { ctx, t } = await finalApproved();
+    const tr = listTaskRepos(ctx.db, t.id)[0]!;
+    writeFileSync(join(tr.worktreePath, "wip.txt"), "人の作業中");
+    cancelTask(ctx, t.id);
+    expect(existsSync(join(tr.worktreePath, "wip.txt"))).toBe(true);
+    expect(listEvents(ctx.db, t.id, 100).some((e) => e.kind === "warning" && String((e.payload as { message: string }).message).includes("未コミット"))).toBe(true);
+  });
+
+  it("起動時に、すでに終わったタスクの worktree と、空の調査用 worktree の跡、古い一時ディレクトリを片付ける", async () => {
+    const { ctx, t } = await finalApproved();
+    const tr = listTaskRepos(ctx.db, t.id)[0]!;
+    // 7-2 より前に終わったタスクの体: 状態だけ done にする
+    ctx.db.prepare("UPDATE tasks SET state = 'done' WHERE id = ?").run(t.id);
+    const emptyProfile = join(ctx.home, "worktrees", "shop", "_profile-123");
+    mkdirSync(emptyProfile, { recursive: true });
+    const oldTmp = join(ctx.home, "tmp", "screens-1-1");
+    mkdirSync(oldTmp, { recursive: true });
+    const old = new Date(Date.now() - 3 * 86_400_000);
+    utimesSync(oldTmp, old, old);
+    const freshTmp = join(ctx.home, "tmp", "mobile-2-2");
+    mkdirSync(freshTmp, { recursive: true });
+    const r = sweepFinishedWorktrees(ctx);
+    expect(r.removed).toContain(tr.worktreePath);
+    expect(existsSync(tr.worktreePath)).toBe(false);
+    expect(existsSync(emptyProfile)).toBe(false);
+    expect(existsSync(oldTmp)).toBe(false);
+    expect(existsSync(freshTmp)).toBe(true); // 使用中かもしれない新しいものは残す
+  });
+});
+

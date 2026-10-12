@@ -84,7 +84,8 @@ function report(taskId: number, remote: string): { summary: string; ok: boolean 
     const events = listEvents(db, taskId, 5000);
     const tools = events.filter((e) => e.kind === "tool_command").map((e) => e.payload as { purpose: string; role?: string; command: string; exitCode: number });
     const shots = (events.filter((e) => e.kind === "screens").at(-1)?.payload as { shots?: { file: string; device?: string; error?: string }[] } | undefined)?.shots ?? [];
-    const commits = commitsSince(tr.worktreePath, tr.baseSha, process.env);
+    // 完了したタスクの worktree は片付けられているので、リポジトリの本体でブランチを読む(7-2)
+    const commits = commitsSince(join(work, "sample-ios"), tr.baseSha, process.env, tr.branchName);
     const checks = [
       ["タスクが完了", task.state === "done"],
       ["デザイナーが動いた(ui-spec.md)", artifacts.has("ui-spec")],

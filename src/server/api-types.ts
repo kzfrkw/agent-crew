@@ -137,7 +137,8 @@ export type ApprovalView = {
   invalidatedAt: string | null;
 };
 
-export type WorktreeView = { repoRole: string; worktreePath: string; branchName: string; baseSha: string };
+/** removed: 完了・取り消しで片付け済み(ブランチは残っている。7-2) */
+export type WorktreeView = { repoRole: string; worktreePath: string; branchName: string; baseSha: string; removed: boolean };
 
 /** 実装後のデザインレビューのために撮った画面(4c)。撮れなかったものは url が null で、error に理由 */
 /** device は iOS シミュレータで撮ったときの機種(フェーズ6。そのときは幅の代わりに出す) */

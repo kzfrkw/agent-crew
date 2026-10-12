@@ -16,6 +16,7 @@ import { installAgentHooks } from "../git/hooks.ts";
 import { branchNameFor, createWorktree, worktreePathFor } from "../git/worktree.ts";
 import type { AppContext } from "./context.ts";
 import { quotaBlock, QuotaError, type QuotaBlock } from "./usage.ts";
+import { releaseTaskWorktrees, sweepFinishedWorktrees } from "./cleanup-worktrees.ts";
 import { HANDLERS } from "./handlers.ts";
 import { testGateOpen } from "./projects.ts";
 import { roleForState, transition, type TaskEvent, type TransitionResult } from "./transitions.ts";
@@ -45,6 +46,8 @@ export function applyEvent(ctx: AppContext, taskId: number, event: TaskEvent, re
   if (next.state === "needs_input" || next.state === "failed") {
     addEvent(ctx.db, { taskId, kind: next.state, payload: { reason: reason ?? describeEvent(event) } });
   }
+  // 完了・取り消しになったら worktree を片付ける(ブランチは残す。設計メモ v0.17)
+  if ((next.state === "done" || next.state === "cancelled") && task.state !== next.state) releaseTaskWorktrees(ctx, taskId);
   return next;
 }
 
@@ -163,6 +166,7 @@ async function stepTaskInner(ctx: AppContext, taskId: number, signal: AbortSigna
 export async function runUntilIdle(ctx: AppContext, o: { maxSteps?: number; onStep?: (taskId: number) => void } = {}): Promise<{ steps: number; quota?: QuotaBlock }> {
   // フックは全worktreeで共有するので、ツールの更新が既存のworktreeにも効くよう毎回書き直す
   installAgentHooks(ctx.home);
+  sweepFinishedWorktrees(ctx);
   const active = new Map<number, Promise<void>>();
   let steps = 0;
   const maxSteps = o.maxSteps ?? 500;

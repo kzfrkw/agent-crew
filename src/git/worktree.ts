@@ -102,11 +102,14 @@ export function diffStat(worktree: string, from: string, env?: Env): string {
 
 export type CommitInfo = { sha: string; author: string; subject: string; agentRole: string | null };
 
-/** ベース以降のコミット(古い順)。trailer の有無でエージェントと人を区別する */
-export function commitsSince(worktree: string, baseSha: string, env?: Env): CommitInfo[] {
+/**
+ * ベース以降のコミット(古い順)。trailer の有無でエージェントと人を区別する。
+ * head は既定で HEAD。worktree を片付けた後は、リポジトリの本体でブランチ名を渡す(7-2)
+ */
+export function commitsSince(worktree: string, baseSha: string, env?: Env, head = "HEAD"): CommitInfo[] {
   const out = git(
     worktree,
-    ["log", "--reverse", `--format=%H%x1f%an%x1f%s%x1f%(trailers:key=${ROLE_TRAILER},valueonly,separator=%x2c)%x1e`, `${baseSha}..HEAD`],
+    ["log", "--reverse", `--format=%H%x1f%an%x1f%s%x1f%(trailers:key=${ROLE_TRAILER},valueonly,separator=%x2c)%x1e`, `${baseSha}..${head}`],
     env,
   );
   return out

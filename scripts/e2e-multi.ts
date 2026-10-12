@@ -82,7 +82,7 @@ function report(taskId: number, remotes: string[]): { summary: string; ok: boole
     const artifacts = new Set(listArtifacts(db, taskId).map((a) => a.kind));
     const perRepo = trs.map((tr) => {
       const repo = repos.find((r) => r.id === tr.repoId)!;
-      return { role: repo.role, path: repo.path, branch: tr.branchName, commits: commitsSince(tr.worktreePath, tr.baseSha, process.env) };
+      return { role: repo.role, path: repo.path, branch: tr.branchName, commits: commitsSince(repo.path, tr.baseSha, process.env, tr.branchName) }; // worktree は片付け済み(7-2)
     });
     const checks = [
       ["タスクが完了", task.state === "done"],

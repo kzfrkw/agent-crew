@@ -243,6 +243,7 @@ function taskDetail(home: string, db: Db, id: number, operable: boolean): TaskDe
       worktreePath: tr.worktreePath,
       branchName: tr.branchName,
       baseSha: tr.baseSha,
+      removed: (t.state === "done" || t.state === "cancelled") && !existsSync(tr.worktreePath),
     })),
     approvals: listAllApprovals(db, id).map((a) => ({
       id: a.id,

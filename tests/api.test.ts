@@ -161,7 +161,7 @@ describe("読み取り API", () => {
     const d = await json<TaskDetail>(`api/tasks/${s.t1.id}`);
     expect(d.task).toMatchObject({ title: "在庫0を除外", body: "本文です", attention: "approve_plan" });
     expect(d.project.name).toBe("shop");
-    expect(d.worktrees).toEqual([{ repoRole: "main", worktreePath: "/wt/1", branchName: "ac/1-x", baseSha: "abc" }]);
+    expect(d.worktrees).toEqual([{ repoRole: "main", worktreePath: "/wt/1", branchName: "ac/1-x", baseSha: "abc", removed: false }]);
     expect(d.approvals).toEqual([expect.objectContaining({ kind: "review", result: "approved", invalidatedAt: expect.any(String) })]);
     expect(d.artifacts).toEqual([
       expect.objectContaining({ kind: "plan", fileName: "plan.md", verdict: "ready", url: `/files/runs/${s.r1.id}/plan.md` }),
