@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { getProjectByName, getProjectWiring, getRepoProfile, getRepoProtect, listProjects, listRepos, listTasks } from "../db/store.ts";
+import { getProjectByName, getProjectSettings, getProjectWiring, getRepoProfile, getRepoProtect, listProjects, listRepos, listTasks } from "../db/store.ts";
 import type { Profile } from "../roles/schemas.ts";
 import { createAppContext } from "../orchestrator/context.ts";
 import { projectDir } from "../orchestrator/paths.ts";
@@ -9,6 +9,7 @@ import {
   mustProject,
   protectPaths,
   registerProject,
+  setProjectSettings,
   repoProfileDir,
   reprofileProject,
   setProfileCommands,
@@ -157,10 +158,17 @@ export function registerProjectCommands(program: Command): void {
     .option("--screens <target>", "ios: 画面を撮る UI テスト(<ターゲット>/<クラス>)")
     .option("--platform <kind>", "アプリの種類(web / flutter / ios)")
     .option("--role <role>", "直すリポジトリの役目(既定は1つ目)")
-    .action((name: string, o: { install?: string; build?: string; test?: string; start?: string; startUrl?: string; analyze?: string; screens?: string; platform?: string; role?: string }) => {
+    .option("--auto-approve-plan <on|off>", "小さなタスクの計画の承認を自動で行う(条件は設計メモ v0.18。既定 off)")
+    .action((name: string, o: { install?: string; build?: string; test?: string; start?: string; startUrl?: string; analyze?: string; screens?: string; platform?: string; role?: string; autoApprovePlan?: string }) => {
       const ctx = createAppContext();
       try {
-        const { role, ...patch } = o;
+        const { role, autoApprovePlan, ...patch } = o;
+        if (autoApprovePlan !== undefined) {
+          if (!["on", "off"].includes(autoApprovePlan)) throw new Error("--auto-approve-plan は on か off で指定してください");
+          setProjectSettings(ctx, name, { autoApprovePlan: autoApprovePlan === "on" });
+          console.log(`小さなタスクの計画の自動承認: ${autoApprovePlan}`);
+        }
+        if (Object.values(patch).every((v) => v === undefined) && autoApprovePlan !== undefined) return;
         const p = setProfileCommands(ctx, name, patch, role);
         console.log(`直しました: ${name}`);
         printCommands(p);
@@ -215,6 +223,7 @@ export function registerProjectCommands(program: Command): void {
         const p = mustProject(ctx.db, name);
         console.log(`${p.name}  プロファイル: ${p.profileStatus}  テスト基盤: ${p.testInfra}${p.allowWithoutTests ? "(例外を許可済み)" : ""}`);
         console.log(`データ: ${projectDir(ctx.home, p.id)}`);
+        console.log(`小さなタスクの計画の自動承認: ${getProjectSettings(ctx.db, p.id).autoApprovePlan ? "on" : "off"}`);
         for (const r of listRepos(ctx.db, p.id)) {
           console.log(`  [${r.role}] ${r.path}(既定ブランチ: ${r.defaultBranch})`);
           const prof = getRepoProfile(ctx.db, r.id) as Profile | null;

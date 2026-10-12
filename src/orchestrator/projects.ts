@@ -9,6 +9,9 @@ import {
   getProjectWiring,
   getRepoProfile,
   getRepoProtect,
+  getProjectSettings,
+  setProjectSettingsRow,
+  type ProjectSettings,
   getTask,
   listRepos,
   listTaskRepos,
@@ -249,6 +252,14 @@ export function protectedPathsFor(ctx: AppContext, o: { taskId?: number; project
     for (const root of roots) for (const p of rel) out.push(join(real(root), p));
   }
   return [...new Set(out)];
+}
+
+/** プロジェクトの設定を変える(指定した項目だけ。フェーズ8) */
+export function setProjectSettings(ctx: AppContext, name: string, patch: ProjectSettings): ProjectSettings {
+  const project = mustProject(ctx.db, name);
+  const next = { ...getProjectSettings(ctx.db, project.id), ...patch };
+  setProjectSettingsRow(ctx.db, project.id, next);
+  return next;
 }
 
 /** アプリの種類。種類を持たない古いプロファイルは web(フェーズ6) */

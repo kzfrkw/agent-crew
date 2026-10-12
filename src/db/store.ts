@@ -490,3 +490,15 @@ export function getRepoProtect(db: Db, repoId: number): string[] {
 export function setRepoProtect(db: Db, repoId: number, paths: string[]): void {
   db.prepare("UPDATE repos SET protect_json = ? WHERE id = ?").run(JSON.stringify(paths), repoId);
 }
+
+/** プロジェクトの設定(フェーズ8) */
+export type ProjectSettings = { autoApprovePlan?: boolean; retrospective?: boolean };
+
+export function getProjectSettings(db: Db, projectId: number): ProjectSettings {
+  const r = db.prepare("SELECT settings_json FROM projects WHERE id = ?").get(projectId) as { settings_json: string | null } | undefined;
+  return r?.settings_json ? (JSON.parse(r.settings_json) as ProjectSettings) : {};
+}
+
+export function setProjectSettingsRow(db: Db, projectId: number, settings: ProjectSettings): void {
+  db.prepare("UPDATE projects SET settings_json = ? WHERE id = ?").run(JSON.stringify(settings), projectId);
+}

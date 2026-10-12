@@ -132,4 +132,8 @@ export const MIGRATIONS: string[] = [
   `
   ALTER TABLE repos ADD COLUMN protect_json TEXT;
   `,
+  // v7(フェーズ8): プロジェクトの設定(小さなタスクの計画の自動承認、振り返りなど。JSON)
+  `
+  ALTER TABLE projects ADD COLUMN settings_json TEXT;
+  `,
 ];

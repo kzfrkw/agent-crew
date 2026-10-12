@@ -19,6 +19,8 @@ import { quotaBlock, QuotaError, type QuotaBlock } from "./usage.ts";
 import { releaseTaskWorktrees, sweepFinishedWorktrees } from "./cleanup-worktrees.ts";
 import { notifyHuman } from "./notify.ts";
 import { recordBounce } from "./bounce.ts";
+import { decideAutoApprove } from "./auto-approve.ts";
+import { approveTask } from "./human.ts";
 import { NEEDS_HUMAN, STATE_LABELS } from "./states.ts";
 import { HANDLERS } from "./handlers.ts";
 import { testGateOpen } from "./projects.ts";
@@ -33,7 +35,8 @@ export function runActive(db: Db, taskId: number): boolean {
  * 出来事を状態遷移に通し、結果をDBに反映する。遷移の正しさは transitions.ts だけが決める。
  * reason は needs_input / failed になったときに人へ見せる理由。
  */
-export function applyEvent(ctx: AppContext, taskId: number, event: TaskEvent, reason?: string): TransitionResult {
+/** quiet: 人への通知を出さない(すぐ自動で承認するときなど) */
+export function applyEvent(ctx: AppContext, taskId: number, event: TaskEvent, reason?: string, o: { quiet?: boolean } = {}): TransitionResult {
   const task = getTask(ctx.db, taskId);
   if (!task) throw new Error(`タスク ${taskId} がありません`);
   const next = transition(task, event, {
@@ -50,7 +53,7 @@ export function applyEvent(ctx: AppContext, taskId: number, event: TaskEvent, re
     addEvent(ctx.db, { taskId, kind: next.state, payload: { reason: reason ?? describeEvent(event) } });
   }
   // 人の対応待ちになったら知らせる(設計メモ v0.17)
-  if (NEEDS_HUMAN.includes(next.state) && task.state !== next.state) notifyHuman(ctx, `#${taskId} ${STATE_LABELS[next.state]}: ${task.title}`);
+  if (!o.quiet && NEEDS_HUMAN.includes(next.state) && task.state !== next.state) notifyHuman(ctx, `#${taskId} ${STATE_LABELS[next.state]}: ${task.title}`);
   // 完了・取り消しになったら worktree を片付ける(ブランチは残す。設計メモ v0.17)
   if ((next.state === "done" || next.state === "cancelled") && task.state !== next.state) releaseTaskWorktrees(ctx, taskId);
   return next;
@@ -158,6 +161,12 @@ async function stepTaskInner(ctx: AppContext, taskId: number, signal: AbortSigna
         applyEvent(ctx, taskId, { type: "repeated_failure", reason: why }, why);
         return;
       }
+    }
+    // 小さなタスクの計画は、プロジェクトでオンなら自動で承認する(設計メモ v0.18)
+    if (event.type === "verdict" && event.role === "planner" && event.verdict === "ready" && decideAutoApprove(ctx, taskId)) {
+      applyEvent(ctx, taskId, event, reason, { quiet: true });
+      approveTask(ctx, taskId, "plan", "自動承認(小さなタスク。条件はタスクのアクティビティを参照。設計メモ v0.18)");
+      return;
     }
     applyEvent(ctx, taskId, event, reason);
   } catch (e) {
