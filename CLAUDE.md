@@ -5,7 +5,7 @@
 
 ## 現在地
 
-- 現在のフェーズ: **フェーズ8(自律の幅を広げる)の計画を確定(2026-10-13)。** 方針は `docs/design-memo.md` の「v0.18で決めたこと」。フェーズ7まで実装済み。会社のリポジトリでの試しの一周は人が `docs/company-checklist.md` に沿って行う
+- 現在のフェーズ: **フェーズ8(自律の幅を広げる)まで実装済み(2026-10-13)。** 方針は `docs/design-memo.md` の「v0.18で決めたこと」。次のフェーズは着手前に人間と確認する。会社のリポジトリでの試しの一周は人が `docs/company-checklist.md` に沿って行う
 - GUIの設計は `docs/strategy.md` → `scope.md` → `structure.md` → `skeleton.md` → `surface.md`(ギャレットの5階層)。画面を変えるときは該当する層も更新する
 - Notion API連携、Maestro、Android にはまだ着手しない
 - フェーズ定義は `docs/design-memo.md` の第13章
@@ -100,6 +100,7 @@
 - 報告(API を使わない書き戻し): `task report <id>` で Notion などに貼る Markdown を出す(概要・受け入れ条件・QA・デザインレビュー・PR の下書き)。取り込み元の URL は `task create --source-url` で持たせる。投稿は人が行う
 - 読ませないパス: `project protect <n> --add <相対パス>`(鍵・本番の設定など。エージェントの Read / Bash とツールの実行のどれからも読めない。`project show` で確認)
 - 利用枠: 使用率が `limits.pauseAtUtilization`(既定 0.95)以上になると、常駐ワーカーと `run` は新しい役割を起動せず、リセットの後に再開する。GUI のヘッダーに使用率。人の対応待ちは macOS の通知(`notify`)。完了・取り消しのタスクの worktree は自動で片付く(ブランチは残る)
+- 自律(フェーズ8): 小さなタスクの計画の自動承認は `project set <n> --auto-approve-plan on`(既定 off)。大きいチケットはプランナーが分割を提案し、`task approve <id> --kind plan --split` で子タスクに分けて順に進める。同じ理由の差し戻しが2回続くと人に回る。完了したタスクは振り返り(`task retro <id> --adopt <番号>` で採用。`project set <n> --retrospective off` で止める)
 - 導入: `docs/setup.md`(別のPC)、`docs/company-checklist.md`(会社で使う前の点検表)
 - 人への引き継ぎ: `task takeover <id>` → worktree で作業してコミット → `task return <id>`。ベースへの追従: `task update-base <id>`
 - GUI: `npx agent-crew serve`(http://127.0.0.1:4300/ 。常駐ワーカーがタスクを自動で進め、GUI から承認・回答・停止・引き取り・チケット投入ができる。`--no-worker` で読み取り専用。GUI のビルドが無いか古ければ自動でビルドする。`--no-build` で抑止)。CLI の `run` とはロックで排他する(GUI で一時停止すると CLI の run を使える)

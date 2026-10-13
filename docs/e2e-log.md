@@ -241,3 +241,35 @@
 コミット:
 - 注文の一覧に状態ラベル(受付 / 発送済み)を表示する(agent-crew implementer)
 
+## 2026-10-12T22:54:33.210Z(モデル: sonnet、引き継ぎあり)
+
+- 所要時間: 3分
+- 費用(見積もり)の合計: $0.915
+
+| 役割 | モデル | 回数 | 費用 | 秒 |
+|---|---|---|---|---|
+| profiler | sonnet | 1 | $0.083 | 15 |
+| planner | sonnet | 1 | $0.114 | 26 |
+| implementer | sonnet | 1 | $0.134 | 27 |
+| verifier | haiku | 2 | $0.046 | 18 |
+| reviewer | sonnet | 2 | $0.152 | 21 |
+| qa | sonnet | 2 | $0.17 | 34 |
+| integrator | sonnet | 1 | $0.13 | 18 |
+| retrospective | sonnet | 1 | $0.086 | 16 |
+
+- ✓ タスクが完了
+- ✓ 成果物 plan
+- ✓ 成果物 impl-notes
+- ✓ 成果物 review
+- ✓ 成果物 qa-report
+- ✓ 成果物 pr-draft
+- ✓ 振り返りが動いた(retro.md。8-5)
+- ✓ ローカルブランチ
+- ✓ remote に push されていない
+- ✓ エージェントのコミットに trailer
+- ✓ 人のコミットを区別
+
+コミット:
+- 在庫0のアイテムを一覧APIから除外する(agent-crew implementer)
+- docs: 一覧の仕様を README に追記(E2E Human)
+
