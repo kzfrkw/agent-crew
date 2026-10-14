@@ -20,7 +20,8 @@
     "e2e": "node scripts/e2e.ts",
     "e2e:multi": "node scripts/e2e-multi.ts",
     "e2e:mobile": "node scripts/e2e-mobile.ts",
-    "e2e:ios": "node scripts/e2e-ios.ts"
+    "e2e:ios": "node scripts/e2e-ios.ts",
+    "e2e:planning": "node scripts/e2e-planning.ts"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
