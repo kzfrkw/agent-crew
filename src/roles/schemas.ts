@@ -101,13 +101,19 @@ const RetrospectiveExtra = z.object({
     .describe("提案(多くても5つ)。無ければ空配列"),
 });
 
+/** 企画の段で、人に決めてほしいこと(1件ずつ。選択肢と推奨案を含める) */
+const questions = z.array(z.string()).default([]).describe("人に決めてほしいこと(need_human のとき)。1件ずつ、選択肢と推奨案を含めて1〜2文で。無ければ空配列");
+const PlanningWriterExtra = z.object({ questions });
+
 const CriticExtra = z.object({
+  questions,
   issues: z
     .array(z.object({ severity: z.enum(["must", "should"]), title: z.string().describe("指摘の見出し(1文)"), detail: z.string().describe("何がなぜ問題か、どう直すか") }))
     .describe("指摘の一覧。無ければ空配列"),
 });
 
 const HandoffExtra = z.object({
+  questions,
   tickets: z
     .array(
       z.object({
@@ -121,6 +127,10 @@ const HandoffExtra = z.object({
 
 export const EXTRA_SCHEMAS: Record<string, z.ZodObject> = {
   critic: CriticExtra,
+  researcher: PlanningWriterExtra,
+  strategist: PlanningWriterExtra,
+  product: PlanningWriterExtra,
+  ux: PlanningWriterExtra,
   handoff: HandoffExtra,
   retrospective: RetrospectiveExtra,
   qa: QaExtra,

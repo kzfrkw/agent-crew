@@ -184,6 +184,8 @@ export type TaskDetail = {
   report: TaskReportView;
   /** 振り返りの提案と人の判断(8-5)。振り返りが無ければ null */
   retro: { proposals: { index: number; target: "conventions" | "decisions"; text: string; status: "pending" | "adopted" | "rejected" }[] } | null;
+  /** 企画の承認で人が決めること(フェーズ9。問いを1件ずつ)。無ければ null */
+  planningQuestions: { stage: string; questions: { from: string; text: string }[]; musts: string[]; shoulds: number } | null;
   /** 分割の親(8-2)。子でなければ null */
   parent: { id: number; title: string } | null;
   /** 分割した子タスク(順番どおり)。親でなければ空 */

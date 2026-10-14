@@ -31,16 +31,44 @@ const ORDER: StageKey[] = ["research", "strategy", "scope", "ux", "handoff"];
 /** 書いた後に人の承認がある段 */
 const HUMAN_GATE: StageKey[] = ["strategy", "scope", "handoff"];
 
+/** 承認のときに人が決めること(問いを1件ずつ。批評の must と should の件数つき) */
+export type PlanningQuestions = { stage: StageKey; questions: { from: "書く役" | "批評担当"; text: string }[]; musts: string[]; shoulds: number };
+
 /**
- * 承認待ちの企画に、この段で出た問い(書く役か批評担当から)があれば返す(GUI と CLI の理由の欄に出す)。
+ * 承認待ちの企画に、この段で出た問い(書く役か批評担当から)があれば返す。
  * その段を書き始めた後に出た問いだけ(却下して書き直した後は、前の問いを出さない)
  */
-export function criticQuestion(db: Db, taskId: number): string | null {
+export function planningQuestions(db: Db, taskId: number): PlanningQuestions | null {
   const events = listEvents(db, taskId, 2000);
   const lastStart = events.filter((e) => e.kind === "state_changed" && STAGES[String((e.payload as { to?: unknown }).to)]).at(-1)?.id ?? 0;
-  const q = events.filter((e) => e.kind === "planning_question" && e.id > lastStart).at(-1)?.payload as { from?: string; summary?: string } | undefined;
-  return q?.summary ? `人の判断が要る点(承認のコメントで答えるか、却下して書き直させてください): ${q.summary}` : null;
+  const q = events.filter((e) => e.kind === "planning_question" && e.id > lastStart).at(-1)?.payload as (Partial<PlanningQuestions> & { summary?: string }) | undefined;
+  // 以前の形(問いを1つの文字列につないだもの)は、書く役と批評担当の部分に分けて読む
+  if (q && !q.questions && q.summary) {
+    const parts = q.summary.split(/。?(?=批評担当: |批評の must: )/);
+    return {
+      stage: q.stage!,
+      questions: parts
+        .filter((p) => !p.startsWith("批評の must: "))
+        .map((p) => (p.startsWith("批評担当: ") ? { from: "批評担当" as const, text: p.slice(6) } : { from: "書く役" as const, text: p.replace(/^書く役: /, "") })),
+      musts: parts.filter((p) => p.startsWith("批評の must: ")).flatMap((p) => p.slice(10).split(" / ")),
+      shoulds: 0,
+    };
+  }
+  if (!q?.questions?.length) return null;
+  return { stage: q.stage!, questions: q.questions, musts: q.musts ?? [], shoulds: q.shoulds ?? 0 };
 }
+
+/** ダッシュボードや CLI に出す短い理由 */
+export function criticQuestion(db: Db, taskId: number): string | null {
+  const q = planningQuestions(db, taskId);
+  return q ? `人の判断が要る点が ${q.questions.length} 件あります(承認のコメントで答えてください)` : null;
+}
+
+/** 役割が返した問い(questions)。分けて返さなかったら要約を1件の問いとして扱う */
+const questionsOf = (r: { summary: string; extra: Record<string, unknown> }): string[] => {
+  const list = ((r.extra.questions ?? []) as unknown[]).map(String).map((q) => q.trim()).filter(Boolean);
+  return list.length ? list : [r.summary];
+};
 
 /** 企画用のプロジェクト(リポジトリなし。新サービスの企画に使う) */
 export function createPlanningProject(ctx: AppContext, name: string): void {
@@ -142,14 +170,17 @@ export const planningStage: Handler = async (ctx, task) => {
   // 次に人の承認がある段で、書く役か批評担当が人の判断を求めたら、自動では差し戻さずに承認待ちへ進む。
   // 問いと批評の must を承認の理由に添え、人が承認のコメントで答えるか、却下して書き直させる(承認と回答を二度させない。実機の通し確認で発見)
   if (gated && (w.verdict === "need_human" || c.verdict === "need_human")) {
-    const parts = [
-      ...(w.verdict === "need_human" ? [`書く役: ${w.summary}`] : []),
-      ...(c.verdict === "need_human" ? [`批評担当: ${c.summary}`] : []),
-      ...(musts.length ? [`批評の must: ${musts.map((i) => i.title).join(" / ")}`] : []),
-    ];
-    const question = parts.join("。").slice(0, 600);
-    addEvent(ctx.db, { taskId: task.id, runId: c.runId, kind: "planning_question", payload: { stage: stage.key, from: w.verdict === "need_human" ? stage.writer : "critic", summary: question } });
-    return { event: { type: "verdict", role: stage.writer, verdict: "ready" }, reason: `${stage.label}: 人の判断を求めています — ${question}${detail}` };
+    const q: PlanningQuestions = {
+      stage: stage.key,
+      questions: [
+        ...(w.verdict === "need_human" ? questionsOf(w).map((text) => ({ from: "書く役" as const, text })) : []),
+        ...(c.verdict === "need_human" ? questionsOf(c).map((text) => ({ from: "批評担当" as const, text })) : []),
+      ],
+      musts: musts.map((i) => i.title),
+      shoulds: issues.filter((i) => i.severity === "should").length,
+    };
+    addEvent(ctx.db, { taskId: task.id, runId: c.runId, kind: "planning_question", payload: q });
+    return { event: { type: "verdict", role: stage.writer, verdict: "ready" }, reason: `${stage.label}: 人の判断が要る点が ${q.questions.length} 件あります${detail}` };
   }
   if (c.verdict === "approve") return { event: { type: "verdict", role: stage.writer, verdict: "ready" }, reason: `${stage.label}: 批評が承認しました — ${c.summary}${detail}` };
   if (c.verdict === "need_human") return { event: { type: "verdict", role: stage.writer, verdict: "need_human" }, reason: `批評担当が人の判断を求めています: ${c.summary}${detail}` };

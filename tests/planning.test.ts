@@ -161,13 +161,31 @@ describe("批評が人の判断を求めたとき(9a。実機の通し確認で�
   it("次に人の承認がある段(戦略・要件・引き渡し)では止めずに承認待ちへ進み、問いを承認の理由に添える", async () => {
     const asks: Script = (spec, n) => {
       writeArtifact(spec, "critique.md", n === 1 ? "need_human" : "approve", "批評");
-      return { structuredOutput: { verdict: n === 1 ? "need_human" : "approve", summary: n === 1 ? "API だけか画面も作るかは方針の選択" : "ok", issues: [] } };
+      return {
+        structuredOutput: {
+          verdict: n === 1 ? "need_human" : "approve",
+          summary: n === 1 ? "方針の選択が2つある" : "ok",
+          issues: n === 1 ? [{ severity: "should", title: "指標の基準が無い", detail: "d" }] : [],
+          questions: n === 1 ? ["API だけか、画面も作るか(推奨: 画面も)", "見せる相手を社内だけにするか"] : [],
+        },
+      };
     };
     const { ctx, t } = await setup({ critic: asks });
     await runUntilIdle(ctx);
     expect(getTask(ctx.db, t.id)!.state).toBe("awaiting_strategy_approval");
     const { taskSummaryOf } = await import("../src/server/api.ts");
-    expect(taskSummaryOf(ctx.db, t.id)!.reason).toContain("API だけか画面も作るか");
+    // ダッシュボードの理由は短く(件数)、中身は問いごとに分けて持つ
+    expect(taskSummaryOf(ctx.db, t.id)!.reason).toBe("人の判断が要る点が 2 件あります(承認のコメントで答えてください)");
+    const { planningQuestions } = await import("../src/orchestrator/planning.ts");
+    expect(planningQuestions(ctx.db, t.id)).toEqual({
+      stage: "strategy",
+      questions: [
+        { from: "批評担当", text: "API だけか、画面も作るか(推奨: 画面も)" },
+        { from: "批評担当", text: "見せる相手を社内だけにするか" },
+      ],
+      musts: [],
+      shoulds: 1,
+    });
   });
 
   it("書く役が人の判断を求めたときも、次に人の承認がある段なら承認待ちへ進む(批評は動くが差し戻さない)。却下して作り直すと問いは消える", async () => {
@@ -184,12 +202,16 @@ describe("批評が人の判断を求めたとき(9a。実機の通し確認で�
     await runUntilIdle(ctx);
     expect(getTask(ctx.db, t.id)!.state).toBe("awaiting_scope_approval");
     const { taskSummaryOf } = await import("../src/server/api.ts");
-    expect(taskSummaryOf(ctx.db, t.id)!.reason).toContain("画面を作るか API だけか");
+    // 問いを分けて返さなかったときは、要約を1件の問いとして扱う
+    expect(taskSummaryOf(ctx.db, t.id)!.reason).toContain("1 件");
+    const { planningQuestions } = await import("../src/orchestrator/planning.ts");
+    expect(planningQuestions(ctx.db, t.id)!.questions).toEqual([{ from: "書く役", text: "画面を作るか API だけかを選んでください" }]);
     expect(runner.rolesCalled().filter((r) => r === "critic")).toHaveLength(3); // 書く役が問いを出しても批評は動く(差し戻しはしない)
     rejectTask(ctx, t.id, "scope", "画面も作る");
     await runUntilIdle(ctx);
     expect(getTask(ctx.db, t.id)!.state).toBe("awaiting_scope_approval");
     expect(taskSummaryOf(ctx.db, t.id)!.reason).toBeNull();
+    expect(planningQuestions(ctx.db, t.id)).toBeNull();
   });
 
   it("人の承認が無い段(調査、構造・骨格)では、従来どおり人の回答待ちにする", async () => {

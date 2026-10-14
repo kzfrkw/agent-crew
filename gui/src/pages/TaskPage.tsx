@@ -10,6 +10,7 @@ import { RunTable } from "../components/RunTable.tsx";
 import { Screenshots } from "../components/Screenshots.tsx";
 import { Report } from "../components/Report.tsx";
 import { RetroPanel } from "../components/Retro.tsx";
+import { PlanningQuestions } from "../components/PlanningQuestions.tsx";
 import { StateBadge, VerdictBadge } from "../components/StateBadge.tsx";
 import { Async, Empty } from "../components/Status.tsx";
 import { useApi, useEvents } from "../lib/api.ts";
@@ -236,7 +237,11 @@ function Banner({ d, onDone }: { d: TaskDetail; onDone: () => void }) {
     <Alert variant={variant} role="status" className="mt-4">
       <AlertTitle className="font-semibold">{title}</AlertTitle>
       <AlertDescription className="w-full text-foreground">
-        {t.reason && <p className="m-0 break-words whitespace-pre-wrap">{t.reason}</p>}
+        {d.planningQuestions ? (
+          <PlanningQuestions taskId={t.id} q={d.planningQuestions} artifacts={d.artifacts} />
+        ) : (
+          t.reason && <p className="m-0 break-words whitespace-pre-wrap">{t.reason}</p>
+        )}
         {toRead.some(Boolean) && (
           <p className="m-0 flex flex-wrap gap-x-4 text-xs">
             {toRead.flatMap((a) =>
