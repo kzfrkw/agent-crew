@@ -307,3 +307,37 @@
 - ✓ 企画は子の完了を待っている
 - ✓ 1つ目の開発のタスクが計画まで進んだ
 
+
+## 2026-10-14T11:00:38.377Z 企画の流れ(モデル: sonnet)
+
+- 所要時間: 7分
+- 費用(見積もり)の合計: $1.347
+- 批評: research=approve、strategy=need_human、scope=approve、ux=approve、handoff=approve
+- 開発のタスク: #2 しきい値のデータと API(保持・設定・在庫僅少の一覧) / #3 s1-low-stock: 在庫僅少のスマホ向け画面 / #4 s2-thresholds: しきい値の設定画面 / #5 設定漏れの表示(未設定の件数と名前)
+
+| 役割 | モデル | 回数 | 費用 | 秒 |
+|---|---|---|---|---|
+| profiler | sonnet | 1 | $0.061 | 16 |
+| researcher | sonnet | 1 | $0.163 | 43 |
+| critic | sonnet | 5 | $0.461 | 143 |
+| strategist | sonnet | 1 | $0.1 | 32 |
+| product | sonnet | 1 | $0.16 | 52 |
+| ux | sonnet | 1 | $0.14 | 43 |
+| handoff | sonnet | 1 | $0.101 | 39 |
+| planner | sonnet | 1 | $0.161 | 45 |
+
+- ✓ 成果物 research
+- ✓ 成果物 strategy
+- ✓ 成果物 strategy.slides
+- ✓ 成果物 scope
+- ✓ 成果物 scope.slides
+- ✓ 成果物 structure
+- ✓ 成果物 skeleton
+- ✓ 成果物 handoff
+- ✓ 調査に Web の出典(URL)がある
+- ✓ 調査担当が手元の資料を読んだ(資料の内容が調査に出てくる)
+- ✓ 各段で批評が動いた
+- ✓ 開発のタスクができた(2つ以上、順番つき)
+- ✓ 企画は子の完了を待っている
+- ✓ 1つ目の開発のタスクが計画まで進んだ
+
