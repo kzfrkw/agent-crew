@@ -34,6 +34,23 @@ describe("プロジェクト画面", () => {
   });
 });
 
+describe("リポジトリの欄", () => {
+  it("呼び名とベースのブランチを、意味が分かる見出しと説明で出す", async () => {
+    render(<ProjectPage id={1} />);
+    expect(await screen.findByText("呼び名")).toBeTruthy();
+    expect(screen.getByText("ベースのブランチ")).toBeTruthy();
+    expect(screen.getByText(/タスクのブランチはここから作り/)).toBeTruthy();
+    expect(screen.queryByText("役目")).toBeNull();
+    expect(screen.queryByText("既定")).toBeNull();
+  });
+
+  it("リポジトリが無い(企画用の)プロジェクトでは、そう書く", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ...detail, repos: [] }), { status: 200, headers: { "content-type": "application/json" } })));
+    render(<ProjectPage id={1} />);
+    expect(await screen.findByText(/リポジトリはまだありません/)).toBeTruthy();
+  });
+});
+
 describe("プロジェクト画面(複数リポジトリ)", () => {
   it("リポジトリごとに、役割に渡すコマンドと起動のつなぎ方を出す", async () => {
     const multi: ProjectDetail = {
