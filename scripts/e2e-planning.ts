@@ -133,10 +133,10 @@ async function main(): Promise<void> {
   cli("task", "approve", String(id), "--kind", "strategy", "--comment", "スマホで見られる画面も作る。しきい値はアイテムごとに設定できるようにする。この方向で進めてください");
   cli("run");
   expect("awaiting_scope_approval");
-  cli("task", "approve", String(id), "--kind", "scope");
+  cli("task", "approve", String(id), "--kind", "scope", "--comment", "問いがあれば推奨案で進めてください");
   cli("run");
   expect("awaiting_handoff_approval");
-  cli("task", "approve", String(id), "--kind", "handoff");
+  cli("task", "approve", String(id), "--kind", "handoff", "--comment", "推奨案で進めてください");
   // 1つ目の開発のタスクを計画まで進める
   cli("run");
   cli("task", "show", String(id));

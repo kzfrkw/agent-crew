@@ -170,6 +170,28 @@ describe("批評が人の判断を求めたとき(9a。実機の通し確認で�
     expect(taskSummaryOf(ctx.db, t.id)!.reason).toContain("API だけか画面も作るか");
   });
 
+  it("書く役が人の判断を求めたときも、次に人の承認がある段なら承認待ちへ進む(批評は飛ばす)。却下して作り直すと問いは消える", async () => {
+    let n = 0;
+    const product: Script = (spec) => {
+      writeArtifact(spec, "scope.slides.md", "ready");
+      const v = n++ === 0 ? "need_human" : "ready";
+      writeArtifact(spec, "scope.md", v, "要件");
+      return { structuredOutput: { verdict: v, summary: v === "need_human" ? "画面を作るか API だけかを選んでください" : "s" } };
+    };
+    const { ctx, t, runner } = await setup({ product });
+    await runUntilIdle(ctx);
+    approveTask(ctx, t.id, "strategy");
+    await runUntilIdle(ctx);
+    expect(getTask(ctx.db, t.id)!.state).toBe("awaiting_scope_approval");
+    const { taskSummaryOf } = await import("../src/server/api.ts");
+    expect(taskSummaryOf(ctx.db, t.id)!.reason).toContain("画面を作るか API だけか");
+    expect(runner.rolesCalled().filter((r) => r === "critic")).toHaveLength(2); // 調査・戦略だけ
+    rejectTask(ctx, t.id, "scope", "画面も作る");
+    await runUntilIdle(ctx);
+    expect(getTask(ctx.db, t.id)!.state).toBe("awaiting_scope_approval");
+    expect(taskSummaryOf(ctx.db, t.id)!.reason).toBeNull();
+  });
+
   it("人の承認が無い段(調査、構造・骨格)では、従来どおり人の回答待ちにする", async () => {
     const asks: Script = (spec) => {
       writeArtifact(spec, "critique.md", "need_human", "批評");

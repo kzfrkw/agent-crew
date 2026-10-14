@@ -31,10 +31,15 @@ const ORDER: StageKey[] = ["research", "strategy", "scope", "ux", "handoff"];
 /** 書いた後に人の承認がある段 */
 const HUMAN_GATE: StageKey[] = ["strategy", "scope", "handoff"];
 
-/** 承認待ちの企画に、批評担当の問いがあれば返す(GUI と CLI の理由の欄に出す) */
+/**
+ * 承認待ちの企画に、この段で出た問い(書く役か批評担当から)があれば返す(GUI と CLI の理由の欄に出す)。
+ * その段を書き始めた後に出た問いだけ(却下して書き直した後は、前の問いを出さない)
+ */
 export function criticQuestion(db: Db, taskId: number): string | null {
-  const last = listEvents(db, taskId, 2000).filter((e) => e.kind === "critique").at(-1)?.payload as { verdict?: string; summary?: string } | undefined;
-  return last?.verdict === "need_human" && last.summary ? `批評担当からの問い(承認のコメントで答えてください): ${last.summary}` : null;
+  const events = listEvents(db, taskId, 2000);
+  const lastStart = events.filter((e) => e.kind === "state_changed" && STAGES[String((e.payload as { to?: unknown }).to)]).at(-1)?.id ?? 0;
+  const q = events.filter((e) => e.kind === "planning_question" && e.id > lastStart).at(-1)?.payload as { from?: string; summary?: string } | undefined;
+  return q?.summary ? `${q.from === "critic" ? "批評担当" : "書く役"}からの問い(承認のコメントで答えるか、却下して書き直させてください): ${q.summary}` : null;
 }
 
 /** 企画用のプロジェクト(リポジトリなし。新サービスの企画に使う) */
@@ -115,7 +120,14 @@ export const planningStage: Handler = async (ctx, task) => {
   mkdirSync(dir, { recursive: true });
   const w = await invokeRole(ctx, { roleName: stage.writer, taskId: task.id, cwd: dir, artifactsDir: dir, prompt: planningPrompt(ctx, task, stage, "write") });
   if (!w.ok) return failed(w, stage.writer);
-  if (w.verdict === "need_human") return { event: { type: "verdict", role: stage.writer, verdict: "need_human" }, reason: `${stage.writer} が人の判断を求めています: ${w.summary}(詳細: ${dir})` };
+  if (w.verdict === "need_human") {
+    // 次に人の承認がある段では、問いを持って承認待ちへ進む(人は承認のコメントで答えるか、却下して書き直させる)
+    if (HUMAN_GATE.includes(stage.key)) {
+      addEvent(ctx.db, { taskId: task.id, runId: w.runId, kind: "planning_question", payload: { stage: stage.key, from: stage.writer, summary: w.summary } });
+      return { event: { type: "verdict", role: stage.writer, verdict: "ready" }, reason: `${stage.label}: 書く役からの問い — ${w.summary}(詳細: ${dir})` };
+    }
+    return { event: { type: "verdict", role: stage.writer, verdict: "need_human" }, reason: `${stage.writer} が人の判断を求めています: ${w.summary}(詳細: ${dir})` };
+  }
   // 役割の出力以外の、この段のファイル(スライドの Markdown、structure.md など)も成果物として出す
   for (const f of stage.files) {
     const path = join(dir, f);
@@ -134,6 +146,7 @@ export const planningStage: Handler = async (ctx, task) => {
   if (c.verdict === "need_human") {
     // 次に人の承認がある段では止めずに承認待ちへ進み、問いは承認のときに人が答える(承認と回答を二度させない。実機の通し確認で発見)
     if (HUMAN_GATE.includes(stage.key)) {
+      addEvent(ctx.db, { taskId: task.id, runId: c.runId, kind: "planning_question", payload: { stage: stage.key, from: "critic", summary: c.summary } });
       return { event: { type: "verdict", role: stage.writer, verdict: "ready" }, reason: `${stage.label}: 批評担当からの問い(承認のコメントで答えてください) — ${c.summary}${detail}` };
     }
     return { event: { type: "verdict", role: stage.writer, verdict: "need_human" }, reason: `批評担当が人の判断を求めています: ${c.summary}${detail}` };
