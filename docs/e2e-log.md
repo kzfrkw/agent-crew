@@ -273,3 +273,37 @@
 - 在庫0のアイテムを一覧APIから除外する(agent-crew implementer)
 - docs: 一覧の仕様を README に追記(E2E Human)
 
+
+## 2026-10-14T10:33:28.099Z 企画の流れ(モデル: sonnet)
+
+- 所要時間: 6分
+- 費用(見積もり)の合計: $1.156
+- 批評: research=approve、ux=approve、handoff=approve
+- 開発のタスク: #3 threshold 項目・JSON 保存・GET /api/items/low / #4 PATCH /api/items/:id でしきい値を設定・解除 / #5 画面 s1-low: 低在庫の一覧(GET /low) / #6 画面 s2-all: 全件表示と画面からのしきい値設定 / #7 公開範囲(HOST)・README 更新・不足量表示(Could)
+
+| 役割 | モデル | 回数 | 費用 | 秒 |
+|---|---|---|---|---|
+| profiler | sonnet | 1 | $0.062 | 16 |
+| researcher | sonnet | 1 | $0.188 | 41 |
+| critic | sonnet | 3 | $0.269 | 82 |
+| strategist | sonnet | 1 | $0.086 | 31 |
+| product | sonnet | 1 | $0.151 | 53 |
+| ux | sonnet | 1 | $0.148 | 47 |
+| handoff | sonnet | 1 | $0.115 | 29 |
+| planner | sonnet | 1 | $0.137 | 43 |
+
+- ✓ 成果物 research
+- ✓ 成果物 strategy
+- ✗ 成果物 strategy.slides
+- ✓ 成果物 scope
+- ✗ 成果物 scope.slides
+- ✓ 成果物 structure
+- ✓ 成果物 skeleton
+- ✓ 成果物 handoff
+- ✓ 調査に Web の出典(URL)がある
+- ✓ 調査担当が手元の資料を読んだ(資料の内容が調査に出てくる)
+- ✗ 各段で批評が動いた
+- ✓ 開発のタスクができた(2つ以上、順番つき)
+- ✓ 企画は子の完了を待っている
+- ✓ 1つ目の開発のタスクが計画まで進んだ
+

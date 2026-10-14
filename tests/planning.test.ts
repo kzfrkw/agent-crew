@@ -170,7 +170,7 @@ describe("批評が人の判断を求めたとき(9a。実機の通し確認で�
     expect(taskSummaryOf(ctx.db, t.id)!.reason).toContain("API だけか画面も作るか");
   });
 
-  it("書く役が人の判断を求めたときも、次に人の承認がある段なら承認待ちへ進む(批評は飛ばす)。却下して作り直すと問いは消える", async () => {
+  it("書く役が人の判断を求めたときも、次に人の承認がある段なら承認待ちへ進む(批評は動くが差し戻さない)。却下して作り直すと問いは消える", async () => {
     let n = 0;
     const product: Script = (spec) => {
       writeArtifact(spec, "scope.slides.md", "ready");
@@ -185,7 +185,7 @@ describe("批評が人の判断を求めたとき(9a。実機の通し確認で�
     expect(getTask(ctx.db, t.id)!.state).toBe("awaiting_scope_approval");
     const { taskSummaryOf } = await import("../src/server/api.ts");
     expect(taskSummaryOf(ctx.db, t.id)!.reason).toContain("画面を作るか API だけか");
-    expect(runner.rolesCalled().filter((r) => r === "critic")).toHaveLength(2); // 調査・戦略だけ
+    expect(runner.rolesCalled().filter((r) => r === "critic")).toHaveLength(3); // 書く役が問いを出しても批評は動く(差し戻しはしない)
     rejectTask(ctx, t.id, "scope", "画面も作る");
     await runUntilIdle(ctx);
     expect(getTask(ctx.db, t.id)!.state).toBe("awaiting_scope_approval");
