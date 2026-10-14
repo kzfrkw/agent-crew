@@ -1,6 +1,6 @@
 import type { Db } from "../db/connection.ts";
 import { listEvents, type Task } from "../db/store.ts";
-import type { Attention, NextAction } from "../server/api-types.ts";
+import type { ApprovalKindView, Attention, NextAction } from "../server/api-types.ts";
 import { runActive } from "./engine.ts";
 
 /**
@@ -17,6 +17,10 @@ export function attentionOf(task: Pick<Task, "state">): Attention | null {
       return "approve_design";
     case "awaiting_final_approval":
       return "approve_final";
+    case "awaiting_strategy_approval":
+    case "awaiting_scope_approval":
+    case "awaiting_handoff_approval":
+      return "approve_planning";
     case "needs_input":
       return "answer";
     case "failed":
@@ -33,7 +37,7 @@ export function nextActions(db: Db, task: Pick<Task, "id" | "state"> & { design?
   if (runActive(db, id)) {
     return [{ kind: "stop", label: "実行中の役割を停止する", command: null, request: { action: "stop" }, confirm: "実行中の claude を止めます。タスクは人の判断待ちになります" }];
   }
-  const approval = (kind: "plan" | "design" | "final", what: string): NextAction[] => [
+  const approval = (kind: ApprovalKindView, what: string): NextAction[] => [
     {
       kind: "approve",
       label: `${what}を確認して承認する`,
@@ -87,6 +91,15 @@ export function nextActions(db: Db, task: Pick<Task, "id" | "state"> & { design?
       return approval("design", "ui-spec.md ");
     case "awaiting_final_approval":
       return approval("final", "成果物");
+    case "awaiting_strategy_approval":
+      return approval("strategy", "strategy.md(戦略)");
+    case "awaiting_scope_approval":
+      return approval("scope", "scope.md(要件)");
+    case "awaiting_handoff_approval": {
+      const [approve, reject] = approval("handoff", "handoff.md(開発のチケット)");
+      const tickets = (listEvents(db, id, 2000).filter((e) => e.kind === "handoff").at(-1)?.payload as { tickets?: { title: string }[] } | undefined)?.tickets ?? [];
+      return [{ ...approve!, label: `handoff.md を確認し、開発のチケット ${tickets.length} 件を作る`, optionsNote: tickets.map((t, i) => `${i + 1}. ${t.title}`).join(" / ") || undefined }, reject!];
+    }
     case "needs_input":
       return [
         {

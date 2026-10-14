@@ -101,7 +101,27 @@ const RetrospectiveExtra = z.object({
     .describe("提案(多くても5つ)。無ければ空配列"),
 });
 
+const CriticExtra = z.object({
+  issues: z
+    .array(z.object({ severity: z.enum(["must", "should"]), title: z.string().describe("指摘の見出し(1文)"), detail: z.string().describe("何がなぜ問題か、どう直すか") }))
+    .describe("指摘の一覧。無ければ空配列"),
+});
+
+const HandoffExtra = z.object({
+  tickets: z
+    .array(
+      z.object({
+        title: z.string(),
+        body: z.string().describe("やること、関係する画面の ID とユーザーストーリー、参照する企画の文書"),
+        acceptanceCriteria: z.array(z.string()).describe("受け入れ条件(検証できる形)"),
+      }),
+    )
+    .describe("開発のチケット(実装する順。2〜8枚)"),
+});
+
 export const EXTRA_SCHEMAS: Record<string, z.ZodObject> = {
+  critic: CriticExtra,
+  handoff: HandoffExtra,
   retrospective: RetrospectiveExtra,
   qa: QaExtra,
   architect: DesignExtra,

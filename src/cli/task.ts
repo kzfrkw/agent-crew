@@ -10,6 +10,8 @@ import { nextActions } from "../orchestrator/next-actions.ts";
 import { buildTaskReport } from "../orchestrator/report.ts";
 import { decideRetro, retroView } from "../orchestrator/retro.ts";
 import { mustProject } from "../orchestrator/projects.ts";
+import { createPlanningTask } from "../orchestrator/planning.ts";
+import type { HumanApprovalKind } from "../orchestrator/transitions.ts";
 import { NEEDS_HUMAN, STATE_LABELS } from "../orchestrator/states.ts";
 
 function withContext<T>(fn: (ctx: AppContext) => T): T {
@@ -51,6 +53,22 @@ export function registerTaskCommands(program: Command): void {
         if (o.sourceUrl && !/^https?:\/\//.test(o.sourceUrl)) throw new Error("取り込み元の URL は http(s) で指定してください");
         const t = createTask(ctx.db, { projectId: p.id, title: o.title, body: readText(o.body, o.bodyFile), sourceKind: o.bodyFile || o.sourceUrl ? "paste" : "local", sourceUrl: o.sourceUrl });
         console.log(`作成しました: #${t.id} ${t.title}(agent-crew run で開始します)`);
+      }),
+    );
+
+  task
+    .command("plan")
+    .description("企画のタスクを作る(調査 → 戦略 → 要件 → 構造・骨格 → 開発への引き渡し。フェーズ9)")
+    .requiredOption("--project <name>", "プロジェクト名(既存サービスの新機能ならそのプロジェクト、新サービスなら project create で作った企画用のもの)")
+    .requiredOption("--title <title>", "題")
+    .option("--body <text>", "本文(作りたいもの、背景、想定するユーザー)")
+    .option("--body-file <path>", "本文のファイル(- で標準入力)")
+    .option("--docs <path>", "読ませる手元の資料(ファイルかフォルダの絶対パス。複数回指定できる)", (v: string, acc: string[]) => [...acc, v], [] as string[])
+    .option("--source-url <url>", "取り込み元のページ(Notion など)の URL")
+    .action((o: { project: string; title: string; body?: string; bodyFile?: string; docs: string[]; sourceUrl?: string }) =>
+      withContext((ctx) => {
+        const t = createPlanningTask(ctx, { projectName: o.project, title: o.title, body: readText(o.body, o.bodyFile), docs: o.docs, sourceUrl: o.sourceUrl });
+        console.log(`企画を作りました: #${t.id} ${t.title}(agent-crew run で調査から始めます)`);
       }),
     );
 
@@ -120,31 +138,32 @@ export function registerTaskCommands(program: Command): void {
 
   task
     .command("approve <id>")
-    .description("計画(plan)・デザイン仕様(design)・最終確認(final)を承認する")
-    .requiredOption("--kind <kind>", "plan | design | final")
+    .description("計画(plan)・デザイン仕様(design)・最終確認(final)、企画の戦略(strategy)・要件(scope)・引き渡し(handoff)を承認する")
+    .requiredOption("--kind <kind>", "plan | design | final | strategy | scope | handoff")
+    .option("--target <project>", "引き渡し(handoff)の承認: 開発のタスクを作るプロジェクト(既定は企画のプロジェクト)")
     .option("--comment <text>", "コメント")
     .option("--design", "計画の承認: 設計者を動かす(プランナーの判定を上書き)")
     .option("--no-design", "計画の承認: 設計者を動かさない")
     .option("--ui", "計画の承認: デザイナーを動かす(UI を伴う)")
     .option("--no-ui", "計画の承認: デザイナーを動かさない")
     .option("--split", "計画の承認: プランナーの案どおりに子タスクに分割して進める(8-2)")
-    .action((id: string, o: { kind: "plan" | "design" | "final"; comment?: string; design?: boolean; ui?: boolean; split?: boolean }) =>
+    .action((id: string, o: { kind: HumanApprovalKind; comment?: string; design?: boolean; ui?: boolean; split?: boolean; target?: string }) =>
       withContext((ctx) => {
         const t = mustTask(ctx, id);
         const override = o.kind === "plan" && (o.design !== undefined || o.ui !== undefined)
           ? { architect: o.design ?? t.design.architect, designer: o.ui ?? t.design.designer }
           : undefined;
-        approveTask(ctx, t.id, o.kind, o.comment, override, { split: o.split });
+        approveTask(ctx, t.id, o.kind, o.comment, override, { split: o.split, targetProject: o.target });
         console.log(`承認しました: #${id}(${STATE_LABELS[getTask(ctx.db, Number(id))!.state]})`);
       }),
     );
 
   task
     .command("reject <id>")
-    .description("計画(plan)・デザイン仕様(design)・最終確認(final)を却下して差し戻す")
-    .requiredOption("--kind <kind>", "plan | design | final")
+    .description("計画・デザイン仕様・最終確認、企画の戦略・要件・引き渡しを却下して差し戻す")
+    .requiredOption("--kind <kind>", "plan | design | final | strategy | scope | handoff")
     .requiredOption("--comment <text>", "却下の理由(次の役割への入力になる)")
-    .action((id: string, o: { kind: "plan" | "design" | "final"; comment: string }) =>
+    .action((id: string, o: { kind: HumanApprovalKind; comment: string }) =>
       withContext((ctx) => {
         rejectTask(ctx, mustTask(ctx, id).id, o.kind, o.comment);
         console.log(`差し戻しました: #${id}(${STATE_LABELS[getTask(ctx.db, Number(id))!.state]})`);

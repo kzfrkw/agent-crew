@@ -3,6 +3,7 @@ import { getProjectByName, getProjectSettings, getProjectWiring, getRepoProfile,
 import type { Profile } from "../roles/schemas.ts";
 import { createAppContext } from "../orchestrator/context.ts";
 import { projectDir } from "../orchestrator/paths.ts";
+import { createPlanningProject } from "../orchestrator/planning.ts";
 import {
   addRepository,
   approveProfile,
@@ -198,6 +199,22 @@ export function registerProjectCommands(program: Command): void {
         const list = protectPaths(ctx, name, { add: o.add, remove: o.remove }, o.role);
         console.log(`読ませないパス(${name}${o.role ? ` [${o.role}]` : ""}): ${list.length ? list.join("、") : "なし"}`);
         console.log("  エージェントの Read / Edit / Write と Bash、ツールが動かすアプリ・テストのどれからも読めなくします(効き方は agent-crew doctor --probe-sandbox で確かめられます)");
+      } catch (e) {
+        console.error((e as Error).message);
+        process.exitCode = 1;
+      } finally {
+        ctx.db.close();
+      }
+    });
+
+  project
+    .command("create <name>")
+    .description("企画用のプロジェクトを作る(リポジトリなし。新サービスの企画に使う。開発に引き渡すときは、リポジトリを登録したプロジェクトを指定する)")
+    .action((name: string) => {
+      const ctx = createAppContext();
+      try {
+        createPlanningProject(ctx, name);
+        console.log(`企画用のプロジェクトを作りました: ${name}(agent-crew task plan --project ${name} --title ... で企画を始めます)`);
       } catch (e) {
         console.error((e as Error).message);
         process.exitCode = 1;

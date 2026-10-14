@@ -11,6 +11,15 @@ export const TASK_STATES = [
   "design_reviewing",
   "awaiting_final_approval",
   "integrating",
+  // 企画の流れ(フェーズ9)。各段は書く役 → 批評の順に動く
+  "p_researching",
+  "p_strategizing",
+  "awaiting_strategy_approval",
+  "p_scoping",
+  "awaiting_scope_approval",
+  "p_ux",
+  "p_handing_off",
+  "awaiting_handoff_approval",
   "done",
   /** 分割した親。子タスクがすべて完了するのを待つ(フェーズ8) */
   "split",
@@ -35,6 +44,14 @@ export const STATE_LABELS: Record<TaskState, string> = {
   design_reviewing: "デザインレビュー中",
   awaiting_final_approval: "最終確認待ち",
   integrating: "統合中",
+  p_researching: "調査中",
+  p_strategizing: "戦略の検討中",
+  awaiting_strategy_approval: "戦略の承認待ち",
+  p_scoping: "要件の整理中",
+  awaiting_scope_approval: "要件の承認待ち",
+  p_ux: "構造・骨格の設計中",
+  p_handing_off: "引き渡しの準備中",
+  awaiting_handoff_approval: "引き渡しの承認待ち",
   done: "完了",
   split: "分割済み(子タスクの完了待ち)",
   needs_input: "人の回答待ち",
@@ -44,4 +61,13 @@ export const STATE_LABELS: Record<TaskState, string> = {
 };
 
 /** 人の対応が必要な状態(一覧で目立たせる) */
-export const NEEDS_HUMAN: TaskState[] = ["needs_input", "awaiting_plan_approval", "awaiting_design_approval", "awaiting_final_approval", "failed"];
+export const NEEDS_HUMAN: TaskState[] = [
+  "needs_input",
+  "awaiting_plan_approval",
+  "awaiting_design_approval",
+  "awaiting_final_approval",
+  "awaiting_strategy_approval",
+  "awaiting_scope_approval",
+  "awaiting_handoff_approval",
+  "failed",
+];

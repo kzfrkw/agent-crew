@@ -8,7 +8,7 @@ import { StateBadge } from "../StateBadge.tsx";
 import { Empty } from "../Status.tsx";
 
 /** 対応待ち(F1)。順番は「回答待ち → 承認待ち(計画・デザイン・最終) → 失敗 → 人が作業中」、同じ種類は古い順(長く待たせているもの)から */
-const ORDER: Attention[] = ["answer", "approve_plan", "approve_design", "approve_final", "failed", "human_working"];
+const ORDER: Attention[] = ["answer", "approve_plan", "approve_design", "approve_final", "approve_planning", "failed", "human_working"];
 
 export function AttentionPanel({ tasks, onDone, operable = true }: { tasks: TaskSummary[]; onDone?: () => void; operable?: boolean }) {
   const list = tasks

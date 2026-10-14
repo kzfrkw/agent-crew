@@ -6,7 +6,11 @@ import type { TaskState } from "./states.ts";
  * 状態遷移は役割の「判定の列挙値」と人の操作だけを見て決める。
  */
 
-export type Role = "planner" | "architect" | "designer" | "implementer" | "reviewer" | "qa" | "design_reviewer" | "integrator";
+/** researcher〜handoff は企画の流れの書く役(フェーズ9。批評担当 critic は各段のハンドラーの中で動く) */
+export type Role = "planner" | "architect" | "designer" | "implementer" | "reviewer" | "qa" | "design_reviewer" | "integrator" | "researcher" | "strategist" | "product" | "ux" | "handoff";
+
+/** 人の承認の種類。strategy / scope / handoff は企画の流れ */
+export type HumanApprovalKind = "plan" | "design" | "final" | "strategy" | "scope" | "handoff";
 
 /** 設計の段で動かす役割(プランナーが判定し、計画の承認時に人が上書きできる) */
 export type DesignPlan = { architect: boolean; designer: boolean };
@@ -20,6 +24,11 @@ const ROLE_BY_STATE: Partial<Record<TaskState, Role>> = {
   qa: "qa",
   design_reviewing: "design_reviewer",
   integrating: "integrator",
+  p_researching: "researcher",
+  p_strategizing: "strategist",
+  p_scoping: "product",
+  p_ux: "ux",
+  p_handing_off: "handoff",
 };
 
 /** その状態で起動する役割。人の承認待ちなど、エージェントが動かない状態では null */
@@ -41,7 +50,16 @@ const VERDICTS: Record<Role, Record<string, Outcome>> = {
   qa: { passed: { to: "awaiting_final_approval" }, failed: "bounce", need_human: "hold" },
   design_reviewer: { approve: { to: "awaiting_final_approval" }, changes_requested: "bounce", need_human: "hold" },
   integrator: { done: { to: "done" }, blocked: "hold" },
+  // 企画の段: 批評担当が approve したら、書く役の ready として次へ進む
+  researcher: { ready: { to: "p_strategizing" }, need_human: "hold" },
+  strategist: { ready: { to: "awaiting_strategy_approval" }, need_human: "hold" },
+  product: { ready: { to: "awaiting_scope_approval" }, need_human: "hold" },
+  ux: { ready: { to: "p_handing_off" }, need_human: "hold" },
+  handoff: { ready: { to: "awaiting_handoff_approval" }, need_human: "hold" },
 };
+
+const PLANNING_ROLES: Role[] = ["researcher", "strategist", "product", "ux", "handoff"];
+const PLANNING_STAGES: TaskState[] = ["p_researching", "p_strategizing", "p_scoping", "p_ux", "p_handing_off"];
 
 /** 人が変更して戻したとき、レビューからやり直す対象になる段階(実装が存在する段階) */
 const AFTER_IMPLEMENTATION: TaskState[] = ["implementing", "reviewing", "qa", "design_reviewing", "awaiting_final_approval", "integrating"];
@@ -54,8 +72,10 @@ export type TaskEvent =
   | { type: "verdict"; role: Role; verdict: string }
   | { type: "tests_failed" }
   /** 計画の承認では、設計の段で動かす役割を人が上書きできる */
-  | { type: "approve"; kind: "plan" | "design" | "final"; design?: DesignPlan }
-  | { type: "reject"; kind: "plan" | "design" | "final" }
+  | { type: "approve"; kind: HumanApprovalKind; design?: DesignPlan }
+  | { type: "reject"; kind: HumanApprovalKind }
+  /** 企画の段の批評が差し戻した(フェーズ9)。同じ段の書く役をやり直す */
+  | { type: "critique_bounce" }
   | { type: "answer" }
   | { type: "takeover" }
   | { type: "return"; humanChanged: boolean }
@@ -80,7 +100,7 @@ export type TaskEvent =
   /** 人が実行中の役割を止めた。その段で人の判断を待つ */
   | { type: "stopped" };
 
-export type TaskSnapshot = { state: TaskState; heldFromState: TaskState | null; reviewRounds: number; design?: DesignPlan };
+export type TaskSnapshot = { state: TaskState; heldFromState: TaskState | null; reviewRounds: number; design?: DesignPlan; kind?: "normal" | "test_infra" | "planning" };
 
 const NO_DESIGN: DesignPlan = { architect: false, designer: false };
 
@@ -137,6 +157,7 @@ export function transition(t: TaskSnapshot, e: TaskEvent, c: TransitionContext):
   switch (e.type) {
     case "start":
       if (t.state !== "queued") fail("開始できるのは queued だけです");
+      if (t.kind === "planning") return to("p_researching");
       if (!c.testGateOpen) fail("テスト基盤の整備が完了していません(人が例外を承認すれば開始できます)");
       return to("planning");
 
@@ -148,8 +169,16 @@ export function transition(t: TaskSnapshot, e: TaskEvent, c: TransitionContext):
       if (!outcome) fail(`${e.role} は ${e.verdict} を返せません`);
       if (outcome === "bounce") return bounce();
       if (outcome === "hold") return hold(t.state);
+      // 企画の段は、次の段で差し戻しの回数を数え直す
+      if (PLANNING_ROLES.includes(e.role)) return to(outcome!.to, { reviewRounds: 0 });
       if (e.role === "qa" && e.verdict === "passed" && t.design?.designer) return to("design_reviewing");
       return to(outcome!.to);
+    }
+
+    case "critique_bounce": {
+      if (!PLANNING_STAGES.includes(t.state)) fail("企画の段ではありません");
+      const rounds = t.reviewRounds + 1;
+      return rounds > c.maxReviewRounds ? to("needs_input", { heldFromState: t.state, reviewRounds: rounds }) : to(t.state, { reviewRounds: rounds });
     }
 
     case "split":
@@ -165,6 +194,7 @@ export function transition(t: TaskSnapshot, e: TaskEvent, c: TransitionContext):
       return to("needs_input", { heldFromState: "split" });
 
     case "repeated_failure":
+      if (PLANNING_STAGES.includes(t.state)) return to("needs_input", { heldFromState: t.state, reviewRounds: t.reviewRounds + 1 });
       if (!["reviewing", "qa", "design_reviewing"].includes(t.state)) fail("差し戻しの段ではありません");
       return to("needs_input", { heldFromState: "implementing", reviewRounds: t.reviewRounds + 1 });
 
@@ -174,9 +204,24 @@ export function transition(t: TaskSnapshot, e: TaskEvent, c: TransitionContext):
 
     case "approve":
     case "reject": {
-      const waiting = { plan: "awaiting_plan_approval", design: "awaiting_design_approval", final: "awaiting_final_approval" }[e.kind];
+      const waiting = {
+        plan: "awaiting_plan_approval",
+        design: "awaiting_design_approval",
+        final: "awaiting_final_approval",
+        strategy: "awaiting_strategy_approval",
+        scope: "awaiting_scope_approval",
+        handoff: "awaiting_handoff_approval",
+      }[e.kind];
       if (t.state !== waiting) fail(`${e.kind} の承認待ちではありません`);
-      if (e.type === "reject") return to({ plan: "planning", design: "designing", final: "implementing" }[e.kind] as TaskState);
+      if (e.type === "reject") {
+        const back = { plan: "planning", design: "designing", final: "implementing", strategy: "p_strategizing", scope: "p_scoping", handoff: "p_handing_off" }[e.kind] as TaskState;
+        // 企画の段の却下は、その段の差し戻しの回数を数え直す(開発の却下は従来どおり数えない)
+        return to(back, ["strategy", "scope", "handoff"].includes(e.kind) ? { reviewRounds: 0 } : {});
+      }
+      // 企画: 戦略 → 要件 → 構造・骨格。引き渡しの承認で開発のタスクを作り、子の完了を待つ(親子の仕組みはフェーズ8の分割と同じ)
+      if (e.kind === "strategy") return to("p_scoping", { reviewRounds: 0 });
+      if (e.kind === "scope") return to("p_ux", { reviewRounds: 0 });
+      if (e.kind === "handoff") return to("split");
       if (e.kind === "plan") {
         const design = e.design ?? t.design ?? NO_DESIGN;
         return to(design.architect || design.designer ? "designing" : "implementing", { design });

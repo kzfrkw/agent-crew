@@ -125,7 +125,8 @@ export type Task = {
   body: string;
   sourceKind: "local" | "paste" | "notion";
   sourceUrl: string | null;
-  kind: "normal" | "test_infra";
+  /** planning は企画のタスク(フェーズ9) */
+  kind: "normal" | "test_infra" | "planning";
   state: TaskState;
   heldFromState: TaskState | null;
   assignee: "agent" | "human" | null;
@@ -426,7 +427,7 @@ export function listRunArtifacts(db: Db, runId: number): Artifact[] {
 // ---- approvals ----
 
 /** tests はオーケストレーターによるテストの再実行の結果 */
-export type ApprovalKind = "plan" | "design" | "final" | "review" | "qa" | "tests";
+export type ApprovalKind = "plan" | "design" | "final" | "review" | "qa" | "tests" | "strategy" | "scope" | "handoff";
 export type Approval = {
   id: number;
   taskId: number;

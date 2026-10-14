@@ -46,7 +46,7 @@ function TaskView({ d, onDone }: { d: TaskDetail; onDone: () => void }) {
         <span>作成 {formatDateTime(t.createdAt)}</span>
         <span>更新 {formatDateTime(t.updatedAt)}</span>
       </Meta>
-      <Pipeline state={t.state} heldFrom={t.heldFromState} design={t.design} />
+      <Pipeline state={t.state} heldFrom={t.heldFromState} design={t.design} kind={t.kind} />
       <Banner d={d} onDone={onDone} />
 
       <div className="mt-6 grid grid-cols-1 items-start gap-6 min-[880px]:grid-cols-[minmax(0,1fr)_320px]">
@@ -221,6 +221,7 @@ function Banner({ d, onDone }: { d: TaskDetail; onDone: () => void }) {
     approve_plan: "計画を確認して承認してください",
     approve_design: "デザイン仕様を確認して承認してください",
     approve_final: "成果物を確認して最終承認してください",
+    approve_planning: "企画の成果物を確認して承認してください",
     failed: "失敗しました",
     human_working: "人が作業中です(エージェントは起動しません)",
   }[t.attention];

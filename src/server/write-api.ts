@@ -6,7 +6,7 @@ import { returnTask, takeoverTask, updateBase } from "../orchestrator/handoff.ts
 import { answerTask, approveTask, cancelTask, rejectTask } from "../orchestrator/human.ts";
 import { decideRetro } from "../orchestrator/retro.ts";
 import type { Worker } from "../orchestrator/worker.ts";
-import type { ActionRequest, ActionResult, CreateTaskRequest, DesignOptions, TaskSummary, WorkerView } from "./api-types.ts";
+import type { ActionRequest, ApprovalKindView, ActionResult, CreateTaskRequest, DesignOptions, TaskSummary, WorkerView } from "./api-types.ts";
 import { HttpError, taskSummaryOf } from "./api.ts";
 
 /**
@@ -71,8 +71,8 @@ async function act(ops: Ops, taskId: number, body: unknown): Promise<ActionResul
   const req = body as ActionRequest;
   const kind = () => {
     const k = (req as { kind?: unknown }).kind;
-    if (k !== "plan" && k !== "design" && k !== "final") throw new HttpError(400, "kind は plan / design / final です");
-    return k;
+    if (!["plan", "design", "final", "strategy", "scope", "handoff"].includes(String(k))) throw new HttpError(400, "kind は plan / design / final / strategy / scope / handoff です");
+    return k as ApprovalKindView;
   };
   const required = (v: unknown, what: string) => {
     if (typeof v !== "string" || !v.trim()) throw new HttpError(400, `${what}を書いてください`);
@@ -90,7 +90,7 @@ async function act(ops: Ops, taskId: number, body: unknown): Promise<ActionResul
           if (typeof d?.architect !== "boolean" || typeof d?.designer !== "boolean") throw new HttpError(400, "design は { architect, designer } を true / false で指定してください");
           design = { architect: d.architect, designer: d.designer };
         }
-        approveTask(ctx, taskId, kind(), comment, design, { split: req.split === true });
+        approveTask(ctx, taskId, kind(), comment, design, { split: req.split === true, targetProject: typeof req.targetProject === "string" && req.targetProject ? req.targetProject : undefined });
         message = "承認しました";
         break;
       }

@@ -8,13 +8,17 @@ import type { TaskState } from "../orchestrator/states.ts";
 export type { TaskState };
 
 /** 人の対応が必要な理由の種類 */
-export type Attention = "approve_plan" | "approve_design" | "approve_final" | "answer" | "failed" | "human_working";
+export type Attention = "approve_plan" | "approve_design" | "approve_final" | "approve_planning" | "answer" | "failed" | "human_working";
 
 /** 人の操作(POST /api/tasks/:id/actions の本文)。CLI と同じ関数を通す */
+/** 人の承認の種類。strategy / scope / handoff は企画の流れ(フェーズ9) */
+export type ApprovalKindView = "plan" | "design" | "final" | "strategy" | "scope" | "handoff";
+
 export type ActionRequest =
   /** design は計画の承認だけ。設計の段で動かす役割の、人による上書き */
-  | { action: "approve"; kind: "plan" | "design" | "final"; comment?: string; design?: DesignOptions; split?: boolean }
-  | { action: "reject"; kind: "plan" | "design" | "final"; comment: string }
+  /** targetProject は引き渡しの承認だけ(フェーズ9。開発のタスクを作るプロジェクト。既定は企画のプロジェクト) */
+  | { action: "approve"; kind: ApprovalKindView; comment?: string; design?: DesignOptions; split?: boolean; targetProject?: string }
+  | { action: "reject"; kind: ApprovalKindView; comment: string }
   | { action: "answer"; message: string }
   | { action: "stop" }
   | { action: "takeover" }
@@ -90,7 +94,7 @@ export type TaskSummary = {
   id: number;
   projectId: number;
   title: string;
-  kind: "normal" | "test_infra";
+  kind: "normal" | "test_infra" | "planning";
   state: TaskState;
   stateLabel: string;
   heldFromState: TaskState | null;

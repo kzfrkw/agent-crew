@@ -90,6 +90,16 @@ describe("pipelineOf", () => {
   });
 });
 
+describe("パイプライン(企画。9a)", () => {
+  it("企画のタスクは企画の段を出す。承認待ちは人の対応待ち", async () => {
+    const { pipelineOf } = await import("./pipeline.ts");
+    const st = pipelineOf("awaiting_scope_approval", null, undefined, "planning");
+    expect(st.map((s) => s.label).slice(0, 5)).toEqual(["調査", "戦略", "戦略の承認", "要件", "要件の承認"]);
+    expect(st.map((s) => s.status).slice(0, 6)).toEqual(["done", "done", "done", "done", "blocked", "todo"]);
+    expect(pipelineOf("split", null, undefined, "planning").find((s) => s.state === "split")!.status).toBe("current");
+  });
+});
+
 describe("パイプライン(分割済み。8-2)", () => {
   it("分割済みの親は、計画の承認までが済み、その先は未着手", async () => {
     const { pipelineOf } = await import("./pipeline.ts");

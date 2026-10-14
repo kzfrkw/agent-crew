@@ -1,11 +1,12 @@
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { addApproval, createTask, getTask, listEvents, listRepos, listTaskRepos } from "../db/store.ts";
+import { addApproval, addEvent, createTask, getProject, getTask, listEvents, listRepos, listTaskRepos } from "../db/store.ts";
 import { releaseTaskWorktrees } from "./cleanup-worktrees.ts";
 import { headSha } from "../git/worktree.ts";
 import type { AppContext } from "./context.ts";
 import { applyEvent, ensureWorktrees } from "./engine.ts";
-import type { DesignPlan } from "./transitions.ts";
+import type { DesignPlan, HumanApprovalKind } from "./transitions.ts";
+import { getProjectByName } from "../db/store.ts";
 import { taskDir } from "./paths.ts";
 
 /** 人のコメント・回答。次に起動する役割の入力になる */
@@ -51,9 +52,51 @@ function approveSplit(ctx: AppContext, taskId: number, comment?: string): void {
   if (comment) appendHumanNote(ctx, taskId, "計画の承認コメント(分割)", comment);
 }
 
-export function approveTask(ctx: AppContext, taskId: number, kind: "plan" | "design" | "final", comment?: string, design?: DesignPlan, o: { split?: boolean } = {}): void {
+/**
+ * 企画を開発に引き渡す(フェーズ9): まとめ担当のチケットから、開発のタスクを順番つきの子として作る。
+ * 引き渡し先は、指定が無ければ企画のプロジェクト。リポジトリの無いプロジェクト(新サービスの企画)には作れない
+ */
+function approveHandoff(ctx: AppContext, taskId: number, comment: string | undefined, targetProject: string | undefined): void {
+  const task = getTask(ctx.db, taskId)!;
+  const target = targetProject ? getProjectByName(ctx.db, targetProject) : getProject(ctx.db, task.projectId);
+  if (!target) throw new Error(`引き渡し先のプロジェクト ${targetProject} がありません`);
+  if (listRepos(ctx.db, target.id).length === 0) {
+    throw new Error(`引き渡し先のプロジェクト(${target.name})にリポジトリがありません。リポジトリを登録したプロジェクトを引き渡し先に指定してください(task approve --kind handoff --target <名前>)`);
+  }
+  const tickets = (listEvents(ctx.db, taskId, 2000).filter((e) => e.kind === "handoff").at(-1)?.payload as { tickets?: { title: string; body: string; acceptanceCriteria?: string[] }[] } | undefined)?.tickets ?? [];
+  if (tickets.length === 0) throw new Error("引き渡すチケットがありません(まとめ担当の handoff.md を確認してください)");
+  applyEvent(ctx, taskId, { type: "approve", kind: "handoff" });
+  addApproval(ctx.db, { taskId, kind: "handoff", result: "approved", comment });
+  const dir = taskDir(ctx.home, taskId);
+  const refs = ["scope.md", "structure.md", "skeleton.md", "strategy.md"].map((f) => join(dir, f));
+  tickets.forEach((tk, i) =>
+    createTask(ctx.db, {
+      projectId: target.id,
+      title: tk.title,
+      body: [
+        tk.body.trim(),
+        "",
+        "## 受け入れ条件(企画から)",
+        ...(tk.acceptanceCriteria ?? []).map((c) => `- ${c}`),
+        "",
+        "---",
+        `企画 #${task.id}「${task.title}」から引き渡された ${i + 1}/${tickets.length} 番目のチケットです。企画の文書(読むだけ): ${refs.join("、")}`,
+        ...(i > 0 ? ["前のチケットのブランチをベースに作業します。"] : []),
+      ].join("\n"),
+      sourceKind: task.sourceKind,
+      sourceUrl: task.sourceUrl ?? undefined,
+      parentId: task.id,
+      seq: i + 1,
+    }),
+  );
+  addEvent(ctx.db, { taskId, kind: "handed_off", payload: { project: target.name, count: tickets.length } });
+  if (comment) appendHumanNote(ctx, taskId, "引き渡しの承認コメント", comment);
+}
+
+export function approveTask(ctx: AppContext, taskId: number, kind: HumanApprovalKind, comment?: string, design?: DesignPlan, o: { split?: boolean; targetProject?: string } = {}): void {
   const task = getTask(ctx.db, taskId);
   if (!task) throw new Error(`タスク ${taskId} がありません`);
+  if (kind === "handoff") return approveHandoff(ctx, taskId, comment, o.targetProject);
   if (o.split) {
     if (kind !== "plan") throw new Error("分割できるのは計画の承認だけです");
     approveSplit(ctx, taskId, comment);
@@ -76,9 +119,9 @@ export function approveTask(ctx: AppContext, taskId: number, kind: "plan" | "des
   if (comment) appendHumanNote(ctx, taskId, `${KIND_LABEL[kind]}の承認コメント`, comment);
 }
 
-const KIND_LABEL = { plan: "計画", design: "デザイン仕様", final: "最終確認" };
+const KIND_LABEL: Record<HumanApprovalKind, string> = { plan: "計画", design: "デザイン仕様", final: "最終確認", strategy: "戦略", scope: "要件", handoff: "引き渡し" };
 
-export function rejectTask(ctx: AppContext, taskId: number, kind: "plan" | "design" | "final", comment: string): void {
+export function rejectTask(ctx: AppContext, taskId: number, kind: HumanApprovalKind, comment: string): void {
   if (!comment.trim()) throw new Error("却下の理由(コメント)を書いてください");
   applyEvent(ctx, taskId, { type: "reject", kind });
   addApproval(ctx.db, { taskId, kind, result: "rejected", comment });

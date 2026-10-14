@@ -9,7 +9,7 @@ import type { Db } from "../db/connection.ts";
 
 export type BounceInfo = {
   /** 差し戻した段(tests / review / qa) */
-  source: "tests" | "review" | "qa";
+  source: "tests" | "review" | "qa" | "critique";
   /** 理由の要点。空なら比べない */
   key: string;
   /** 人に見せる理由の要約 */

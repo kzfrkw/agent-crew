@@ -108,6 +108,8 @@ export function runnableTasks(ctx: AppContext): Task[] {
     // 完了したタスクの振り返り(8-5。状態は変えない)
     if (t.state === "done") return retroPending(ctx.db, t.id) && !(ctx.stops?.has(t.id) ?? false);
     if (t.state === "queued") {
+      // 企画のタスクはリポジトリもテスト基盤も要らない(フェーズ9)
+      if (t.kind === "planning") return true;
       // 分割の子は順に進める: 前の子が完了するまで始めない(8-2)
       if (t.parentId !== null && (t.seq ?? 1) > 1) {
         const prev = listChildren(ctx.db, t.parentId).find((c) => c.seq === (t.seq ?? 1) - 1);
@@ -184,7 +186,7 @@ async function stepTaskInner(ctx: AppContext, taskId: number, signal: AbortSigna
     }
     if (task.state === "queued") {
       // 複数リポジトリのプロジェクトは、計画で変更するリポジトリを決めてから worktree を作る(設計メモ v0.14)
-      if (listRepos(ctx.db, task.projectId).length === 1) ensureWorktrees(ctx, task);
+      if (task.kind !== "planning" && listRepos(ctx.db, task.projectId).length === 1) ensureWorktrees(ctx, task);
       applyEvent(ctx, taskId, { type: "start" });
       return;
     }

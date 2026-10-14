@@ -22,7 +22,8 @@ import { projectDir, taskDir } from "./paths.ts";
 import type { Role } from "./transitions.ts";
 
 /** 状態に結びつく役割と、レビュワーの内部で動く監査担当 */
-export type PromptRole = Role | "auditor" | "retrospective";
+/** 企画の役割(researcher〜handoff)は planning.ts の planningPrompt を使う */
+export type PromptRole = Exclude<Role, "researcher" | "strategist" | "product" | "ux" | "handoff"> | "auditor" | "retrospective";
 
 /** タスクの役割に共通の入力(チケット、作業場所、参照するファイル)と、役割ごとの今回やること */
 export function taskPrompt(ctx: AppContext, task: Task, role: PromptRole, extra: string[] = []): string {

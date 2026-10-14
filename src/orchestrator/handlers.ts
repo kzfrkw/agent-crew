@@ -14,6 +14,7 @@ import type { Shot } from "../browser/chrome.ts";
 import { platformOf, resolveServiceEnv } from "./projects.ts";
 import { applyAudit, checkReviewConsistency, mustIndexes, type Finding } from "./review-findings.ts";
 import { taskPrompt } from "./prompts.ts";
+import { planningStage } from "./planning.ts";
 import { baseRefFor } from "./engine.ts";
 import { testFailureKey, type BounceInfo } from "./bounce.ts";
 import type { Role, TaskEvent } from "./transitions.ts";
@@ -505,4 +506,19 @@ const integrator: Handler = async (ctx, task) => {
 };
 
 /** 状態ごとの処理 */
-export const HANDLERS: Partial<Record<Role, Handler>> = { planner, architect: design, implementer, reviewer, qa, design_reviewer: designReview, integrator };
+export const HANDLERS: Partial<Record<Role, Handler>> = {
+  planner,
+  architect: design,
+  implementer,
+  reviewer,
+  qa,
+  design_reviewer: designReview,
+  integrator,
+  // 企画の段(フェーズ9)は1つのハンドラーで、段ごとの書く役と批評担当を動かす。
+  // planning.ts とは循環して読み込まれるため、呼ぶときに参照する
+  researcher: (ctx, task) => planningStage(ctx, task),
+  strategist: (ctx, task) => planningStage(ctx, task),
+  product: (ctx, task) => planningStage(ctx, task),
+  ux: (ctx, task) => planningStage(ctx, task),
+  handoff: (ctx, task) => planningStage(ctx, task),
+};

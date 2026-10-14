@@ -61,6 +61,7 @@ export async function invokeRole(
   const bridge = o.toolCommands ? writeBridge(ctx, run.id, o.cwd, o.toolCommands, o.taskId) : undefined;
   const prompt = bridge ? `${o.prompt}\n## テストと静的解析の実行\n- テスト・静的解析は Bash では実行せず、MCP の道具 \`${TOOL_NAME}\`(kind: ${bridge.kinds.join(" / ")})を使ってください。ツールがサンドボックスの中で代わりに実行し、終了コードと出力を返します(Bash の中ではこれらのコマンドは止まります)\n` : o.prompt;
 
+  const webTools = role.tools.filter((t) => t === "WebSearch" || t === "WebFetch");
   let result: RunResult;
   let sawRejected = false;
   const startedAt = Date.now();
@@ -85,7 +86,9 @@ export async function invokeRole(
         allowedDomains: o.toolCommands?.platform === "flutter" ? [...new Set([...ctx.config.sandbox.allowedDomains, ...FLUTTER_DOMAINS])] : ctx.config.sandbox.allowedDomains,
         extraEnv: o.extraEnv,
         denyRead: protectedPathsFor(ctx, { taskId: o.taskId, projectId: o.projectId, cwd: o.cwd }),
-        ...(bridge ? { mcpServers: bridge.servers, extraAllowedTools: [MCP_TOOL] } : {}),
+        ...(bridge ? { mcpServers: bridge.servers } : {}),
+        // MCP の橋の道具と、役割が使う Web の道具(調査担当だけ。フェーズ9)を許可する
+        ...(bridge || webTools.length ? { extraAllowedTools: [...(bridge ? [MCP_TOOL] : []), ...webTools] } : {}),
         // 依存の準備(flutter pub get)は Bash で行うため、道具のキャッシュに書けるようにする(設計メモ v0.15)
         ...(o.toolCommands ? { extraWritable: toolchainWritable(o.toolCommands.platform, { home: homedir(), flutterRoot: findFlutterRoot() }) } : {}),
         signal: o.taskId === undefined ? undefined : ctx.stops?.get(o.taskId)?.signal,
