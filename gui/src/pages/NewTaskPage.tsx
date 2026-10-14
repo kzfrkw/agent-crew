@@ -145,7 +145,11 @@ function Form({ overview }: { overview: Overview }) {
             value={body}
             onChange={(e) => setBody(e.target.value)}
             disabled={busy}
-            placeholder={"仕様・不具合の内容。Notion などから貼り付けてかまいません(Markdown)。\n受け入れ条件があれば書いてください"}
+            placeholder={
+              planning
+                ? "作りたいもの、背景、想定するユーザーとその困りごと。思いつきの解決案があれば書いてください(数行で十分です)"
+                : "仕様・不具合の内容。Notion などから貼り付けてかまいません(Markdown)。\n受け入れ条件があれば書いてください"
+            }
           />
         </div>
         {planning && (
