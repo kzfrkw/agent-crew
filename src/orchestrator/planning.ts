@@ -18,21 +18,23 @@ import type { Role } from "./transitions.ts";
  */
 
 export type StageKey = "research" | "strategy" | "scope" | "ux" | "handoff";
-type Stage = { key: StageKey; writer: Role; label: string; files: string[] };
+/** writerLabel は画面に出す担当名(内部の役割名 researcher などは出さない) */
+type Stage = { key: StageKey; writer: Role; writerLabel: string; label: string; files: string[] };
 
 export const STAGES: Record<string, Stage> = {
-  p_researching: { key: "research", writer: "researcher", label: "調査", files: ["research.md"] },
-  p_strategizing: { key: "strategy", writer: "strategist", label: "戦略", files: ["strategy.md", "strategy.slides.md"] },
-  p_scoping: { key: "scope", writer: "product", label: "要件", files: ["scope.md", "scope.slides.md"] },
-  p_ux: { key: "ux", writer: "ux", label: "構造・骨格", files: ["structure.md", "skeleton.md"] },
-  p_handing_off: { key: "handoff", writer: "handoff", label: "引き渡し", files: ["handoff.md"] },
+  p_researching: { key: "research", writer: "researcher", writerLabel: "調査担当", label: "調査", files: ["research.md"] },
+  p_strategizing: { key: "strategy", writer: "strategist", writerLabel: "企画担当", label: "戦略", files: ["strategy.md", "strategy.slides.md"] },
+  p_scoping: { key: "scope", writer: "product", writerLabel: "要件担当", label: "要件", files: ["scope.md", "scope.slides.md"] },
+  p_ux: { key: "ux", writer: "ux", writerLabel: "UX 担当", label: "構造・骨格", files: ["structure.md", "skeleton.md"] },
+  p_handing_off: { key: "handoff", writer: "handoff", writerLabel: "まとめ担当", label: "引き渡し", files: ["handoff.md"] },
 };
 const ORDER: StageKey[] = ["research", "strategy", "scope", "ux", "handoff"];
 /** 書いた後に人の承認がある段 */
 const HUMAN_GATE: StageKey[] = ["strategy", "scope", "handoff"];
 
 /** 承認のときに人が決めること(問いを1件ずつ。批評の must と should の件数つき) */
-export type PlanningQuestions = { stage: StageKey; questions: { from: "書く役" | "批評担当"; text: string }[]; musts: string[]; shoulds: number };
+/** from は問いを出した担当(企画担当、要件担当、批評担当など) */
+export type PlanningQuestions = { stage: StageKey; questions: { from: string; text: string }[]; musts: string[]; shoulds: number };
 
 /**
  * 承認待ちの企画に、この段で出た問い(書く役か批評担当から)があれば返す。
@@ -49,14 +51,18 @@ export function planningQuestions(db: Db, taskId: number): PlanningQuestions | n
       stage: q.stage!,
       questions: parts
         .filter((p) => !p.startsWith("批評の must: "))
-        .map((p) => (p.startsWith("批評担当: ") ? { from: "批評担当" as const, text: p.slice(6) } : { from: "書く役" as const, text: p.replace(/^書く役: /, "") })),
+        .map((p) => (p.startsWith("批評担当: ") ? { from: "批評担当", text: p.slice(6) } : { from: writerLabelOf(q.stage), text: p.replace(/^書く役: /, "") })),
       musts: parts.filter((p) => p.startsWith("批評の must: ")).flatMap((p) => p.slice(10).split(" / ")),
       shoulds: 0,
     };
   }
   if (!q?.questions?.length) return null;
-  return { stage: q.stage!, questions: q.questions, musts: q.musts ?? [], shoulds: q.shoulds ?? 0 };
+  // 以前は書く役を「書く役」と記録していた。段の担当名に読み替える
+  const questions = q.questions.map((x) => (x.from === "書く役" ? { ...x, from: writerLabelOf(q.stage) } : x));
+  return { stage: q.stage!, questions, musts: q.musts ?? [], shoulds: q.shoulds ?? 0 };
 }
+
+const writerLabelOf = (stage: StageKey | undefined) => Object.values(STAGES).find((s) => s.key === stage)?.writerLabel ?? "書く担当";
 
 /** ダッシュボードや CLI に出す短い理由 */
 export function criticQuestion(db: Db, taskId: number): string | null {
@@ -150,7 +156,7 @@ export const planningStage: Handler = async (ctx, task) => {
   if (!w.ok) return failed(w, stage.writer);
   const gated = HUMAN_GATE.includes(stage.key);
   // 人の承認が無い段で書く役が止まったら、人の回答待ち
-  if (w.verdict === "need_human" && !gated) return { event: { type: "verdict", role: stage.writer, verdict: "need_human" }, reason: `${stage.writer} が人の判断を求めています: ${w.summary}(詳細: ${dir})` };
+  if (w.verdict === "need_human" && !gated) return { event: { type: "verdict", role: stage.writer, verdict: "need_human" }, reason: `${stage.writerLabel}が人の判断を求めています: ${w.summary}(詳細: ${dir})` };
   // 役割の出力以外の、この段のファイル(スライドの Markdown、structure.md など)も成果物として出す
   for (const f of stage.files) {
     const path = join(dir, f);
@@ -173,8 +179,8 @@ export const planningStage: Handler = async (ctx, task) => {
     const q: PlanningQuestions = {
       stage: stage.key,
       questions: [
-        ...(w.verdict === "need_human" ? questionsOf(w).map((text) => ({ from: "書く役" as const, text })) : []),
-        ...(c.verdict === "need_human" ? questionsOf(c).map((text) => ({ from: "批評担当" as const, text })) : []),
+        ...(w.verdict === "need_human" ? questionsOf(w).map((text) => ({ from: stage.writerLabel, text })) : []),
+        ...(c.verdict === "need_human" ? questionsOf(c).map((text) => ({ from: "批評担当", text })) : []),
       ],
       musts: musts.map((i) => i.title),
       shoulds: issues.filter((i) => i.severity === "should").length,

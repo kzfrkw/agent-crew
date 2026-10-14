@@ -10,7 +10,7 @@ describe("企画の承認で人が決めること(読みやすく)", () => {
     render(
       <PlanningQuestions
         taskId={3}
-        q={{ stage: "strategy", questions: [{ from: "書く役", text: "動かす先を Web にするか(推奨)" }, { from: "批評担当", text: "成功指標の目標値" }], musts: ["根拠が無い"], shoulds: 7 }}
+        q={{ stage: "strategy", questions: [{ from: "企画担当", text: "動かす先を Web にするか(推奨)" }, { from: "批評担当", text: "成功指標の目標値" }], musts: ["根拠が無い"], shoulds: 7 }}
         artifacts={[
           { id: 10, kind: "strategy", fileName: "strategy.md" },
           { id: 11, kind: "strategy.slides", fileName: "strategy.slides.md" },
@@ -21,7 +21,7 @@ describe("企画の承認で人が決めること(読みやすく)", () => {
     );
     const items = screen.getAllByRole("listitem").map((li) => li.textContent);
     expect(items[0]).toContain("動かす先を Web にするか(推奨)");
-    expect(items[0]).toContain("書く役");
+    expect(items[0]).toContain("企画担当");
     expect(items[1]).toContain("批評担当");
     expect(screen.getByText(/must/).textContent).toContain("根拠が無い");
     expect(screen.getByText(/should 7 件/)).toBeTruthy();

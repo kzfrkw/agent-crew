@@ -205,7 +205,8 @@ describe("批評が人の判断を求めたとき(9a。実機の通し確認で�
     // 問いを分けて返さなかったときは、要約を1件の問いとして扱う
     expect(taskSummaryOf(ctx.db, t.id)!.reason).toContain("1 件");
     const { planningQuestions } = await import("../src/orchestrator/planning.ts");
-    expect(planningQuestions(ctx.db, t.id)!.questions).toEqual([{ from: "書く役", text: "画面を作るか API だけかを選んでください" }]);
+    // 誰からの問いかは、段の担当名で出す(要件の段なら要件担当)
+    expect(planningQuestions(ctx.db, t.id)!.questions).toEqual([{ from: "要件担当", text: "画面を作るか API だけかを選んでください" }]);
     expect(runner.rolesCalled().filter((r) => r === "critic")).toHaveLength(3); // 書く役が問いを出しても批評は動く(差し戻しはしない)
     rejectTask(ctx, t.id, "scope", "画面も作る");
     await runUntilIdle(ctx);
