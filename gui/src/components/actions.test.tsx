@@ -139,6 +139,18 @@ describe("チケット投入", () => {
     expect(posts()[0]).toMatchObject({ url: "/api/tasks", body: { projectId: 2, title: "検索を追加", body: "部分一致で", sourceUrl: "https://www.notion.so/x" } });
   });
 
+  it("企画として作るを選ぶと、種類と読ませる資料(1行に1つ)を送る(9a)", async () => {
+    reply = (url, init) => (init.method === "POST" ? { status: 201, body: { task: { id: 43 } } } : { status: 200, body: overview });
+    window.history.pushState(null, "", "/tasks/new");
+    render(<NewTaskPage />);
+    fireEvent.click(await screen.findByLabelText(/企画として作る/));
+    fireEvent.change(screen.getByLabelText("タイトル"), { target: { value: "家計簿の共有" } });
+    fireEvent.change(screen.getByLabelText(/読ませる資料/), { target: { value: "/Users/me/docs\n/Users/me/memo.md\n" } });
+    fireEvent.click(screen.getByRole("button", { name: "作成する" }));
+    await waitFor(() => expect(window.location.pathname).toBe("/tasks/43"));
+    expect(posts()[0]!.body).toMatchObject({ title: "家計簿の共有", kind: "planning", docs: ["/Users/me/docs", "/Users/me/memo.md"] });
+  });
+
   it("タイトルが空なら送らない", async () => {
     reply = () => ({ status: 200, body: overview });
     render(<NewTaskPage />);

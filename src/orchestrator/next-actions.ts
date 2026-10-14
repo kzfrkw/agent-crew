@@ -1,5 +1,5 @@
 import type { Db } from "../db/connection.ts";
-import { listEvents, type Task } from "../db/store.ts";
+import { getProject, getTask, listEvents, listProjects, listRepos, type Task } from "../db/store.ts";
 import type { ApprovalKindView, Attention, NextAction } from "../server/api-types.ts";
 import { runActive } from "./engine.ts";
 
@@ -98,7 +98,18 @@ export function nextActions(db: Db, task: Pick<Task, "id" | "state"> & { design?
     case "awaiting_handoff_approval": {
       const [approve, reject] = approval("handoff", "handoff.md(開発のチケット)");
       const tickets = (listEvents(db, id, 2000).filter((e) => e.kind === "handoff").at(-1)?.payload as { tickets?: { title: string }[] } | undefined)?.tickets ?? [];
-      return [{ ...approve!, label: `handoff.md を確認し、開発のチケット ${tickets.length} 件を作る`, optionsNote: tickets.map((t, i) => `${i + 1}. ${t.title}`).join(" / ") || undefined }, reject!];
+      const task0 = getTask(db, id)!;
+      const projects = listProjects(db).filter((p) => listRepos(db, p.id).length > 0).map((p) => p.name);
+      const own = getProject(db, task0.projectId)!.name;
+      return [
+        {
+          ...approve!,
+          label: `handoff.md を確認し、開発のチケット ${tickets.length} 件を作る`,
+          optionsNote: tickets.map((t, i) => `${i + 1}. ${t.title}`).join(" / ") || undefined,
+          targets: { projects, selected: projects.includes(own) ? own : null },
+        },
+        reject!,
+      ];
     }
     case "needs_input":
       return [

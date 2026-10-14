@@ -5,6 +5,7 @@ import { requestStop } from "../orchestrator/engine.ts";
 import { returnTask, takeoverTask, updateBase } from "../orchestrator/handoff.ts";
 import { answerTask, approveTask, cancelTask, rejectTask } from "../orchestrator/human.ts";
 import { decideRetro } from "../orchestrator/retro.ts";
+import { createPlanningTask } from "../orchestrator/planning.ts";
 import type { Worker } from "../orchestrator/worker.ts";
 import type { ActionRequest, ApprovalKindView, ActionResult, CreateTaskRequest, DesignOptions, TaskSummary, WorkerView } from "./api-types.ts";
 import { HttpError, taskSummaryOf } from "./api.ts";
@@ -48,7 +49,17 @@ function createTicket(ops: Ops, body: unknown): TaskSummary {
     sourceUrl = str(req.sourceUrl, "sourceUrl").trim();
     if (!/^https?:\/\//.test(sourceUrl)) throw new HttpError(400, "取り込み元の URL は http(s) で指定してください");
   }
-  const t = createTask(ops.ctx.db, { projectId: project.id, title, body: text, sourceKind: sourceUrl ? "paste" : "local", sourceUrl });
+  let t;
+  if (req.kind === "planning") {
+    const docs = Array.isArray(req.docs) ? req.docs.map((d) => str(d, "docs").trim()).filter(Boolean) : [];
+    try {
+      t = createPlanningTask(ops.ctx, { projectName: project.name, title, body: text, docs, sourceUrl });
+    } catch (e) {
+      throw new HttpError(400, (e as Error).message);
+    }
+  } else {
+    t = createTask(ops.ctx.db, { projectId: project.id, title, body: text, sourceKind: sourceUrl ? "paste" : "local", sourceUrl });
+  }
   ops.worker?.kick();
   return taskSummaryOf(ops.ctx.db, t.id)!;
 }

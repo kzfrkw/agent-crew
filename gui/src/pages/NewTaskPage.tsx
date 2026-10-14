@@ -22,6 +22,9 @@ function Form({ overview }: { overview: Overview }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
+  // 企画のタスク(フェーズ9): 調査から始め、要件の整理の後で開発のチケットに引き渡す
+  const [planning, setPlanning] = useState(false);
+  const [docs, setDocs] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const project = overview.projects.find((p) => p.id === projectId);
@@ -32,7 +35,13 @@ function Form({ overview }: { overview: Overview }) {
     if (!title.trim()) return setError("タイトルを書いてください");
     setBusy(true);
     try {
-      const r = await postJson<{ task: TaskSummary }>("/api/tasks", { projectId, title, body, ...(sourceUrl.trim() ? { sourceUrl: sourceUrl.trim() } : {}) });
+      const r = await postJson<{ task: TaskSummary }>("/api/tasks", {
+        projectId,
+        title,
+        body,
+        ...(sourceUrl.trim() ? { sourceUrl: sourceUrl.trim() } : {}),
+        ...(planning ? { kind: "planning", docs: docs.split("\n").map((d) => d.trim()).filter(Boolean) } : {}),
+      });
       navigate(paths.task(r.task.id));
     } catch (err) {
       setError((err as Error).message);
@@ -63,8 +72,15 @@ function Form({ overview }: { overview: Overview }) {
               </option>
             ))}
           </NativeSelect>
-          {project && project.profileStatus !== "approved" && <span className="text-xs text-attn">プロファイルが未承認のため、承認されるまで開始しません</span>}
+          {project && project.profileStatus !== "approved" && !planning && <span className="text-xs text-attn">プロファイルが未承認のため、承認されるまで開始しません</span>}
         </div>
+        <label className="inline-flex cursor-pointer items-start gap-2 text-sm">
+          <input type="checkbox" className="mt-1 accent-foreground" checked={planning} onChange={(e) => setPlanning(e.target.checked)} disabled={busy} />
+          <span>
+            企画として作る
+            <span className="block text-xs text-muted-foreground">調査 → 戦略 → 要件 → 構造・骨格 → 開発のチケットへの引き渡し、の順に進めます(新サービス・新機能の企画)</span>
+          </span>
+        </label>
         <div className="flex flex-col gap-2">
           <Label htmlFor="title" className="text-xs text-muted-foreground">
             タイトル
@@ -84,6 +100,14 @@ function Form({ overview }: { overview: Overview }) {
             placeholder={"仕様・不具合の内容。Notion などから貼り付けてかまいません(Markdown)。\n受け入れ条件があれば書いてください"}
           />
         </div>
+        {planning && (
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="docs" className="text-xs text-muted-foreground">
+              読ませる資料(任意。手元のファイルかフォルダの絶対パスを、1行に1つ)
+            </Label>
+            <Textarea id="docs" className="min-h-20 bg-card font-mono text-xs" value={docs} onChange={(e) => setDocs(e.target.value)} disabled={busy} placeholder="/Users/me/Documents/企画メモ" />
+          </div>
+        )}
         <div className="flex flex-col gap-2">
           <Label htmlFor="source" className="text-xs text-muted-foreground">
             取り込み元の URL(任意)

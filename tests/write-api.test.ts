@@ -98,6 +98,15 @@ describe("チケット投入", () => {
     expect(getTask(ctx.db, task.id)).toMatchObject({ body: "本文", sourceKind: "paste", sourceUrl: "https://www.notion.so/x" });
   });
 
+  it("企画のタスク(9a)も作れる。読ませる資料は絶対パスで、無ければ 400", async () => {
+    const { ctx, project } = await setup();
+    const docs = (await import("./helpers/gitrepo.ts")).tempDir("agent-crew-docs-");
+    const r = await post("/api/tasks", { projectId: project.id, title: "新機能の企画", body: "b", kind: "planning", docs: [docs] });
+    expect(r.status).toBe(201);
+    expect(getTask(ctx.db, (r.body.task as TaskSummary).id)).toMatchObject({ kind: "planning" });
+    expect((await post("/api/tasks", { projectId: project.id, title: "x", body: "", kind: "planning", docs: ["relative/path"] })).status).toBe(400);
+  });
+
   it("入力の誤りは 400(タイトルが空、プロジェクトが無い、URL が http(s) でない)", async () => {
     const { ctx, project } = await setup();
     expect((await post("/api/tasks", { projectId: project.id, title: "  ", body: "" })).status).toBe(400);

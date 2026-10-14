@@ -69,6 +69,9 @@ describe("企画の流れ(9a)", () => {
     expect(research.prompt).toContain(docs);
     expect(research.prompt).toContain("顧客が注文の状態を知りたい");
     expect(runner.calls.find((c) => c.role === "strategist")!.tools).not.toContain("WebSearch");
+    // 段の成果物は、役割の出力以外(スライドの Markdown など)も成果物として出す
+    const { listArtifacts } = await import("../src/db/store.ts");
+    expect(listArtifacts(ctx.db, t.id).map((a) => a.kind)).toEqual(expect.arrayContaining(["research", "strategy", "strategy.slides", "critique-research"]));
     // 批評は段ごとに残す
     expect(existsSync(join(taskDir(ctx.home, t.id), "critique-research.md"))).toBe(true);
     expect(runner.calls.filter((c) => c.role === "critic")[1]!.prompt).toContain("strategy.md");
@@ -135,6 +138,9 @@ describe("企画の流れ(9a)", () => {
     approveTask(ctx, t.id, "scope");
     await runUntilIdle(ctx);
     expect(() => approveTask(ctx, t.id, "handoff")).toThrow(/引き渡し先/);
+    // GUI では、リポジトリのあるプロジェクトから引き渡し先を選ぶ
+    const approve = nextActions(ctx.db, getTask(ctx.db, t.id)!).find((a) => a.kind === "approve")!;
+    expect(approve.targets).toEqual({ projects: ["shop"], selected: null });
     approveTask(ctx, t.id, "handoff", undefined, undefined, { targetProject: "shop" });
     expect(listChildren(ctx.db, t.id).every((k) => k.projectId === dev.id)).toBe(true);
     expect(listEvents(ctx.db, t.id, 200).some((e) => e.kind === "handed_off")).toBe(true);

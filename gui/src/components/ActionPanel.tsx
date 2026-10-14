@@ -46,6 +46,9 @@ export function ActionPanel({
   );
   // 計画の承認での「分割して進める」(8-2)
   const [split, setSplit] = useState(false);
+  // 引き渡しの承認での、開発のタスクを作るプロジェクト(9a)
+  const targetAction = compact ? undefined : shown.find((a) => a.targets);
+  const [target, setTarget] = useState<string>(targetAction?.targets?.selected ?? "");
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState<NextAction | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +59,7 @@ export function ActionPanel({
   const send = async (a: NextAction) => {
     const text = a.input ? (values[a.input.field] ?? "") : "";
     const design = a.options?.length && !compact ? Object.fromEntries(a.options.map((o) => [o.key, choices[o.key] ?? o.value])) : undefined;
-    const body = { ...a.request, ...(a.input ? { [a.input.field]: text } : {}), ...(design ? { design } : {}), ...(a.split && split ? { split: true } : {}) } as ActionRequest;
+    const body = { ...a.request, ...(a.input ? { [a.input.field]: text } : {}), ...(design ? { design } : {}), ...(a.split && split ? { split: true } : {}), ...(a.targets && target ? { targetProject: target } : {}) } as ActionRequest;
     setBusy(true);
     try {
       const r = await postJson<ActionResult>(`/api/tasks/${taskId}/actions`, body);
@@ -126,6 +129,20 @@ export function ActionPanel({
           )}
         </fieldset>
       ))}
+      {targetAction && (
+        <label className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-muted-foreground">開発のタスクを作るプロジェクト</span>
+          <select className="rounded-md border bg-card px-2 py-1 text-xs" value={target} onChange={(e) => setTarget(e.target.value)} disabled={busy} aria-label="開発のタスクを作るプロジェクト">
+            <option value="">選んでください</option>
+            {targetAction.targets!.projects.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+          {targetAction.optionsNote && <span className="basis-full text-muted-foreground">{targetAction.optionsNote}</span>}
+        </label>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         {shown.map((a) => (
           <Button

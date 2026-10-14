@@ -53,6 +53,8 @@ export type NextAction = {
   optionsNote?: string;
   /** 計画の承認で選べる「分割して進める」(8-2。プランナーが分割を提案したときだけ)。選んだら request.split を true にして送る */
   split?: { count: number; titles: string[] };
+  /** 引き渡しの承認で選べる、開発のタスクを作るプロジェクト(9a。リポジトリのあるもの)。選んだら request.targetProject に入れて送る */
+  targets?: { projects: string[]; selected: string | null };
 };
 
 /** quota は利用枠による自動の一時停止(7-1。リセットの時刻を過ぎたら自動で動く) */
@@ -61,7 +63,8 @@ export type WorkerView = { state: "running" | "paused" | "locked" | "disabled"; 
 /** 利用枠の最新の値(7-1。claude の rate_limit から) */
 export type UsageView = { status: string; updatedAt: number; windows: { key: string; label: string; utilization: number; resetsAt: number }[] };
 
-export type CreateTaskRequest = { projectId: number; title: string; body: string; sourceUrl?: string };
+/** kind が planning なら企画のタスク(フェーズ9)。docs は読ませる手元の資料(絶対パス) */
+export type CreateTaskRequest = { projectId: number; title: string; body: string; sourceUrl?: string; kind?: "normal" | "planning"; docs?: string[] };
 
 export type ActionResult = { message: string; task: TaskSummary };
 

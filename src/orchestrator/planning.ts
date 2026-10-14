@@ -1,6 +1,6 @@
 import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
-import { addEvent, createProject, createTask, getProject, getProjectByName, listEvents, listRepos, type Task } from "../db/store.ts";
+import { addArtifact, addEvent, createProject, createTask, getProject, getProjectByName, listEvents, listRepos, type Task } from "../db/store.ts";
 import type { BounceInfo } from "./bounce.ts";
 import type { AppContext } from "./context.ts";
 import type { Handler, HandlerOutcome } from "./handlers.ts";
@@ -107,11 +107,17 @@ export const planningStage: Handler = async (ctx, task) => {
   const w = await invokeRole(ctx, { roleName: stage.writer, taskId: task.id, cwd: dir, artifactsDir: dir, prompt: planningPrompt(ctx, task, stage, "write") });
   if (!w.ok) return failed(w, stage.writer);
   if (w.verdict === "need_human") return { event: { type: "verdict", role: stage.writer, verdict: "need_human" }, reason: `${stage.writer} が人の判断を求めています: ${w.summary}(詳細: ${dir})` };
+  // 役割の出力以外の、この段のファイル(スライドの Markdown、structure.md など)も成果物として出す
+  for (const f of stage.files) {
+    const path = join(dir, f);
+    if (f !== ctx.roles.get(stage.writer)?.output && existsSync(path)) addArtifact(ctx.db, { taskId: task.id, runId: w.runId, kind: f.replace(/\.md$/, ""), path });
+  }
   if (stage.key === "handoff") addEvent(ctx.db, { taskId: task.id, runId: w.runId, kind: "handoff", payload: { tickets: w.extra.tickets ?? [] } });
 
   const c = await invokeRole(ctx, { roleName: "critic", taskId: task.id, cwd: dir, artifactsDir: dir, prompt: planningPrompt(ctx, task, stage, "critique") });
   if (!c.ok) return failed(c, "critic");
   copyFileSync(join(dir, "critique.md"), join(dir, `critique-${stage.key}.md`));
+  addArtifact(ctx.db, { taskId: task.id, runId: c.runId, kind: `critique-${stage.key}`, path: join(dir, `critique-${stage.key}.md`), verdict: c.verdict });
   const issues = (c.extra.issues ?? []) as { severity: string; title: string; detail: string }[];
   addEvent(ctx.db, { taskId: task.id, runId: c.runId, kind: "critique", payload: { stage: stage.key, verdict: c.verdict, issues } });
   const detail = `(詳細: ${join(dir, `critique-${stage.key}.md`)})`;
