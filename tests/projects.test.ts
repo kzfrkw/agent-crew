@@ -26,7 +26,7 @@ describe("registerProject", () => {
 
     const p = getProjectByName(ctx.db, "shop")!;
     expect(p).toMatchObject({ profileStatus: "draft", testInfra: "present" });
-    expect(listRepos(ctx.db, p.id)).toMatchObject([{ path: repo, role: "main", defaultBranch: "main" }]);
+    expect(listRepos(ctx.db, p.id)).toMatchObject([{ path: repo, role: "repo", defaultBranch: "main" }]);
 
     const call = runner.calls[0]!;
     expect(call.role).toBe("profiler");
@@ -114,6 +114,20 @@ describe("プロジェクト把握担当と MCP の橋(フェーズ6)", () => {
     const ctx2 = testContext(runner2);
     await registerProject(ctx2, { name: "web", repoPath: makeRepo().repo });
     expect(runner2.calls.find((c) => c.role === "profiler")!.mcpServers).toBeUndefined();
+  });
+});
+
+describe("リポジトリの名前の既定(フォルダ名)", () => {
+  it("名前(--role)を省くと、リポジトリのフォルダ名を使える形にしたものになる", async () => {
+    const { defaultRepoName } = await import("../src/orchestrator/projects.ts");
+    expect(defaultRepoName("/Users/me/dev/shop-api")).toBe("shop-api");
+    expect(defaultRepoName("/Users/me/dev/My_App.v2")).toBe("my_app-v2");
+    expect(defaultRepoName("/Users/me/dev/家計簿")).toBe("main");
+    expect(defaultRepoName("/Users/me/dev/-x-")).toBe("x-");
+    const ctx = testContext(new ScriptedRunner({ profiler: profiler("present") }));
+    const { repo } = makeRepo();
+    await registerProject(ctx, { name: "shop", repoPath: repo });
+    expect(listRepos(ctx.db, getProjectByName(ctx.db, "shop")!.id)[0]!.role).toBe("repo");
   });
 });
 

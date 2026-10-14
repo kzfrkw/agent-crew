@@ -23,7 +23,7 @@ describe("開始とプランナー", () => {
 
     expect(getTask(ctx.db, t.id)).toMatchObject({ state: "awaiting_plan_approval", assignee: null });
     const [tr] = listTaskRepos(ctx.db, t.id);
-    expect(tr!.worktreePath).toBe(join(ctx.home, "worktrees", "shop", String(t.id), "main"));
+    expect(tr!.worktreePath).toBe(join(ctx.home, "worktrees", "shop", String(t.id), "repo")); // リポジトリの名前の既定はフォルダ名
     expect(tr!.branchName).toBe(branchNameFor(t.id, t.title));
     expect(tr!.baseSha).toBe(git(repo, "rev-parse", "main"));
     expect(git(tr!.worktreePath, "branch", "--show-current")).toBe(tr!.branchName);

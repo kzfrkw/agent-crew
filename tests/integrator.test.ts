@@ -74,7 +74,7 @@ describe("統合担当", () => {
 
   it("最終確認の後にコミットが増えていたら needs_input", async () => {
     const { ctx, t } = await finalApproved();
-    const wt = join(ctx.home, "worktrees", "shop", String(t.id), "main");
+    const wt = join(ctx.home, "worktrees", "shop", String(t.id), "repo");
     writeFileSync(join(wt, "late.js"), "x");
     git(wt, "add", ".");
     git(wt, "commit", "-q", "-m", "late");

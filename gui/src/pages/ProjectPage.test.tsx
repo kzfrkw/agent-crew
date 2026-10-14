@@ -35,10 +35,10 @@ describe("プロジェクト画面", () => {
 });
 
 describe("リポジトリの欄", () => {
-  it("呼び名とベースのブランチを、意味が分かる見出しと説明で出す", async () => {
+  it("ベースのブランチを説明つきで出す。リポジトリが1つだけなら、区別する名前の行は出さない", async () => {
     render(<ProjectPage id={1} />);
-    expect(await screen.findByText("呼び名")).toBeTruthy();
-    expect(screen.getByText("ベースのブランチ")).toBeTruthy();
+    expect(await screen.findByText("ベースのブランチ")).toBeTruthy();
+    expect(screen.queryByText("名前")).toBeNull();
     expect(screen.getByText(/タスクのブランチはここから作り/)).toBeTruthy();
     expect(screen.queryByText("役目")).toBeNull();
     expect(screen.queryByText("既定")).toBeNull();
@@ -64,6 +64,7 @@ describe("プロジェクト画面(複数リポジトリ)", () => {
     render(<ProjectPage id={1} />);
     expect(await screen.findByText("node api.js")).toBeTruthy();
     expect(screen.getByText("node web.js")).toBeTruthy();
+    expect(screen.getAllByText("名前")).toHaveLength(2); // 複数リポジトリでは区別する名前を出す
     expect(screen.getByText("API_URL={url:backend}")).toBeTruthy();
     expect(screen.getByText("secrets")).toBeTruthy(); // 読ませないパス(7-4)
     expect(screen.getByText(/project set agent-crew --role frontend/)).toBeTruthy();

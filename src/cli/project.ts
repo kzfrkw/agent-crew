@@ -54,7 +54,7 @@ export function registerProjectCommands(program: Command): void {
     .command("add <path>")
     .description("リポジトリを登録し、プロジェクト把握担当にプロファイルを作らせる")
     .requiredOption("--name <name>", "プロジェクト名(英数字・-・_)")
-    .option("--role <role>", "リポジトリの役目", "main")
+    .option("--role <name>", "プロジェクトの中でのリポジトリの名前(既定はフォルダ名。複数リポジトリのとき backend / frontend などで区別する)")
     .action(async (path: string, opts: { name: string; role: string }) => {
       const ctx = createAppContext();
       try {
@@ -71,7 +71,7 @@ export function registerProjectCommands(program: Command): void {
   project
     .command("add-repo <name> <path>")
     .description("プロジェクトにリポジトリを追加し、プロジェクト把握担当にそのリポジトリのプロファイルを作らせる(複数リポジトリ)")
-    .requiredOption("--role <role>", "リポジトリの役目(frontend / backend など。英小文字・数字・-・_)")
+    .requiredOption("--role <name>", "プロジェクトの中でのリポジトリの名前(frontend / backend など。英小文字・数字・-・_)")
     .action(async (name: string, path: string, o: { role: string }) => {
       const ctx = createAppContext();
       try {

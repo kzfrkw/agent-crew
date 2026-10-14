@@ -70,16 +70,21 @@ function ProjectView({ d }: { d: ProjectDetail }) {
             <h3 className="mt-0 mb-2 text-xs font-semibold text-muted-foreground">リポジトリ</h3>
             {d.repos.length === 0 && (
               <p className="m-0 text-xs text-muted-foreground">
-                リポジトリはまだありません(企画用のプロジェクト)。登録は <code className="font-mono">agent-crew project add-repo {p.name} &lt;パス&gt; --role &lt;呼び名&gt;</code>
+                リポジトリはまだありません(企画用のプロジェクト)。登録は <code className="font-mono">agent-crew project add-repo {p.name} &lt;パス&gt; --role &lt;名前&gt;</code>
               </p>
             )}
             {d.repos.map((r) => (
               <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs [&+dl]:mt-3 [&+dl]:border-t [&+dl]:pt-3" key={r.id}>
-                <dt className="text-muted-foreground">呼び名</dt>
-                <dd className="m-0">
-                  <span className="font-mono">{r.role}</span>
-                  <span className="block text-subtle-foreground">複数のリポジトリを区別する名前(例: backend / frontend)。コマンドの --role で指定する</span>
-                </dd>
+                {/* リポジトリが1つだけなら、区別する名前は要らないので出さない */}
+                {d.repos.length > 1 && (
+                  <>
+                    <dt className="text-muted-foreground">名前</dt>
+                    <dd className="m-0">
+                      <span className="font-mono">{r.role}</span>
+                      <span className="block text-subtle-foreground">このプロジェクトの中でリポジトリを区別する名前。コマンドの --role で指定する</span>
+                    </dd>
+                  </>
+                )}
                 <dt className="text-muted-foreground">パス</dt>
                 <dd className="m-0 font-mono break-all">{r.path}</dd>
                 <dt className="text-muted-foreground">ベースのブランチ</dt>

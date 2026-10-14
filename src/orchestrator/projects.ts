@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
-import { isAbsolute, join } from "node:path";
+import { basename, isAbsolute, join } from "node:path";
 import {
   addRepo,
   createProject,
@@ -57,13 +57,26 @@ function inspectRepo(ctx: AppContext, path: string): { repoPath: string; default
 
 const ROLE_NAME = /^[a-z0-9][a-z0-9_-]*$/;
 
+/**
+ * リポジトリの名前(役目。プロジェクトの中でリポジトリを区別する)の既定: フォルダ名を、使える文字(英小文字・数字・- ・_)にしたもの。
+ * 以前の既定は main だったが、ブランチ名と紛らわしいため変えた(すでに登録済みの名前は worktree の場所に使われているので変えない)
+ */
+export function defaultRepoName(repoPath: string): string {
+  const name = basename(repoPath)
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^[^a-z0-9]+/, "");
+  return name || "main";
+}
+
 /** プロジェクトとリポジトリを登録し、プロジェクト把握担当にプロファイルを作らせる(設計メモ5.1) */
 export async function registerProject(ctx: AppContext, o: { name: string; repoPath: string; role?: string }): Promise<ProfileOutcome> {
   if (!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(o.name)) throw new Error(`プロジェクト名は英数字・-・_ だけにしてください: ${o.name}`);
   if (getProjectByName(ctx.db, o.name)) throw new Error(`プロジェクト ${o.name} はすでに登録されています`);
-  const role = o.role ?? "main";
-  if (!ROLE_NAME.test(role)) throw new Error(`役目は英小文字・数字・-・_ だけにしてください: ${role}`);
+  if (o.role !== undefined && !ROLE_NAME.test(o.role)) throw new Error(`リポジトリの名前(--role)は英小文字・数字・-・_ だけにしてください: ${o.role}`);
   const { repoPath, defaultBranch } = inspectRepo(ctx, o.repoPath);
+  const role = o.role ?? defaultRepoName(repoPath);
 
   const project = createProject(ctx.db, { name: o.name });
   const repo = addRepo(ctx.db, { projectId: project.id, path: repoPath, role, defaultBranch });
@@ -82,7 +95,7 @@ export async function registerProject(ctx: AppContext, o: { name: string; repoPa
  */
 export async function addRepository(ctx: AppContext, o: { name: string; repoPath: string; role: string }): Promise<ProfileOutcome> {
   const project = mustProject(ctx.db, o.name);
-  if (!ROLE_NAME.test(o.role)) throw new Error(`役目は英小文字・数字・-・_ だけにしてください: ${o.role}`);
+  if (!ROLE_NAME.test(o.role)) throw new Error(`リポジトリの名前(--role)は英小文字・数字・-・_ だけにしてください: ${o.role}`);
   if (listRepos(ctx.db, project.id).some((r) => r.role === o.role)) throw new Error(`役目 ${o.role} のリポジトリはすでに登録されています`);
   const { repoPath, defaultBranch } = inspectRepo(ctx, o.repoPath);
   const repo = addRepo(ctx.db, { projectId: project.id, path: repoPath, role: o.role, defaultBranch });

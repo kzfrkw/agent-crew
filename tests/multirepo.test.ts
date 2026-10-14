@@ -65,7 +65,7 @@ describe("複数リポジトリの登録(フェーズ5)", () => {
   it("役目は英数字・-・_ で、プロジェクトの中で重ならない", async () => {
     const { ctx } = await twoRepos({ frontend: {}, backend: {} });
     await expect(addRepository(ctx, { name: "shop", repoPath: makeRepo().repo, role: "backend" })).rejects.toThrow(/すでに/);
-    await expect(addRepository(ctx, { name: "shop", repoPath: makeRepo().repo, role: "バック" })).rejects.toThrow(/役目/);
+    await expect(addRepository(ctx, { name: "shop", repoPath: makeRepo().repo, role: "バック" })).rejects.toThrow(/リポジトリの名前/);
   });
 
   it("コマンドの手直しは役目を指定できる(既定は1つ目)", async () => {
