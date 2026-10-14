@@ -1,3 +1,6 @@
+import { PlusIcon } from "lucide-react";
+import { Link } from "../lib/router.tsx";
+import { Button } from "@/components/ui/button";
 import type { ProjectDetail } from "../../../src/server/api-types.ts";
 import { CommandLine } from "../components/Commands.tsx";
 import { Crumbs, Meta, PageTitle } from "../components/Layout.tsx";
@@ -23,7 +26,25 @@ function ProjectView({ d }: { d: ProjectDetail }) {
   return (
     <>
       <Crumbs items={[{ label: "ダッシュボード", to: paths.dashboard() }, { label: p.name }]} />
-      <PageTitle>{p.name}</PageTitle>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <PageTitle>{p.name}</PageTitle>
+        <div className="flex gap-2">
+          {d.repos.length > 0 && (
+            <Button asChild variant="outline" size="sm">
+              <Link to={paths.newTask(p.id)} className="no-underline">
+                <PlusIcon />
+                チケット
+              </Link>
+            </Button>
+          )}
+          <Button asChild variant="outline" size="sm">
+            <Link to={paths.newPlan(p.id)} className="no-underline">
+              <PlusIcon />
+              企画
+            </Link>
+          </Button>
+        </div>
+      </div>
       <Meta>
         <Badge variant={p.profileStatus === "approved" ? "done" : "attention"}>プロファイル: {PROFILE[p.profileStatus] ?? p.profileStatus}</Badge>
         <Badge variant={p.testInfra === "present" ? "done" : "outline"}>テスト基盤: {TEST_INFRA[p.testInfra] ?? p.testInfra}</Badge>

@@ -74,6 +74,10 @@ export type ProjectSummary = {
   profileStatus: string;
   testInfra: string;
   allowWithoutTests: boolean;
+  /** リポジトリの数。0 なら企画用のプロジェクト(フェーズ9) */
+  repoCount: number;
+  /** 完了・取り消し以外のタスクの数 */
+  activeTasks: number;
 };
 
 export type RunSummary = {

@@ -5,7 +5,7 @@ import type { ProjectDetail } from "../../../src/server/api-types.ts";
 import { ProjectPage } from "./ProjectPage.tsx";
 
 const detail: ProjectDetail = {
-  project: { id: 1, name: "agent-crew", profileStatus: "approved", testInfra: "present", allowWithoutTests: false },
+  project: { id: 1, name: "agent-crew", profileStatus: "approved", testInfra: "present", allowWithoutTests: false, repoCount: 1, activeTasks: 0 },
   repos: [
     { id: 1, path: "/r/agent-crew", role: "main", defaultBranch: "main", profile: { commands: { install: "npm install", build: null, test: "npm test", start: "npm start -- --port 4310" }, startUrl: "http://127.0.0.1:4310/" }, env: {}, protect: [] },
   ],

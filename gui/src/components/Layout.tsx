@@ -19,6 +19,7 @@ export function Layout({ children, projectId }: { children: ReactNode; projectId
   const { status } = useStream();
   const overview = useApi<Overview>("/api/overview");
   const projects = overview.data?.projects ?? [];
+  const current = projects.find((p) => p.id === projectId);
   const attention = overview.data?.tasks.filter((t) => t.attention && t.attention !== "human_working").length ?? 0;
 
   useEffect(() => {
@@ -49,12 +50,15 @@ export function Layout({ children, projectId }: { children: ReactNode; projectId
               ))}
             </NativeSelect>
           )}
-          <Button asChild variant="outline" size="xs">
-            <Link to={paths.newTask()} className="no-underline">
-              <PlusIcon />
-              <span className="max-sm:sr-only">チケット</span>
-            </Link>
-          </Button>
+          {/* プロジェクトを選んでいるときだけ、そのプロジェクトで作る近道(企画用のプロジェクトなら企画) */}
+          {current && (
+            <Button asChild variant="outline" size="xs">
+              <Link to={current.repoCount > 0 ? paths.newTask(current.id) : paths.newPlan(current.id)} className="no-underline">
+                <PlusIcon />
+                <span className="max-sm:sr-only">{current.repoCount > 0 ? "チケット" : "企画"}</span>
+              </Link>
+            </Button>
+          )}
           <span className="flex-1 max-sm:hidden" />
           {overview.data && <UsageMeter usage={overview.data.usage} quota={overview.data.worker.quota} />}
           {overview.data && <WorkerSwitch worker={overview.data.worker} onChange={overview.reload} />}

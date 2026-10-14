@@ -121,7 +121,7 @@ describe("App(ダッシュボード)", () => {
   const overview: Overview = {
     worker: { state: "disabled", active: [] },
     usage: null,
-    projects: [{ id: 1, name: "shop", profileStatus: "approved", testInfra: "present", allowWithoutTests: false }],
+    projects: [{ id: 1, name: "shop", profileStatus: "approved", testInfra: "present", allowWithoutTests: false, repoCount: 1, activeTasks: 0 }],
     tasks: [
       task({ id: 7, title: "検索を追加", running: { id: 9, role: "implementer", model: "sonnet", startedAt: "2026-10-09T00:00:00.000Z" } }),
       task({ id: 8, title: "質問あり", state: "needs_input", stateLabel: "人の回答待ち", attention: "answer", reason: "どちら?" }),
@@ -176,7 +176,7 @@ describe("App(ダッシュボード)", () => {
     });
 
     it("複数プロジェクトの合計が、押したときの一覧の行数と一致する。0件でも押せる", async () => {
-      overview.projects = [...overview.projects, { id: 2, name: "blog", profileStatus: "approved", testInfra: "present", allowWithoutTests: false }];
+      overview.projects = [...overview.projects, { id: 2, name: "blog", profileStatus: "approved", testInfra: "present", allowWithoutTests: false, repoCount: 1, activeTasks: 0 }];
       overview.tasks = [
         task({ id: 1, projectId: 1, title: "p1進行" }),
         a({ id: 2, projectId: 1, title: "p1待ち" }),

@@ -1,7 +1,10 @@
 /** 画面と URL の対応(docs/structure.md の画面一覧) */
 export type Route =
   | { name: "dashboard" }
-  | { name: "newTask" }
+  | { name: "chooseProject" }
+  | { name: "newProject" }
+  | { name: "newTask"; projectId: number }
+  | { name: "newPlan"; projectId: number }
   | { name: "task"; id: number }
   | { name: "artifact"; taskId: number; id: number }
   | { name: "run"; id: number }
@@ -11,7 +14,11 @@ export type Route =
 export function matchRoute(path: string): Route {
   const p = path.replace(/\/+$/, "") || "/";
   if (p === "/") return { name: "dashboard" };
-  if (p === "/tasks/new") return { name: "newTask" };
+  // チケット・企画はプロジェクトから作る(フェーズ9)。以前の /tasks/new はプロジェクトを選ぶ案内にする
+  if (p === "/tasks/new") return { name: "chooseProject" };
+  if (p === "/projects/new") return { name: "newProject" };
+  const n = /^\/projects\/(\d+)\/(tasks|plans)\/new$/.exec(p);
+  if (n) return { name: n[2] === "tasks" ? "newTask" : "newPlan", projectId: Number(n[1]) };
   let m = /^\/tasks\/(\d+)$/.exec(p);
   if (m) return { name: "task", id: Number(m[1]) };
   m = /^\/tasks\/(\d+)\/artifacts\/(\d+)$/.exec(p);
@@ -25,7 +32,9 @@ export function matchRoute(path: string): Route {
 
 export const paths = {
   dashboard: () => "/",
-  newTask: () => "/tasks/new",
+  newProject: () => "/projects/new",
+  newTask: (projectId: number) => `/projects/${projectId}/tasks/new`,
+  newPlan: (projectId: number) => `/projects/${projectId}/plans/new`,
   task: (id: number) => `/tasks/${id}`,
   artifact: (taskId: number, id: number) => `/tasks/${taskId}/artifacts/${id}`,
   run: (id: number) => `/runs/${id}`,

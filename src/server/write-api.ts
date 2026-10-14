@@ -75,7 +75,7 @@ function createProjectFromGui(ops: Ops, body: unknown): ProjectSummary {
   } catch (e) {
     throw new HttpError(400, (e as Error).message);
   }
-  return projectSummary(getProjectByName(ops.ctx.db, name)!);
+  return projectSummary(ops.ctx.db, getProjectByName(ops.ctx.db, name)!);
 }
 
 async function toggleWorker(ops: Ops, body: unknown): Promise<WorkerView> {

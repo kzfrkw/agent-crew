@@ -101,12 +101,14 @@ export function handleApi(home: string, path: string, query: URLSearchParams, wo
 
 // ---- 変換 ----
 
-export const projectSummary = (p: Project): ProjectSummary => ({
+export const projectSummary = (db: Db, p: Project): ProjectSummary => ({
   id: p.id,
   name: p.name,
   profileStatus: p.profileStatus,
   testInfra: p.testInfra,
   allowWithoutTests: p.allowWithoutTests,
+  repoCount: listRepos(db, p.id).length,
+  activeTasks: listTasks(db, { projectId: p.id }).filter((t) => t.state !== "done" && t.state !== "cancelled").length,
 });
 
 function runSummary(r: RunRow): RunSummary {
@@ -218,7 +220,7 @@ function overview(db: Db): Omit<Overview, "worker"> {
   const tasks = listTasks(db);
   const titles = new Map(tasks.map((t) => [t.id, t.title]));
   return {
-    projects: listProjects(db).map(projectSummary),
+    projects: listProjects(db).map((p) => projectSummary(db, p)),
     tasks: tasks.map((t) => taskSummary(db, t, running, costs)),
     running: listRuns(db, { state: "running" }).map((r) => ({ ...runSummary(r), taskTitle: r.taskId === null ? null : (titles.get(r.taskId) ?? null) })),
     stateLabels: STATE_LABELS,
@@ -246,7 +248,7 @@ function taskDetail(home: string, db: Db, id: number, operable: boolean): TaskDe
   const roles = new Map(listRepos(db, t.projectId).map((r) => [r.id, r.role]));
   return {
     task: { ...task, body: t.body, sourceKind: t.sourceKind, sourceUrl: t.sourceUrl },
-    project: projectSummary(getProject(db, t.projectId)!),
+    project: projectSummary(db, getProject(db, t.projectId)!),
     worktrees: listTaskRepos(db, id).map((tr) => ({
       repoRole: roles.get(tr.repoId) ?? "",
       worktreePath: tr.worktreePath,
@@ -316,7 +318,7 @@ function runDetail(home: string, db: Db, id: number): RunDetail | undefined {
   return {
     run: runSummary(r),
     task: task ? { id: task.id, title: task.title } : null,
-    project: project ? projectSummary(project) : null,
+    project: project ? projectSummary(db, project) : null,
     artifacts: listRunArtifacts(db, id).map((a) => artifactSummary(home, a)),
     streamUrl: fileUrl(home, join(runDir(home, id), "stream.jsonl")),
   };
@@ -328,7 +330,7 @@ function projectDetail(home: string, db: Db, id: number): ProjectDetail | undefi
   const running = runningByTask(db);
   const costs = costByTask(db);
   return {
-    project: projectSummary(p),
+    project: projectSummary(db, p),
     repos: listRepos(db, id).map((r) => ({
       id: r.id,
       path: r.path,

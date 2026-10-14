@@ -2,7 +2,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextAction, Overview } from "../../../src/server/api-types.ts";
-import { NewTaskPage } from "../pages/NewTaskPage.tsx";
 import { ActionPanel } from "./ActionPanel.tsx";
 
 type Call = { url: string; init: RequestInit };
@@ -112,72 +111,6 @@ describe("ActionPanel", () => {
     render(<ActionPanel taskId={1} actions={[approve, reject, stop]} />);
     expect(screen.getByText("CLI で操作する")).toBeTruthy();
     expect(screen.getByText("agent-crew task approve 1 --kind plan")).toBeTruthy();
-  });
-});
-
-describe("チケット投入", () => {
-  const overview: Partial<Overview> = {
-    worker: { state: "running", active: [] },
-    projects: [
-      { id: 1, name: "shop", profileStatus: "approved", testInfra: "present", allowWithoutTests: false },
-      { id: 2, name: "notes", profileStatus: "approved", testInfra: "present", allowWithoutTests: false },
-    ],
-    tasks: [],
-  };
-
-  it("プロジェクト・タイトル・本文・取り込み元を送り、作ったタスクへ移る", async () => {
-    reply = (url, init) =>
-      init.method === "POST" ? { status: 201, body: { task: { id: 42 } } } : { status: 200, body: overview };
-    window.history.pushState(null, "", "/tasks/new");
-    render(<NewTaskPage />);
-    fireEvent.change(await screen.findByLabelText("プロジェクト"), { target: { value: "2" } });
-    fireEvent.change(screen.getByLabelText("タイトル"), { target: { value: "検索を追加" } });
-    fireEvent.change(screen.getByLabelText("本文"), { target: { value: "部分一致で" } });
-    fireEvent.change(screen.getByLabelText(/取り込み元/), { target: { value: "https://www.notion.so/x" } });
-    fireEvent.click(screen.getByRole("button", { name: "作成する" }));
-    await waitFor(() => expect(window.location.pathname).toBe("/tasks/42"));
-    expect(posts()[0]).toMatchObject({ url: "/api/tasks", body: { projectId: 2, title: "検索を追加", body: "部分一致で", sourceUrl: "https://www.notion.so/x" } });
-  });
-
-  it("企画として作るを選ぶと、種類と読ませる資料(1行に1つ)を送る(9a)", async () => {
-    reply = (url, init) => (init.method === "POST" ? { status: 201, body: { task: { id: 43 } } } : { status: 200, body: overview });
-    window.history.pushState(null, "", "/tasks/new");
-    render(<NewTaskPage />);
-    fireEvent.click(await screen.findByLabelText(/企画として作る/));
-    fireEvent.change(screen.getByLabelText("タイトル"), { target: { value: "家計簿の共有" } });
-    fireEvent.change(screen.getByLabelText(/読ませる資料/), { target: { value: "/Users/me/docs\n/Users/me/memo.md\n" } });
-    fireEvent.click(screen.getByRole("button", { name: "作成する" }));
-    await waitFor(() => expect(window.location.pathname).toBe("/tasks/43"));
-    expect(posts()[0]!.body).toMatchObject({ title: "家計簿の共有", kind: "planning", docs: ["/Users/me/docs", "/Users/me/memo.md"] });
-  });
-
-  it("企画として作るとき、その場で企画用のプロジェクトを作って選べる(フェーズ9)", async () => {
-    reply = (url, init) => {
-      if (init.method === "POST" && url === "/api/projects") return { status: 201, body: { project: { id: 9, name: "kakeibo", profileStatus: "none", testInfra: "unknown", allowWithoutTests: false } } };
-      if (init.method === "POST") return { status: 201, body: { task: { id: 44 } } };
-      return { status: 200, body: overview };
-    };
-    window.history.pushState(null, "", "/tasks/new");
-    render(<NewTaskPage />);
-    fireEvent.click(await screen.findByLabelText(/企画として作る/));
-    fireEvent.click(screen.getByRole("button", { name: "企画用のプロジェクトを作る" }));
-    fireEvent.change(screen.getByLabelText("新しいプロジェクトの名前"), { target: { value: "kakeibo" } });
-    fireEvent.click(screen.getByRole("button", { name: "プロジェクトを作る" }));
-    await waitFor(() => expect(posts().some((p) => p.url === "/api/projects")).toBe(true));
-    expect(posts().find((p) => p.url === "/api/projects")!.body).toEqual({ name: "kakeibo" });
-    fireEvent.change(screen.getByLabelText("タイトル"), { target: { value: "家計簿" } });
-    fireEvent.click(screen.getByRole("button", { name: "作成する" }));
-    await waitFor(() => expect(window.location.pathname).toBe("/tasks/44"));
-    expect(posts().at(-1)!.body).toMatchObject({ projectId: 9, kind: "planning" });
-  });
-
-  it("タイトルが空なら送らない", async () => {
-    reply = () => ({ status: 200, body: overview });
-    render(<NewTaskPage />);
-    await screen.findByLabelText("プロジェクト");
-    fireEvent.click(screen.getByRole("button", { name: "作成する" }));
-    expect(screen.getByRole("alert").textContent).toContain("タイトル");
-    expect(posts()).toEqual([]);
   });
 });
 

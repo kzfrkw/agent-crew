@@ -5,6 +5,7 @@ import { matchRoute, type Route } from "./lib/routes.ts";
 import { usePath } from "./lib/router.tsx";
 import { ArtifactPage } from "./pages/ArtifactPage.tsx";
 import { Dashboard } from "./pages/Dashboard.tsx";
+import { NewProjectPage } from "./pages/NewProjectPage.tsx";
 import { NewTaskPage } from "./pages/NewTaskPage.tsx";
 import { ProjectPage } from "./pages/ProjectPage.tsx";
 import { RunPage } from "./pages/RunPage.tsx";
@@ -13,7 +14,8 @@ import { TaskPage } from "./pages/TaskPage.tsx";
 /** 画面の振り分けだけを行う(docs/structure.md の画面一覧) */
 export function App() {
   const route = matchRoute(usePath());
-  return <Layout projectId={route.name === "project" ? route.id : undefined}>{page(route)}</Layout>;
+  const projectId = route.name === "project" ? route.id : route.name === "newTask" || route.name === "newPlan" ? route.projectId : undefined;
+  return <Layout projectId={projectId}>{page(route)}</Layout>;
 }
 
 function page(route: Route): ReactNode {
@@ -21,7 +23,13 @@ function page(route: Route): ReactNode {
     case "dashboard":
       return <Dashboard />;
     case "newTask":
-      return <NewTaskPage />;
+      return <NewTaskPage key={`t${route.projectId}`} projectId={route.projectId} kind="normal" />;
+    case "newPlan":
+      return <NewTaskPage key={`p${route.projectId}`} projectId={route.projectId} kind="planning" />;
+    case "newProject":
+      return <NewProjectPage />;
+    case "chooseProject":
+      return <Empty>チケットや企画は、プロジェクトの画面から作ります。ヘッダーでプロジェクトを選んでください</Empty>;
     case "task":
       return <TaskPage key={route.id} id={route.id} />;
     case "artifact":

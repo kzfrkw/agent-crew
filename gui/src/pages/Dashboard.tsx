@@ -1,5 +1,7 @@
 import { useState } from "react";
-import type { Overview, TaskSummary } from "../../../src/server/api-types.ts";
+import { PlusIcon } from "lucide-react";
+import type { Overview, ProjectSummary, TaskSummary } from "../../../src/server/api-types.ts";
+import { Button } from "@/components/ui/button";
 import { AttentionPanel } from "../components/dashboard/AttentionPanel.tsx";
 import { LivePanel } from "../components/dashboard/LivePanel.tsx";
 import { Async, Empty } from "../components/Status.tsx";
@@ -27,10 +29,42 @@ export function Dashboard() {
             <AttentionPanel tasks={o.tasks} onDone={overview.reload} operable={o.worker.state !== "disabled"} />
             <LivePanel running={o.running} />
           </div>
+          <ProjectsSection projects={o.projects} />
           <TaskSection overview={o} />
         </>
       )}
     </Async>
+  );
+}
+
+/** プロジェクトの欄(フェーズ9): 種類(開発 / 企画用)・プロファイルの状態・進行中のタスク数。ここからプロジェクトを作る */
+function ProjectsSection({ projects }: { projects: ProjectSummary[] }) {
+  return (
+    <section className="mt-6">
+      <div className="mb-3 flex items-center gap-3">
+        <h2 className="m-0 text-[15px] font-semibold">プロジェクト</h2>
+        <Button asChild variant="outline" size="xs">
+          <Link to={paths.newProject()} className="no-underline">
+            <PlusIcon />
+            プロジェクト
+          </Link>
+        </Button>
+      </div>
+      {projects.length > 0 && (
+        <ul className="m-0 flex list-none flex-col divide-y rounded-lg border bg-card p-0">
+          {projects.map((p) => (
+            <li key={p.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 text-sm max-sm:px-3">
+              <Link to={paths.project(p.id)} className="min-w-0 font-semibold">
+                {p.name}
+              </Link>
+              <span className="text-xs text-muted-foreground">{p.repoCount > 0 ? "開発" : "企画用"}</span>
+              {p.repoCount > 0 && <span className={cn("text-xs", p.profileStatus === "approved" ? "text-muted-foreground" : "text-attn")}>プロファイル: {PROFILE[p.profileStatus] ?? p.profileStatus}</span>}
+              <span className="ml-auto text-xs text-muted-foreground tabular-nums">進行中 {p.activeTasks}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -45,7 +79,7 @@ function TaskSection({ overview }: { overview: Overview }) {
     return (
       <section className="mt-6 rounded-lg border bg-card">
         <Empty>
-          プロジェクトがまだありません。<code className="font-mono">agent-crew project add &lt;path&gt; --name &lt;name&gt;</code> で登録します
+          プロジェクトがまだありません。上の「+ プロジェクト」から作ります
         </Empty>
       </section>
     );
