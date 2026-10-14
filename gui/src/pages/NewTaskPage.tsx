@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import type { Overview, TaskSummary } from "../../../src/server/api-types.ts";
+import type { Overview, ProjectSummary, TaskSummary } from "../../../src/server/api-types.ts";
 import { Crumbs, PageTitle } from "../components/Layout.tsx";
 import { Async, Empty } from "../components/Status.tsx";
 import { postJson, useApi } from "../lib/api.ts";
@@ -18,7 +18,10 @@ export function NewTaskPage() {
 }
 
 function Form({ overview }: { overview: Overview }) {
+  // その場で作った企画用のプロジェクトも選べるよう、一覧を手元に持つ(フェーズ9)
+  const [projects, setProjects] = useState(overview.projects);
   const [projectId, setProjectId] = useState(overview.projects[0]?.id ?? 0);
+  const [newProject, setNewProject] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
@@ -27,7 +30,23 @@ function Form({ overview }: { overview: Overview }) {
   const [docs, setDocs] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const project = overview.projects.find((p) => p.id === projectId);
+  const project = projects.find((p) => p.id === projectId);
+
+  const createProject = async () => {
+    setError(null);
+    if (!newProject?.trim()) return setError("プロジェクトの名前を書いてください");
+    setBusy(true);
+    try {
+      const r = await postJson<{ project: ProjectSummary }>("/api/projects", { name: newProject.trim() });
+      setProjects([...projects, r.project]);
+      setProjectId(r.project.id);
+      setNewProject(null);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -49,10 +68,15 @@ function Form({ overview }: { overview: Overview }) {
     }
   };
 
-  if (overview.projects.length === 0) {
+  if (projects.length === 0 && newProject === null && !planning) {
     return (
       <Empty>
-        プロジェクトがまだありません。<code className="font-mono">agent-crew project add &lt;path&gt; --name &lt;name&gt;</code> で登録します
+        プロジェクトがまだありません。リポジトリは <code className="font-mono">agent-crew project add &lt;path&gt; --name &lt;name&gt;</code> で登録します。
+        <span className="mt-3 block">
+          <Button type="button" variant="outline" size="sm" onClick={() => (setPlanning(true), setNewProject(""))}>
+            企画から始める(企画用のプロジェクトを作る)
+          </Button>
+        </span>
       </Empty>
     );
   }
@@ -66,13 +90,37 @@ function Form({ overview }: { overview: Overview }) {
             プロジェクト
           </Label>
           <NativeSelect id="project" className="max-w-[320px]" value={projectId} onChange={(e) => setProjectId(Number(e.target.value))} disabled={busy}>
-            {overview.projects.map((p) => (
+            {projects.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
               </option>
             ))}
           </NativeSelect>
           {project && project.profileStatus !== "approved" && !planning && <span className="text-xs text-attn">プロファイルが未承認のため、承認されるまで開始しません</span>}
+          {planning &&
+            (newProject === null ? (
+              <Button type="button" variant="ghost" size="xs" className="self-start text-muted-foreground" onClick={() => setNewProject("")} disabled={busy}>
+                企画用のプロジェクトを作る
+              </Button>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  className="max-w-[240px] bg-card"
+                  aria-label="新しいプロジェクトの名前"
+                  placeholder="例: kakeibo(英数字と . _ -)"
+                  value={newProject}
+                  onChange={(e) => setNewProject(e.target.value)}
+                  disabled={busy}
+                />
+                <Button type="button" variant="outline" size="sm" onClick={createProject} disabled={busy}>
+                  プロジェクトを作る
+                </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setNewProject(null)} disabled={busy}>
+                  やめる
+                </Button>
+                <span className="basis-full text-xs text-muted-foreground">リポジトリの無い、新サービスの企画用のプロジェクトです。開発に引き渡すときは、リポジトリを登録したプロジェクトを選びます</span>
+              </div>
+            ))}
         </div>
         <label className="inline-flex cursor-pointer items-start gap-2 text-sm">
           <input type="checkbox" className="mt-1 accent-foreground" checked={planning} onChange={(e) => setPlanning(e.target.checked)} disabled={busy} />

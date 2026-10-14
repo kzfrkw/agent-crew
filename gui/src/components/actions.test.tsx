@@ -151,6 +151,26 @@ describe("チケット投入", () => {
     expect(posts()[0]!.body).toMatchObject({ title: "家計簿の共有", kind: "planning", docs: ["/Users/me/docs", "/Users/me/memo.md"] });
   });
 
+  it("企画として作るとき、その場で企画用のプロジェクトを作って選べる(フェーズ9)", async () => {
+    reply = (url, init) => {
+      if (init.method === "POST" && url === "/api/projects") return { status: 201, body: { project: { id: 9, name: "kakeibo", profileStatus: "none", testInfra: "unknown", allowWithoutTests: false } } };
+      if (init.method === "POST") return { status: 201, body: { task: { id: 44 } } };
+      return { status: 200, body: overview };
+    };
+    window.history.pushState(null, "", "/tasks/new");
+    render(<NewTaskPage />);
+    fireEvent.click(await screen.findByLabelText(/企画として作る/));
+    fireEvent.click(screen.getByRole("button", { name: "企画用のプロジェクトを作る" }));
+    fireEvent.change(screen.getByLabelText("新しいプロジェクトの名前"), { target: { value: "kakeibo" } });
+    fireEvent.click(screen.getByRole("button", { name: "プロジェクトを作る" }));
+    await waitFor(() => expect(posts().some((p) => p.url === "/api/projects")).toBe(true));
+    expect(posts().find((p) => p.url === "/api/projects")!.body).toEqual({ name: "kakeibo" });
+    fireEvent.change(screen.getByLabelText("タイトル"), { target: { value: "家計簿" } });
+    fireEvent.click(screen.getByRole("button", { name: "作成する" }));
+    await waitFor(() => expect(window.location.pathname).toBe("/tasks/44"));
+    expect(posts().at(-1)!.body).toMatchObject({ projectId: 9, kind: "planning" });
+  });
+
   it("タイトルが空なら送らない", async () => {
     reply = () => ({ status: 200, body: overview });
     render(<NewTaskPage />);

@@ -1,14 +1,14 @@
 import { spawn } from "node:child_process";
-import { createTask, getProject, getTask, listTaskRepos } from "../db/store.ts";
+import { createTask, getProject, getProjectByName, getTask, listTaskRepos } from "../db/store.ts";
 import type { AppContext } from "../orchestrator/context.ts";
 import { requestStop } from "../orchestrator/engine.ts";
 import { returnTask, takeoverTask, updateBase } from "../orchestrator/handoff.ts";
 import { answerTask, approveTask, cancelTask, rejectTask } from "../orchestrator/human.ts";
 import { decideRetro } from "../orchestrator/retro.ts";
-import { createPlanningTask } from "../orchestrator/planning.ts";
+import { createPlanningProject, createPlanningTask } from "../orchestrator/planning.ts";
 import type { Worker } from "../orchestrator/worker.ts";
-import type { ActionRequest, ApprovalKindView, ActionResult, CreateTaskRequest, DesignOptions, TaskSummary, WorkerView } from "./api-types.ts";
-import { HttpError, taskSummaryOf } from "./api.ts";
+import type { ActionRequest, ApprovalKindView, ProjectSummary, ActionResult, CreateTaskRequest, DesignOptions, TaskSummary, WorkerView } from "./api-types.ts";
+import { HttpError, projectSummary, taskSummaryOf } from "./api.ts";
 
 /**
  * 書き込み API(docs/structure.md「フェーズ3」)。人の操作は CLI と同じ関数を通し、
@@ -24,6 +24,7 @@ export function workerView(worker: Worker | undefined): WorkerView {
 export async function handleWrite(ops: Ops, path: string, body: unknown): Promise<{ status: number; data: unknown }> {
   if (path === "tasks") return { status: 201, data: { task: createTicket(ops, body) } };
   if (path === "worker") return { status: 200, data: await toggleWorker(ops, body) };
+  if (path === "projects") return { status: 201, data: { project: createProjectFromGui(ops, body) } };
   const m = /^tasks\/(\d+)\/actions$/.exec(path);
   if (m) return { status: 200, data: await act(ops, Number(m[1]), body) };
   throw new HttpError(404, "ありません");
@@ -62,6 +63,19 @@ function createTicket(ops: Ops, body: unknown): TaskSummary {
   }
   ops.worker?.kick();
   return taskSummaryOf(ops.ctx.db, t.id)!;
+}
+
+/** 企画用のプロジェクト(リポジトリなし)を作る(フェーズ9)。リポジトリの登録は、ローカルのパスを扱うため CLI のまま */
+function createProjectFromGui(ops: Ops, body: unknown): ProjectSummary {
+  if (!isObject(body)) throw new HttpError(400, "本文は JSON のオブジェクトで送ってください");
+  const name = str(body.name, "name").trim();
+  if (!name) throw new HttpError(400, "名前を書いてください");
+  try {
+    createPlanningProject(ops.ctx, name);
+  } catch (e) {
+    throw new HttpError(400, (e as Error).message);
+  }
+  return projectSummary(getProjectByName(ops.ctx.db, name)!);
 }
 
 async function toggleWorker(ops: Ops, body: unknown): Promise<WorkerView> {

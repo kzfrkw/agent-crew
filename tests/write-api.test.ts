@@ -88,6 +88,21 @@ describe("書き込み API: 安全策", () => {
   });
 });
 
+describe("企画用のプロジェクトを作る(GUI から。フェーズ9)", () => {
+  it("名前だけで作り、作ったプロジェクトを返す。名前の誤りや重複は 400", async () => {
+    const { ctx } = await setup();
+    const r = await post("/api/projects", { name: "kakeibo" });
+    expect(r.status).toBe(201);
+    expect(r.body.project).toMatchObject({ name: "kakeibo" });
+    const { getProjectByName, listRepos } = await import("../src/db/store.ts");
+    const p = getProjectByName(ctx.db, "kakeibo")!;
+    expect(listRepos(ctx.db, p.id)).toEqual([]);
+    expect((await post("/api/projects", { name: "kakeibo" })).status).toBe(400);
+    expect((await post("/api/projects", { name: "家計簿" })).status).toBe(400);
+    expect((await post("/api/projects", { name: "" })).status).toBe(400);
+  });
+});
+
 describe("チケット投入", () => {
   it("作ったタスクを返す。取り込み元の URL があれば貼り付けとして記録する", async () => {
     const { ctx, project } = await setup();

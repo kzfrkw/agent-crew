@@ -101,7 +101,7 @@ export function handleApi(home: string, path: string, query: URLSearchParams, wo
 
 // ---- 変換 ----
 
-const projectSummary = (p: Project): ProjectSummary => ({
+export const projectSummary = (p: Project): ProjectSummary => ({
   id: p.id,
   name: p.name,
   profileStatus: p.profileStatus,
