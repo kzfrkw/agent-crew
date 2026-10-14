@@ -10,7 +10,7 @@ import { nextActions } from "../orchestrator/next-actions.ts";
 import { buildTaskReport } from "../orchestrator/report.ts";
 import { decideRetro, retroView } from "../orchestrator/retro.ts";
 import { mustProject } from "../orchestrator/projects.ts";
-import { createPlanningTask } from "../orchestrator/planning.ts";
+import { createPlanningTask, criticQuestion } from "../orchestrator/planning.ts";
 import type { HumanApprovalKind } from "../orchestrator/transitions.ts";
 import { NEEDS_HUMAN, STATE_LABELS } from "../orchestrator/states.ts";
 
@@ -98,6 +98,8 @@ export function registerTaskCommands(program: Command): void {
         if (runActive(ctx.db, t.id)) console.log("⚠ エージェントが実行中です。worktree を触らないでください");
         const reason = t.state === "needs_input" || t.state === "failed" ? latestReason(ctx.db, t.id, t.state) : undefined;
         if (reason) console.log(`理由: ${reason}`);
+        const question = t.kind === "planning" ? criticQuestion(ctx.db, t.id) : null;
+        if (question && t.state.startsWith("awaiting_")) console.log(question);
         for (const a of nextActions(ctx.db, t)) if (a.command) console.log(`→ ${a.label}: ${a.command}`);
         const roles = new Map(listRepos(ctx.db, t.projectId).map((r) => [r.id, r.role]));
         for (const tr of listTaskRepos(ctx.db, t.id)) console.log(`worktree [${roles.get(tr.repoId)}]: ${tr.worktreePath}(${tr.branchName})`);

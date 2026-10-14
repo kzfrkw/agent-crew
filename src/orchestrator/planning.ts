@@ -2,6 +2,7 @@ import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { addArtifact, addEvent, createProject, createTask, getProject, getProjectByName, listEvents, listRepos, type Task } from "../db/store.ts";
 import type { BounceInfo } from "./bounce.ts";
+import type { Db } from "../db/connection.ts";
 import type { AppContext } from "./context.ts";
 import type { Handler, HandlerOutcome } from "./handlers.ts";
 import { invokeRole, type InvokeResult } from "./invoke.ts";
@@ -27,6 +28,14 @@ export const STAGES: Record<string, Stage> = {
   p_handing_off: { key: "handoff", writer: "handoff", label: "引き渡し", files: ["handoff.md"] },
 };
 const ORDER: StageKey[] = ["research", "strategy", "scope", "ux", "handoff"];
+/** 書いた後に人の承認がある段 */
+const HUMAN_GATE: StageKey[] = ["strategy", "scope", "handoff"];
+
+/** 承認待ちの企画に、批評担当の問いがあれば返す(GUI と CLI の理由の欄に出す) */
+export function criticQuestion(db: Db, taskId: number): string | null {
+  const last = listEvents(db, taskId, 2000).filter((e) => e.kind === "critique").at(-1)?.payload as { verdict?: string; summary?: string } | undefined;
+  return last?.verdict === "need_human" && last.summary ? `批評担当からの問い(承認のコメントで答えてください): ${last.summary}` : null;
+}
 
 /** 企画用のプロジェクト(リポジトリなし。新サービスの企画に使う) */
 export function createPlanningProject(ctx: AppContext, name: string): void {
@@ -119,10 +128,16 @@ export const planningStage: Handler = async (ctx, task) => {
   copyFileSync(join(dir, "critique.md"), join(dir, `critique-${stage.key}.md`));
   addArtifact(ctx.db, { taskId: task.id, runId: c.runId, kind: `critique-${stage.key}`, path: join(dir, `critique-${stage.key}.md`), verdict: c.verdict });
   const issues = (c.extra.issues ?? []) as { severity: string; title: string; detail: string }[];
-  addEvent(ctx.db, { taskId: task.id, runId: c.runId, kind: "critique", payload: { stage: stage.key, verdict: c.verdict, issues } });
+  addEvent(ctx.db, { taskId: task.id, runId: c.runId, kind: "critique", payload: { stage: stage.key, verdict: c.verdict, summary: c.summary, issues } });
   const detail = `(詳細: ${join(dir, `critique-${stage.key}.md`)})`;
   if (c.verdict === "approve") return { event: { type: "verdict", role: stage.writer, verdict: "ready" }, reason: `${stage.label}: 批評が承認しました — ${c.summary}${detail}` };
-  if (c.verdict === "need_human") return { event: { type: "verdict", role: stage.writer, verdict: "need_human" }, reason: `批評担当が人の判断を求めています: ${c.summary}${detail}` };
+  if (c.verdict === "need_human") {
+    // 次に人の承認がある段では止めずに承認待ちへ進み、問いは承認のときに人が答える(承認と回答を二度させない。実機の通し確認で発見)
+    if (HUMAN_GATE.includes(stage.key)) {
+      return { event: { type: "verdict", role: stage.writer, verdict: "ready" }, reason: `${stage.label}: 批評担当からの問い(承認のコメントで答えてください) — ${c.summary}${detail}` };
+    }
+    return { event: { type: "verdict", role: stage.writer, verdict: "need_human" }, reason: `批評担当が人の判断を求めています: ${c.summary}${detail}` };
+  }
   const musts = issues.filter((i) => i.severity === "must");
   const bounce: BounceInfo = {
     source: "critique",

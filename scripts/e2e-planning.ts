@@ -113,7 +113,9 @@ async function main(): Promise<void> {
   }
 
   cli("project", "add", repo, "--name", "stock");
-  cli("project", "approve", "stock");
+  const approved = cli("project", "approve", "stock", "--allow-without-tests");
+  const infra = /整備タスクを作りました: #(\d+)/.exec(approved);
+  if (infra) cli("task", "cancel", infra[1]!);
   const created = cli("task", "plan", "--project", "stock", "--title", "在庫が少ないアイテムを知らせる", "--body", "在庫 API に、在庫が少ないアイテムを知らせる機能を足したい。小さな店の店長が使う。", "--docs", docs);
   const id = Number(/#(\d+)/.exec(created)![1]);
 
@@ -127,7 +129,8 @@ async function main(): Promise<void> {
   };
   cli("run");
   expect("awaiting_strategy_approval");
-  cli("task", "approve", String(id), "--kind", "strategy", "--comment", "この方向で進めてください");
+  // 批評担当の問い(方針の選択)には、承認のコメントで答える
+  cli("task", "approve", String(id), "--kind", "strategy", "--comment", "スマホで見られる画面も作る。しきい値はアイテムごとに設定できるようにする。この方向で進めてください");
   cli("run");
   expect("awaiting_scope_approval");
   cli("task", "approve", String(id), "--kind", "scope");

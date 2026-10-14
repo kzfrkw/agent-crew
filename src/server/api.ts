@@ -35,6 +35,7 @@ import { projectDir, runDir, taskDir } from "../orchestrator/paths.ts";
 import { buildTaskReport } from "../orchestrator/report.ts";
 import { getUsage } from "../orchestrator/usage.ts";
 import { retroView } from "../orchestrator/retro.ts";
+import { criticQuestion } from "../orchestrator/planning.ts";
 import { STATE_LABELS } from "../orchestrator/states.ts";
 import type {
   ArtifactDetail,
@@ -143,7 +144,12 @@ function taskSummary(db: Db, t: Task, running: Map<number, RunRow>, costs: Map<n
     createdAt: t.createdAt,
     updatedAt: t.updatedAt,
     attention,
-    reason: attention === "answer" || attention === "failed" ? (latestReason(db, t.id, t.state as "needs_input" | "failed") ?? null) : null,
+    reason:
+      attention === "answer" || attention === "failed"
+        ? (latestReason(db, t.id, t.state as "needs_input" | "failed") ?? null)
+        : attention === "approve_planning"
+          ? criticQuestion(db, t.id)
+          : null,
     running: r ? { id: r.id, role: r.role, model: r.model, startedAt: r.startedAt } : null,
     primaryAction: attention ? (nextActions(db, t)[0] ?? null) : null,
     costUsd: costs.get(t.id) ?? null,

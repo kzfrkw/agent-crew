@@ -156,3 +156,27 @@ describe("企画の流れ(9a)", () => {
 });
 
 export type { RunSpec };
+
+describe("批評が人の判断を求めたとき(9a。実機の通し確認で発見)", () => {
+  it("次に人の承認がある段(戦略・要件・引き渡し)では止めずに承認待ちへ進み、問いを承認の理由に添える", async () => {
+    const asks: Script = (spec, n) => {
+      writeArtifact(spec, "critique.md", n === 1 ? "need_human" : "approve", "批評");
+      return { structuredOutput: { verdict: n === 1 ? "need_human" : "approve", summary: n === 1 ? "API だけか画面も作るかは方針の選択" : "ok", issues: [] } };
+    };
+    const { ctx, t } = await setup({ critic: asks });
+    await runUntilIdle(ctx);
+    expect(getTask(ctx.db, t.id)!.state).toBe("awaiting_strategy_approval");
+    const { taskSummaryOf } = await import("../src/server/api.ts");
+    expect(taskSummaryOf(ctx.db, t.id)!.reason).toContain("API だけか画面も作るか");
+  });
+
+  it("人の承認が無い段(調査、構造・骨格)では、従来どおり人の回答待ちにする", async () => {
+    const asks: Script = (spec) => {
+      writeArtifact(spec, "critique.md", "need_human", "批評");
+      return { structuredOutput: { verdict: "need_human", summary: "調べる範囲を決めて", issues: [] } };
+    };
+    const { ctx, t } = await setup({ critic: asks });
+    await runUntilIdle(ctx);
+    expect(getTask(ctx.db, t.id)).toMatchObject({ state: "needs_input", heldFromState: "p_researching" });
+  });
+});
