@@ -10,7 +10,7 @@ import { RunTable } from "../components/RunTable.tsx";
 import { Screenshots } from "../components/Screenshots.tsx";
 import { Report } from "../components/Report.tsx";
 import { RetroPanel } from "../components/Retro.tsx";
-import { PlanningQuestions } from "../components/PlanningQuestions.tsx";
+import { PlanningReview, planningApprovalTitle } from "../components/PlanningQuestions.tsx";
 import { StateBadge, VerdictBadge } from "../components/StateBadge.tsx";
 import { Async, Empty } from "../components/Status.tsx";
 import { useApi, useEvents } from "../lib/api.ts";
@@ -222,7 +222,7 @@ function Banner({ d, onDone }: { d: TaskDetail; onDone: () => void }) {
     approve_plan: "計画を確認して承認してください",
     approve_design: "デザイン仕様を確認して承認してください",
     approve_final: "成果物を確認して最終承認してください",
-    approve_planning: "企画の成果物を確認して承認してください",
+    approve_planning: planningApprovalTitle(t.state),
     failed: "失敗しました",
     human_working: "人が作業中です(エージェントは起動しません)",
   }[t.attention];
@@ -237,8 +237,8 @@ function Banner({ d, onDone }: { d: TaskDetail; onDone: () => void }) {
     <Alert variant={variant} role="status" className="mt-4">
       <AlertTitle className="font-semibold">{title}</AlertTitle>
       <AlertDescription className="w-full text-foreground">
-        {d.planningQuestions ? (
-          <PlanningQuestions taskId={t.id} q={d.planningQuestions} artifacts={d.artifacts} />
+        {t.attention === "approve_planning" ? (
+          <PlanningReview taskId={t.id} state={t.state} q={d.planningQuestions} artifacts={d.artifacts} />
         ) : (
           t.reason && <p className="m-0 break-words whitespace-pre-wrap">{t.reason}</p>
         )}
