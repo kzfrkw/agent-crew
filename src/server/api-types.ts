@@ -190,6 +190,8 @@ export type TaskDetail = {
   retro: { proposals: { index: number; target: "conventions" | "decisions"; text: string; status: "pending" | "adopted" | "rejected" }[] } | null;
   /** 企画の承認で人が決めること(フェーズ9。問いを1件ずつ)。無ければ null */
   planningQuestions: { stage: string; questions: { from: string; text: string }[]; musts: string[]; shoulds: number } | null;
+  /** 最終確認の材料のうち、成果物として登録しないファイル(差分、テストの変更の検出結果)の URL。無ければ null */
+  reviewFiles: { diff: string | null; testChanges: string | null };
   /** 分割の親(8-2)。子でなければ null */
   parent: { id: number; title: string } | null;
   /** 分割した子タスク(順番どおり)。親でなければ空 */

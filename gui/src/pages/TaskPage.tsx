@@ -10,6 +10,7 @@ import { RunTable } from "../components/RunTable.tsx";
 import { Screenshots } from "../components/Screenshots.tsx";
 import { Report } from "../components/Report.tsx";
 import { RetroPanel } from "../components/Retro.tsx";
+import { FinalReview } from "../components/FinalReview.tsx";
 import { PlanningReview, planningApprovalTitle } from "../components/PlanningQuestions.tsx";
 import { StateBadge, VerdictBadge } from "../components/StateBadge.tsx";
 import { Async, Empty } from "../components/Status.tsx";
@@ -221,7 +222,7 @@ function Banner({ d, onDone }: { d: TaskDetail; onDone: () => void }) {
     answer: "人の回答待ちです",
     approve_plan: "計画を確認して承認してください",
     approve_design: "デザイン仕様を確認して承認してください",
-    approve_final: "成果物を確認して最終承認してください",
+    approve_final: "実装の結果を確かめて最終承認してください(承認すると PR の下書きを作ります)",
     approve_planning: planningApprovalTitle(t.state),
     failed: "失敗しました",
     human_working: "人が作業中です(エージェントは起動しません)",
@@ -239,6 +240,8 @@ function Banner({ d, onDone }: { d: TaskDetail; onDone: () => void }) {
       <AlertDescription className="w-full text-foreground">
         {t.attention === "approve_planning" ? (
           <PlanningReview taskId={t.id} state={t.state} q={d.planningQuestions} artifacts={d.artifacts} />
+        ) : t.attention === "approve_final" ? (
+          <FinalReview taskId={t.id} artifacts={d.artifacts} files={d.reviewFiles} screenshots={d.screenshots.filter((x) => x.url).length} />
         ) : (
           t.reason && <p className="m-0 break-words whitespace-pre-wrap">{t.reason}</p>
         )}

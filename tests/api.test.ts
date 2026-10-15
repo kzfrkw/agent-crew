@@ -198,6 +198,16 @@ describe("読み取り API", () => {
     ]);
   });
 
+  it("task: 最終確認の材料の差分とテストの変更の検出結果を、URL で返す。無ければ null", async () => {
+    const s = seed();
+    const dir = join(s.home, "tasks", String(s.t1.id));
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "diff.patch"), "diff");
+    server = await startServer({ home: s.home, port: 0 });
+    const d = await json<TaskDetail>(`api/tasks/${s.t1.id}`);
+    expect(d.reviewFiles).toEqual({ diff: `/files/tasks/${s.t1.id}/diff.patch`, testChanges: null });
+  });
+
   it("task: 分割の親と子(8-2)を返す", async () => {
     const s = seed();
     const db = openDb(appDbPath(s.home));

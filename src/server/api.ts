@@ -274,6 +274,7 @@ function taskDetail(home: string, db: Db, id: number, operable: boolean): TaskDe
     nextActions: nextActions(db, t),
     runActive: runActive(db, id),
     screenshots: screenshotsOf(home, db, id),
+    reviewFiles: { diff: fileUrl(home, join(taskDir(home, id), "diff.patch")), testChanges: fileUrl(home, join(taskDir(home, id), "test-changes.md")) },
     report: buildTaskReport(db, id),
     retro: retroView(db, id),
     planningQuestions: t.kind === "planning" && t.state.startsWith("awaiting_") ? planningQuestions(db, id) : null,
