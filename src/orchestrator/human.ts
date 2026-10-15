@@ -146,6 +146,16 @@ export function answerTask(ctx: AppContext, taskId: number, message: string): vo
   appendHumanNote(ctx, taskId, "人からの回答", message);
 }
 
+/**
+ * デザインレビューで止まったときの人の判断(撮影できない、など)。回答してやり直すだけでは同じところで止まるため、
+ * 飛ばして最終確認へ進めるか、実装者に差し戻す
+ */
+export function resolveDesignReview(ctx: AppContext, taskId: number, choice: "skip" | "implementer", comment?: string): void {
+  if (choice === "implementer" && !comment?.trim()) throw new Error("差し戻す理由を書いてください");
+  applyEvent(ctx, taskId, { type: choice === "skip" ? "skip_design_review" : "back_to_implementer" });
+  if (comment?.trim()) appendHumanNote(ctx, taskId, choice === "skip" ? "デザインレビューを飛ばした理由" : "実装者への差し戻し(デザインレビューで止まったため)", comment);
+}
+
 export function cancelTask(ctx: AppContext, taskId: number): void {
   applyEvent(ctx, taskId, { type: "cancel" });
 }

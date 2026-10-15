@@ -1,9 +1,10 @@
-import { writeFileSync, mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { getTask, listEvents } from "../src/db/store.ts";
 import { latestNeedsInputReason, runUntilIdle } from "../src/orchestrator/engine.ts";
-import { approveTask } from "../src/orchestrator/human.ts";
+import { approveTask, humanNotesPath, resolveDesignReview } from "../src/orchestrator/human.ts";
+import { nextActions } from "../src/orchestrator/next-actions.ts";
 import type { CaptureFn } from "../src/orchestrator/context.ts";
 import { testContext } from "./helpers/context.ts";
 import { sh } from "./helpers/gitrepo.ts";
@@ -96,5 +97,48 @@ describe("デザインレビュー(4c)", () => {
     const calls: { path: string }[][] = [];
     await toQa({ qa: answer("qa-report.md", "passed"), design_reviewer: answer("design-review.md", "approve") }, fakeCapture(calls));
     expect(calls[0]).toEqual([{ path: "/", note: "トップ(QA が撮る画面を返さなかったため)" }]);
+  });
+});
+
+describe("デザインレビューを行わないとき・撮影できなかったときの出口", () => {
+  it("デザイナーが「UI は変わらない」(uiChanges: false)と返したら、撮影もデザインレビューもしない", async () => {
+    const calls: { path: string }[][] = [];
+    const { ctx, runner, t } = await toQa(
+      { designer: answer("ui-spec.md", "ready", { decisions: [], uiChanges: false }), design_reviewer: answer("design-review.md", "approve") },
+      fakeCapture(calls),
+    );
+    expect(calls).toEqual([]);
+    expect(runner.rolesCalled()).not.toContain("design_reviewer");
+    expect(getTask(ctx.db, t.id)!.state).toBe("awaiting_final_approval");
+  });
+
+  it("撮影できずに止まったら、回答のほかに「飛ばして最終確認へ」「実装者に差し戻す」を選べる", async () => {
+    const { ctx, t } = await toQa({ design_reviewer: answer("design-review.md", "approve") }, fakeCapture([], true));
+    const kinds = nextActions(ctx.db, getTask(ctx.db, t.id)!).map((a) => a.kind);
+    expect(kinds).toEqual(expect.arrayContaining(["answer", "skip_design_review", "back_to_implementer"]));
+    resolveDesignReview(ctx, t.id, "skip", "UI は変わらない");
+    expect(getTask(ctx.db, t.id)!.state).toBe("awaiting_final_approval");
+    expect(readFileSync(humanNotesPath(ctx.home, t.id), "utf8")).toContain("UI は変わらない");
+  });
+
+  it("実装者に差し戻すと、理由を残して実装からやり直す", async () => {
+    const { ctx, t } = await toQa({ design_reviewer: answer("design-review.md", "approve") }, fakeCapture([], true));
+    resolveDesignReview(ctx, t.id, "implementer", "screens_test.dart を書いてください");
+    expect(getTask(ctx.db, t.id)!.state).toBe("implementing");
+    expect(readFileSync(humanNotesPath(ctx.home, t.id), "utf8")).toContain("screens_test.dart を書いてください");
+    expect(() => resolveDesignReview(ctx, t.id, "skip")).toThrow();
+  });
+});
+
+describe("テスト基盤整備では設計者・デザイナーを動かさない", () => {
+  it("計画の承認に、設計者・デザイナーのチェックを出さない", async () => {
+    const { createTask, setTaskDesign, updateTaskState } = await import("../src/db/store.ts");
+    const ctx = testContext(new ScriptedRunner({}));
+    const { project } = await approvedProject(ctx);
+    const t = createTask(ctx.db, { projectId: project.id, kind: "test_infra", title: "テスト基盤整備", body: "b" });
+    updateTaskState(ctx.db, t.id, { state: "awaiting_plan_approval" });
+    setTaskDesign(ctx.db, t.id, { architect: false, designer: true });
+    const approve = nextActions(ctx.db, getTask(ctx.db, t.id)!).find((a) => a.kind === "approve")!;
+    expect(approve.options).toBeUndefined();
   });
 });

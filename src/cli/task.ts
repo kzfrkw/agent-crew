@@ -4,7 +4,7 @@ import { createTask, getProject, getTask, listArtifacts, listEvents, listRepos, 
 import { createAppContext, type AppContext } from "../orchestrator/context.ts";
 import { latestReason, runActive, runUntilIdle } from "../orchestrator/engine.ts";
 import { returnTask, takeoverTask, updateBase } from "../orchestrator/handoff.ts";
-import { answerTask, approveTask, cancelTask, rejectTask } from "../orchestrator/human.ts";
+import { answerTask, approveTask, cancelTask, rejectTask, resolveDesignReview } from "../orchestrator/human.ts";
 import { acquireRunLock, recoverStaleRuns } from "../orchestrator/lock.ts";
 import { nextActions } from "../orchestrator/next-actions.ts";
 import { buildTaskReport } from "../orchestrator/report.ts";
@@ -167,6 +167,28 @@ export function registerTaskCommands(program: Command): void {
           console.log(`  agent-crew project profile ${name}`);
           console.log(`  agent-crew project approve ${name}(テスト基盤を待たずに始めるなら --allow-without-tests)`);
         }
+      }),
+    );
+
+  task
+    .command("skip-design-review <id>")
+    .description("デザインレビューで止まったタスク(撮影できない、など)を、デザインレビューを飛ばして最終確認待ちにする")
+    .option("--comment <text>", "理由")
+    .action((id: string, o: { comment?: string }) =>
+      withContext((ctx) => {
+        resolveDesignReview(ctx, mustTask(ctx, id).id, "skip", o.comment);
+        console.log(`デザインレビューを飛ばしました: #${id}(${STATE_LABELS[getTask(ctx.db, Number(id))!.state]})`);
+      }),
+    );
+
+  task
+    .command("back-to-implementer <id>")
+    .description("デザインレビューで止まったタスクを、実装者に差し戻す(レビューからやり直す)")
+    .requiredOption("--comment <text>", "差し戻す理由(実装者への入力になる)")
+    .action((id: string, o: { comment: string }) =>
+      withContext((ctx) => {
+        resolveDesignReview(ctx, mustTask(ctx, id).id, "implementer", o.comment);
+        console.log(`実装者に差し戻しました: #${id}(${STATE_LABELS[getTask(ctx.db, Number(id))!.state]})`);
       }),
     );
 

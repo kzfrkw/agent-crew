@@ -77,6 +77,10 @@ export type TaskEvent =
   /** 企画の段の批評が差し戻した(フェーズ9)。同じ段の書く役をやり直す */
   | { type: "critique_bounce" }
   | { type: "answer" }
+  /** デザインレビューで止まったとき(撮影できないなど)、人がデザインレビューを飛ばして最終確認へ進める */
+  | { type: "skip_design_review" }
+  /** デザインレビューで止まったとき、人が実装者に差し戻す(撮影のテストを書かせるなど) */
+  | { type: "back_to_implementer" }
   | { type: "takeover" }
   | { type: "return"; humanChanged: boolean }
   | { type: "limit_exceeded"; reason: string }
@@ -110,6 +114,8 @@ export type TransitionContext = {
   runActive: boolean;
   /** テスト基盤が整っている、または人が例外を承認している */
   testGateOpen: boolean;
+  /** デザイナーが「このタスクで UI は変わらない」と返した。実装後のデザインレビューを行わない */
+  uiUnchanged?: boolean;
 };
 
 export type Effect = { type: "invalidate_approvals"; kinds: ApprovalKind[] };
@@ -171,7 +177,7 @@ export function transition(t: TaskSnapshot, e: TaskEvent, c: TransitionContext):
       if (outcome === "hold") return hold(t.state);
       // 企画の段は、次の段で差し戻しの回数を数え直す
       if (PLANNING_ROLES.includes(e.role)) return to(outcome!.to, { reviewRounds: 0 });
-      if (e.role === "qa" && e.verdict === "passed" && t.design?.designer) return to("design_reviewing");
+      if (e.role === "qa" && e.verdict === "passed" && t.design?.designer && !c.uiUnchanged) return to("design_reviewing");
       return to(outcome!.to);
     }
 
@@ -223,7 +229,8 @@ export function transition(t: TaskSnapshot, e: TaskEvent, c: TransitionContext):
       if (e.kind === "scope") return to("p_ux", { reviewRounds: 0 });
       if (e.kind === "handoff") return to("split");
       if (e.kind === "plan") {
-        const design = e.design ?? t.design ?? NO_DESIGN;
+        // テスト基盤整備は画面を変えないので、設計者・デザイナーを動かさない
+        const design = t.kind === "test_infra" ? NO_DESIGN : (e.design ?? t.design ?? NO_DESIGN);
         return to(design.architect || design.designer ? "designing" : "implementing", { design });
       }
       return to(e.kind === "design" ? "implementing" : "integrating");
@@ -232,6 +239,12 @@ export function transition(t: TaskSnapshot, e: TaskEvent, c: TransitionContext):
     case "answer":
       if (t.state !== "needs_input" || !t.heldFromState) fail("回答待ちではありません");
       return to(t.heldFromState!, { reviewRounds: 0 });
+
+    case "skip_design_review":
+    case "back_to_implementer":
+      if (t.state !== "needs_input" || t.heldFromState !== "design_reviewing") fail("デザインレビューで止まっていません");
+      if (e.type === "skip_design_review") return to("awaiting_final_approval");
+      return to("implementing", { reviewRounds: 0, effects: RESTART_REVIEW });
 
     case "takeover":
       if (c.runActive) fail("エージェントが実行中です。先に停止してください");

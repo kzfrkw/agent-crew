@@ -32,7 +32,7 @@ export function attentionOf(task: Pick<Task, "state">): Attention | null {
   }
 }
 
-export function nextActions(db: Db, task: Pick<Task, "id" | "state"> & { design?: Task["design"] }): NextAction[] {
+export function nextActions(db: Db, task: Pick<Task, "id" | "state"> & { design?: Task["design"]; heldFromState?: Task["heldFromState"]; kind?: Task["kind"] }): NextAction[] {
   const id = task.id;
   if (runActive(db, id)) {
     return [{ kind: "stop", label: "実行中の役割を停止する", command: null, request: { action: "stop" }, confirm: "実行中の claude を止めます。タスクは人の判断待ちになります" }];
@@ -77,11 +77,16 @@ export function nextActions(db: Db, task: Pick<Task, "id" | "state"> & { design?
       return [
         {
           ...approve!,
-          options: [
-            { key: "architect", label: "設計者を動かす(design.md)", value: design.architect },
-            { key: "designer", label: "デザイナーを動かす(ui-spec.md、UI を伴う変更)", value: design.designer },
-          ],
-          optionsNote: reason ? `プランナーの判断: ${reason}` : undefined,
+          // テスト基盤整備は画面を変えないので、設計者・デザイナーは選ばせない(動かさない)
+          ...(task.kind === "test_infra"
+            ? {}
+            : {
+                options: [
+                  { key: "architect", label: "設計者を動かす(design.md)", value: design.architect },
+                  { key: "designer", label: "デザイナーを動かす(ui-spec.md、UI を伴う変更)", value: design.designer },
+                ],
+                optionsNote: reason ? `プランナーの判断: ${reason}` : undefined,
+              }),
           ...(split.length >= 2 ? { split: { count: split.length, titles: split.map((s) => s.title) } } : {}),
         },
         reject!,
@@ -121,6 +126,24 @@ export function nextActions(db: Db, task: Pick<Task, "id" | "state"> & { design?
           input: { field: "message", required: true, placeholder: "回答(次の役割への入力になります)" },
           primary: true,
         },
+        // デザインレビューで止まったとき(撮影できないなど)は、やり直すだけでは進まないことがあるので出口を出す
+        ...(task.heldFromState === "design_reviewing"
+          ? ([
+              {
+                kind: "skip_design_review" as const,
+                label: "デザインレビューを飛ばして最終確認へ",
+                command: `agent-crew task skip-design-review ${id}`,
+                request: { action: "skip_design_review" as const },
+              },
+              {
+                kind: "back_to_implementer" as const,
+                label: "実装者に差し戻す",
+                command: `agent-crew task back-to-implementer ${id} --comment "..."`,
+                request: { action: "back_to_implementer" as const, comment: "" },
+                input: { field: "comment", required: true, placeholder: "差し戻す理由(例: 画面を撮るテスト integration_test/screens_test.dart を書いてください)" },
+              },
+            ] satisfies NextAction[])
+          : []),
         takeover,
         { kind: "update_base", label: "ベースを取り込む", command: `agent-crew task update-base ${id}`, request: { action: "update_base" } },
         cancel,

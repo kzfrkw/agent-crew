@@ -3,7 +3,7 @@ import { createTask, getProject, getProjectByName, getTask, listTaskRepos } from
 import type { AppContext } from "../orchestrator/context.ts";
 import { requestStop } from "../orchestrator/engine.ts";
 import { returnTask, takeoverTask, updateBase } from "../orchestrator/handoff.ts";
-import { answerTask, approveTask, cancelTask, rejectTask } from "../orchestrator/human.ts";
+import { answerTask, approveTask, cancelTask, rejectTask, resolveDesignReview } from "../orchestrator/human.ts";
 import { decideRetro } from "../orchestrator/retro.ts";
 import { createPlanningProject, createPlanningTask } from "../orchestrator/planning.ts";
 import { approveProfile, reprofileProject } from "../orchestrator/projects.ts";
@@ -129,7 +129,7 @@ async function toggleWorker(ops: Ops, body: unknown): Promise<WorkerView> {
   return workerView(ops.worker);
 }
 
-const ACTIONS = ["approve", "reject", "answer", "stop", "takeover", "return", "cancel", "update_base", "open_editor", "retro"];
+const ACTIONS = ["approve", "reject", "answer", "skip_design_review", "back_to_implementer", "stop", "takeover", "return", "cancel", "update_base", "open_editor", "retro"];
 
 async function act(ops: Ops, taskId: number, body: unknown): Promise<ActionResult> {
   const { ctx, worker } = ops;
@@ -178,6 +178,14 @@ async function act(ops: Ops, taskId: number, body: unknown): Promise<ActionResul
       case "answer":
         answerTask(ctx, taskId, required(req.message, "回答"));
         message = "回答しました";
+        break;
+      case "skip_design_review":
+        resolveDesignReview(ctx, taskId, "skip", typeof req.comment === "string" ? req.comment : undefined);
+        message = "デザインレビューを飛ばし、最終確認待ちにしました";
+        break;
+      case "back_to_implementer":
+        resolveDesignReview(ctx, taskId, "implementer", required(req.comment, "差し戻す理由"));
+        message = "実装者に差し戻しました";
         break;
       case "stop":
         if (!requestStop(ctx, taskId)) {

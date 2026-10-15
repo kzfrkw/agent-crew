@@ -85,6 +85,10 @@ const AuditorExtra = z.object({
 const DesignExtra = z.object({
   decisions: z.array(z.string()).describe("設計判断ログに残す、このプロジェクトの重要な判断(1件1文)。なければ空配列"),
 });
+/** デザイナー: UI が変わらないと分かったら、実装後のデザインレビュー(撮影)を行わない */
+const DesignerExtra = DesignExtra.extend({
+  uiChanges: z.boolean().default(true).describe("このタスクで画面・見た目・操作の流れが変わるか。変わらなければ false(実装後のデザインレビューを行わない)"),
+});
 
 /** QA: 実装後のデザインレビューで撮ってほしい画面(ui-spec.md の画面。UI を伴うタスクのとき) */
 const QaExtra = z.object({
@@ -135,7 +139,7 @@ export const EXTRA_SCHEMAS: Record<string, z.ZodObject> = {
   retrospective: RetrospectiveExtra,
   qa: QaExtra,
   architect: DesignExtra,
-  designer: DesignExtra,
+  designer: DesignerExtra,
   implementer: ImplementerExtra,
   profiler: z.object({ profile: ProfileSchema }),
   planner: PlannerExtra,

@@ -68,7 +68,8 @@ const planner: Handler = async (ctx, task) => {
       // 2つ以上のリポジトリを変えるなら、設計者は必須(インターフェース契約を書く。設計メモ 5.3)
       if (new Set(chosen).size > 1) architect = true;
     }
-    setTaskDesign(ctx.db, task.id, { architect, designer: d.designer });
+    // テスト基盤整備は画面を変えないので、設計者・デザイナーを動かさない
+    setTaskDesign(ctx.db, task.id, task.kind === "test_infra" ? { architect: false, designer: false } : { architect, designer: d.designer });
   }
   return outcomeOf(r, "planner", `${dir}/plan.md`);
 };
@@ -103,7 +104,11 @@ const design: Handler = async (ctx, task) => {
   }
   if (task.design.designer) {
     const r = await run("designer");
-    if (r.ok && r.verdict === "ready") appendDecisions(ctx, task, "designer", r.extra.decisions as string[], r.runId);
+    if (r.ok && r.verdict === "ready") {
+      appendDecisions(ctx, task, "designer", r.extra.decisions as string[], r.runId);
+      // UI が変わらないなら、実装後のデザインレビューを行わない(撮る画面が無いため)
+      addEvent(ctx.db, { taskId: task.id, runId: r.runId, kind: "ui_changes", payload: { changed: r.extra.uiChanges !== false } });
+    }
     return outcomeOf(r, "designer", `${dir}/ui-spec.md`);
   }
   // 人が両方とも外した後に戻ってきた場合など。設計の段は飛ばして実装へ

@@ -322,3 +322,29 @@ describe("デザインレビューの段(design_reviewing、4c)", () => {
     expect(next(snap("design_reviewing", { design: ui }), { type: "base_updated" }).state).toBe("reviewing");
   });
 });
+
+describe("デザインレビューを行わないとき・撮影できなかったときの出口", () => {
+  const ui = { architect: false, designer: true };
+
+  it("デザイナーが「UI は変わらない」と返したタスクは、QA の合格で最終確認待ちへ", () => {
+    expect(next(snap("qa", { design: ui }), { type: "verdict", role: "qa", verdict: "passed" }, ctx({ uiUnchanged: true })).state).toBe("awaiting_final_approval");
+  });
+
+  it("デザインレビューで止まったら、人が飛ばして最終確認へ進めるか、実装者に差し戻せる(レビューからやり直す)", () => {
+    const held = snap("needs_input", { heldFromState: "design_reviewing", design: ui, reviewRounds: 2 });
+    expect(next(held, { type: "skip_design_review" })).toMatchObject({ state: "awaiting_final_approval", heldFromState: null });
+    expect(next(held, { type: "back_to_implementer" })).toMatchObject({
+      state: "implementing",
+      reviewRounds: 0,
+      effects: [{ type: "invalidate_approvals", kinds: ["review", "qa", "final"] }],
+    });
+    expect(() => next(snap("needs_input", { heldFromState: "qa" }), { type: "skip_design_review" })).toThrow(TransitionError);
+    expect(() => next(snap("design_reviewing", { design: ui }), { type: "back_to_implementer" })).toThrow(TransitionError);
+  });
+
+  it("テスト基盤整備では、計画の承認で設計者・デザイナーを選んでも動かさない", () => {
+    expect(
+      next(snap("awaiting_plan_approval", { kind: "test_infra", design: ui }), { type: "approve", kind: "plan", design: { architect: true, designer: true } }),
+    ).toMatchObject({ state: "implementing", design: { architect: false, designer: false } });
+  });
+});

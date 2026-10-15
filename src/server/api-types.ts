@@ -20,6 +20,9 @@ export type ActionRequest =
   | { action: "approve"; kind: ApprovalKindView; comment?: string; design?: DesignOptions; split?: boolean; targetProject?: string; devProject?: { repoPath: string; name?: string } }
   | { action: "reject"; kind: ApprovalKindView; comment: string }
   | { action: "answer"; message: string }
+  /** デザインレビューで止まったとき(撮影できないなど)の出口。comment は任意 */
+  | { action: "skip_design_review"; comment?: string }
+  | { action: "back_to_implementer"; comment: string }
   | { action: "stop" }
   | { action: "takeover" }
   | { action: "return" }
