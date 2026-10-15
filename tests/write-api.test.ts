@@ -12,8 +12,8 @@ import { startServer, type RunningServer } from "../src/server/server.ts";
 import type { RunSpec } from "../src/runner/types.ts";
 import { testContext } from "./helpers/context.ts";
 import { tempDir } from "./helpers/gitrepo.ts";
-import { approvedProject, newTask } from "./helpers/project.ts";
-import { answer, ScriptedRunner } from "./helpers/scripted-runner.ts";
+import { approvedProject, newTask, PROFILE } from "./helpers/project.ts";
+import { answer, ScriptedRunner, writeArtifact } from "./helpers/scripted-runner.ts";
 
 let server: RunningServer | undefined;
 let worker: Worker | undefined;
@@ -100,6 +100,55 @@ describe("企画用のプロジェクトを作る(GUI から。フェーズ9)", 
     expect((await post("/api/projects", { name: "kakeibo" })).status).toBe(400);
     expect((await post("/api/projects", { name: "家計簿" })).status).toBe(400);
     expect((await post("/api/projects", { name: "" })).status).toBe(400);
+  });
+});
+
+describe("引き渡しで開発のプロジェクトを作り、GUI からプロファイルを承認する(フェーズ9)", () => {
+  const profiler = (spec: RunSpec) => {
+    writeArtifact(spec, "profile.md", "ready");
+    return { structuredOutput: { verdict: "ready", summary: "s", profile: { ...PROFILE, testInfra: "none" } } };
+  };
+
+  /** 企画用のプロジェクトの、引き渡しの承認待ちのタスク */
+  async function handoffWaiting(ctx: Awaited<ReturnType<typeof setup>>["ctx"]) {
+    const { createPlanningProject, createPlanningTask } = await import("../src/orchestrator/planning.ts");
+    const { addEvent } = await import("../src/db/store.ts");
+    createPlanningProject(ctx, "newsvc");
+    const t = createPlanningTask(ctx, { projectName: "newsvc", title: "新サービス", body: "b", docs: [] });
+    updateTaskState(ctx.db, t.id, { state: "awaiting_handoff_approval" });
+    addEvent(ctx.db, { taskId: t.id, kind: "handoff", payload: { tickets: [{ title: "最初の画面", body: "b", acceptanceCriteria: ["a"] }] } });
+    return t;
+  }
+
+  it("リポジトリのフォルダと名前を送ると、プロジェクトを作って開発のタスクを作り、裏でプロファイルを作る。できたら承認でき、テスト基盤を待たずに始めることもできる", async () => {
+    const { ctx } = await setup({ profiler });
+    const t = await handoffWaiting(ctx);
+    const dir = join(tempDir("agent-crew-new-"), "app");
+    const r = await post(`/api/tasks/${t.id}/actions`, { action: "approve", kind: "handoff", devProject: { repoPath: dir, name: "newsvc-dev" } });
+    expect(r.status).toBe(200);
+    expect(r.body.message).toContain("プロファイル");
+    const { getProjectByName, listChildren } = await import("../src/db/store.ts");
+    const dev = getProjectByName(ctx.db, "newsvc-dev")!;
+    expect(listChildren(ctx.db, t.id).map((k) => k.projectId)).toEqual([dev.id]);
+    await waitFor(() => getProjectByName(ctx.db, "newsvc-dev")!.profileStatus === "draft");
+    const a = await post(`/api/projects/${dev.id}/profile`, { action: "approve", allowWithoutTests: true });
+    expect(a.status).toBe(200);
+    expect(getProjectByName(ctx.db, "newsvc-dev")).toMatchObject({ profileStatus: "approved", allowWithoutTests: true });
+    expect(listTasks(ctx.db, { projectId: dev.id }).some((x) => x.kind === "test_infra")).toBe(true);
+  });
+
+  it("使えないフォルダは 409 で、何も作らない。プロファイルの作り直しも受け付ける", async () => {
+    const { ctx } = await setup({ profiler });
+    const t = await handoffWaiting(ctx);
+    const r = await post(`/api/tasks/${t.id}/actions`, { action: "approve", kind: "handoff", devProject: { repoPath: "relative" } });
+    expect(r.status).toBe(409);
+    expect(getTask(ctx.db, t.id)!.state).toBe("awaiting_handoff_approval");
+    expect((await post(`/api/tasks/${t.id}/actions`, { action: "approve", kind: "handoff", devProject: { name: "x" } })).status).toBe(400);
+    const { getProjectByName } = await import("../src/db/store.ts");
+    const own = getProjectByName(ctx.db, "newsvc")!;
+    // リポジトリが無ければ作り直せない
+    expect((await post(`/api/projects/${own.id}/profile`, { action: "reprofile" })).status).toBe(409);
+    expect((await post(`/api/projects/${own.id}/profile`, { action: "approve" })).status).toBe(409);
   });
 });
 

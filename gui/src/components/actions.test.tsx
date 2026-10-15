@@ -142,3 +142,48 @@ describe("計画の承認で分割して進める(8-2)", () => {
     expect(JSON.parse(String(fetchMock.mock.calls[0]![1]!.body))).toMatchObject({ action: "approve", kind: "plan", split: true });
   });
 });
+
+describe("引き渡しの承認: 開発のプロジェクトを選ぶか作る(フェーズ9)", () => {
+  const handoff = (targets: NextAction["targets"]): NextAction => ({
+    kind: "approve",
+    label: "handoff.md を確認し、開発のチケット 2 件を作る",
+    command: null,
+    request: { action: "approve", kind: "handoff" },
+    primary: true,
+    targets,
+  });
+  const select = () => screen.getByLabelText("開発のタスクを作るプロジェクト") as HTMLSelectElement;
+  const press = () => fireEvent.click(screen.getByRole("button", { name: /開発のチケット/ }));
+
+  it("企画のプロジェクトにリポジトリが無ければ、そこに登録するのが既定。フォルダを送る", async () => {
+    render(<ActionPanel taskId={1} actions={[handoff({ projects: ["shop"], selected: null, attachTo: "newsvc" })]} />);
+    expect(select().value).toBe(":attach");
+    expect([...select().options].filter((o) => o.value).map((o) => o.textContent)).toEqual(["shop", "newsvc にリポジトリを登録する", "新しいプロジェクトを作る"]);
+    expect(screen.getByText(/空のフォルダ\(無ければ作って git init します\)/)).toBeTruthy();
+    press();
+    expect(screen.getByRole("alert").textContent).toContain("フォルダ");
+    expect(posts()).toEqual([]);
+    fireEvent.change(screen.getByLabelText("リポジトリのフォルダ"), { target: { value: " /Users/me/dev/app " } });
+    press();
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    expect(posts()[0]!.body).toEqual({ action: "approve", kind: "handoff", devProject: { repoPath: "/Users/me/dev/app" } });
+  });
+
+  it("新しいプロジェクトを作るなら、名前も送る。既存のプロジェクトなら名前だけを送る", async () => {
+    render(<ActionPanel taskId={1} actions={[handoff({ projects: ["shop"], selected: null, attachTo: "newsvc" })]} />);
+    fireEvent.change(select(), { target: { value: ":new" } });
+    fireEvent.change(screen.getByLabelText("新しいプロジェクトの名前"), { target: { value: "newsvc-dev" } });
+    fireEvent.change(screen.getByLabelText("リポジトリのフォルダ"), { target: { value: "/Users/me/dev/app" } });
+    press();
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    expect(posts()[0]!.body).toEqual({ action: "approve", kind: "handoff", devProject: { repoPath: "/Users/me/dev/app", name: "newsvc-dev" } });
+    cleanup();
+    calls = [];
+    render(<ActionPanel taskId={1} actions={[handoff({ projects: ["shop"], selected: "shop" })]} />);
+    expect(select().value).toBe("shop");
+    expect(screen.queryByLabelText("リポジトリのフォルダ")).toBeNull();
+    press();
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    expect(posts()[0]!.body).toEqual({ action: "approve", kind: "handoff", targetProject: "shop" });
+  });
+});

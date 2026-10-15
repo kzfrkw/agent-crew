@@ -1,7 +1,7 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { getTask, listChildren, listEvents, listTaskRepos } from "../src/db/store.ts";
+import { getProjectByName, getTask, listChildren, listEvents, listRepos, listTaskRepos } from "../src/db/store.ts";
 import { runUntilIdle } from "../src/orchestrator/engine.ts";
 import { approveTask, rejectTask } from "../src/orchestrator/human.ts";
 import { nextActions } from "../src/orchestrator/next-actions.ts";
@@ -9,8 +9,9 @@ import { taskDir } from "../src/orchestrator/paths.ts";
 import { createPlanningProject, createPlanningTask } from "../src/orchestrator/planning.ts";
 import type { RunSpec } from "../src/runner/types.ts";
 import { testContext } from "./helpers/context.ts";
-import { tempDir } from "./helpers/gitrepo.ts";
-import { approvedProject } from "./helpers/project.ts";
+import { git, makeRepo, tempDir } from "./helpers/gitrepo.ts";
+import { approvedProject, PROFILE } from "./helpers/project.ts";
+import { approveProfile, reprofileProject } from "../src/orchestrator/projects.ts";
 import { answer, ScriptedRunner, writeArtifact, type Script } from "./helpers/scripted-runner.ts";
 
 const write = (file: string): Script => answer(file, "ready", {});
@@ -140,7 +141,7 @@ describe("企画の流れ(9a)", () => {
     expect(() => approveTask(ctx, t.id, "handoff")).toThrow(/引き渡し先/);
     // GUI では、リポジトリのあるプロジェクトから引き渡し先を選ぶ
     const approve = nextActions(ctx.db, getTask(ctx.db, t.id)!).find((a) => a.kind === "approve")!;
-    expect(approve.targets).toEqual({ projects: ["shop"], selected: null });
+    expect(approve.targets).toEqual({ projects: ["shop"], selected: null, attachTo: "newsvc" });
     approveTask(ctx, t.id, "handoff", undefined, undefined, { targetProject: "shop" });
     expect(listChildren(ctx.db, t.id).every((k) => k.projectId === dev.id)).toBe(true);
     expect(listEvents(ctx.db, t.id, 200).some((e) => e.kind === "handed_off")).toBe(true);
@@ -223,5 +224,78 @@ describe("批評が人の判断を求めたとき(9a。実機の通し確認で�
     const { ctx, t } = await setup({ critic: asks });
     await runUntilIdle(ctx);
     expect(getTask(ctx.db, t.id)).toMatchObject({ state: "needs_input", heldFromState: "p_researching" });
+  });
+});
+
+describe("引き渡しで開発のプロジェクトを用意する(9a。新サービス)", () => {
+  /** リポジトリの無い企画用プロジェクトで、引き渡しの承認待ちまで進める */
+  async function planned() {
+    const runner = new ScriptedRunner(scripts());
+    const ctx = testContext(runner);
+    createPlanningProject(ctx, "newsvc");
+    const t = createPlanningTask(ctx, { projectName: "newsvc", title: "新サービス", body: "b", docs: [] });
+    await runUntilIdle(ctx);
+    approveTask(ctx, t.id, "strategy");
+    await runUntilIdle(ctx);
+    approveTask(ctx, t.id, "scope");
+    await runUntilIdle(ctx);
+    expect(getTask(ctx.db, t.id)!.state).toBe("awaiting_handoff_approval");
+    return { ctx, t };
+  }
+
+  it("GUI では、企画のプロジェクトにリポジトリを足すか、別のプロジェクトを作るかも選べる", async () => {
+    const { ctx, t } = await planned();
+    const approve = nextActions(ctx.db, getTask(ctx.db, t.id)!).find((a) => a.kind === "approve")!;
+    expect(approve.targets).toEqual({ projects: [], selected: null, attachTo: "newsvc" });
+  });
+
+  it("空のフォルダ(無ければ作る)を指定すると git init して企画のプロジェクトに登録し、開発のタスクを作る。プロファイルは承認待ちになるまで始めない", async () => {
+    const { ctx, t } = await planned();
+    const dir = join(tempDir("agent-crew-new-"), "newsvc-app");
+    approveTask(ctx, t.id, "handoff", undefined, undefined, { devProject: { repoPath: dir } });
+    const project = getProjectByName(ctx.db, "newsvc")!;
+    const repos = listRepos(ctx.db, project.id);
+    expect(repos.map((r) => [r.path, r.role, r.defaultBranch])).toEqual([[realpathSync(dir), "newsvc-app", "main"]]);
+    expect(git(dir, "log", "--oneline")).toMatch(/\S/);
+    expect(listChildren(ctx.db, t.id).every((k) => k.projectId === project.id)).toBe(true);
+    expect(project.profileStatus).toBe("none");
+    // プロファイルを作って承認するまで、開発のタスクは始まらない
+    ctx.runner = new ScriptedRunner({
+      profiler: (spec) => {
+        writeArtifact(spec, "profile.md", "ready");
+        return { structuredOutput: { verdict: "ready", summary: "s", profile: { ...PROFILE, testInfra: "none" } } };
+      },
+      planner: scripts().planner!,
+    });
+    await runUntilIdle(ctx);
+    expect(listChildren(ctx.db, t.id).map((k) => k.state)).toEqual(["queued", "queued"]);
+    const r = await reprofileProject(ctx, "newsvc");
+    expect(r.ok).toBe(true);
+    approveProfile(ctx, "newsvc", { allowWithoutTests: true });
+    await runUntilIdle(ctx);
+    expect(getTask(ctx.db, listChildren(ctx.db, t.id)[0]!.id)!.state).toBe("awaiting_plan_approval");
+  });
+
+  it("名前を付けると、別のプロジェクトを作ってそこに引き渡す(手元の既存のリポジトリも使える)", async () => {
+    const { ctx, t } = await planned();
+    const { repo } = makeRepo();
+    approveTask(ctx, t.id, "handoff", undefined, undefined, { devProject: { repoPath: repo, name: "newsvc-dev" } });
+    const dev = getProjectByName(ctx.db, "newsvc-dev")!;
+    expect(listRepos(ctx.db, dev.id).map((r) => r.path)).toEqual([realpathSync(repo)]);
+    expect(listRepos(ctx.db, getProjectByName(ctx.db, "newsvc")!.id)).toEqual([]);
+    expect(listChildren(ctx.db, t.id).every((k) => k.projectId === dev.id)).toBe(true);
+  });
+
+  it("空でない git 以外のフォルダや、使われている名前では、何も変えずにエラー", async () => {
+    const { ctx, t } = await planned();
+    const dir = tempDir("agent-crew-x-");
+    writeFileSync(join(dir, "a.txt"), "x");
+    expect(() => approveTask(ctx, t.id, "handoff", undefined, undefined, { devProject: { repoPath: dir } })).toThrow(/空のフォルダか git リポジトリ/);
+    expect(() => approveTask(ctx, t.id, "handoff", undefined, undefined, { devProject: { repoPath: "relative" } })).toThrow(/絶対パス/);
+    const { repo } = makeRepo();
+    expect(() => approveTask(ctx, t.id, "handoff", undefined, undefined, { devProject: { repoPath: repo, name: "newsvc" } })).toThrow(/すでに/);
+    expect(getTask(ctx.db, t.id)!.state).toBe("awaiting_handoff_approval");
+    expect(listChildren(ctx.db, t.id)).toEqual([]);
+    expect(listRepos(ctx.db, getProjectByName(ctx.db, "newsvc")!.id)).toEqual([]);
   });
 });

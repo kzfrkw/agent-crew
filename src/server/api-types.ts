@@ -17,7 +17,7 @@ export type ApprovalKindView = "plan" | "design" | "final" | "strategy" | "scope
 export type ActionRequest =
   /** design は計画の承認だけ。設計の段で動かす役割の、人による上書き */
   /** targetProject は引き渡しの承認だけ(フェーズ9。開発のタスクを作るプロジェクト。既定は企画のプロジェクト) */
-  | { action: "approve"; kind: ApprovalKindView; comment?: string; design?: DesignOptions; split?: boolean; targetProject?: string }
+  | { action: "approve"; kind: ApprovalKindView; comment?: string; design?: DesignOptions; split?: boolean; targetProject?: string; devProject?: { repoPath: string; name?: string } }
   | { action: "reject"; kind: ApprovalKindView; comment: string }
   | { action: "answer"; message: string }
   | { action: "stop" }
@@ -54,7 +54,8 @@ export type NextAction = {
   /** 計画の承認で選べる「分割して進める」(8-2。プランナーが分割を提案したときだけ)。選んだら request.split を true にして送る */
   split?: { count: number; titles: string[] };
   /** 引き渡しの承認で選べる、開発のタスクを作るプロジェクト(9a。リポジトリのあるもの)。選んだら request.targetProject に入れて送る */
-  targets?: { projects: string[]; selected: string | null };
+  /** attachTo: リポジトリの無い企画のプロジェクト。リポジトリを足して開発に使うか、別のプロジェクトを作れる(request.devProject) */
+  targets?: { projects: string[]; selected: string | null; attachTo?: string };
 };
 
 /** quota は利用枠による自動の一時停止(7-1。リセットの時刻を過ぎたら自動で動く) */

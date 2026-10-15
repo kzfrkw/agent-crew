@@ -6,6 +6,9 @@ import { returnTask, takeoverTask, updateBase } from "../orchestrator/handoff.ts
 import { answerTask, approveTask, cancelTask, rejectTask } from "../orchestrator/human.ts";
 import { decideRetro } from "../orchestrator/retro.ts";
 import { createPlanningProject, createPlanningTask } from "../orchestrator/planning.ts";
+import { approveProfile, reprofileProject } from "../orchestrator/projects.ts";
+import { notifyHuman } from "../orchestrator/notify.ts";
+import { listRepos } from "../db/store.ts";
 import type { Worker } from "../orchestrator/worker.ts";
 import type { ActionRequest, ApprovalKindView, ProjectSummary, ActionResult, CreateTaskRequest, DesignOptions, TaskSummary, WorkerView } from "./api-types.ts";
 import { HttpError, projectSummary, taskSummaryOf } from "./api.ts";
@@ -27,6 +30,8 @@ export async function handleWrite(ops: Ops, path: string, body: unknown): Promis
   if (path === "projects") return { status: 201, data: { project: createProjectFromGui(ops, body) } };
   const m = /^tasks\/(\d+)\/actions$/.exec(path);
   if (m) return { status: 200, data: await act(ops, Number(m[1]), body) };
+  const pm = /^projects\/(\d+)\/profile$/.exec(path);
+  if (pm) return { status: 200, data: profileAction(ops, Number(pm[1]), body) };
   throw new HttpError(404, "ありません");
 }
 
@@ -78,6 +83,43 @@ function createProjectFromGui(ops: Ops, body: unknown): ProjectSummary {
   return projectSummary(ops.ctx.db, getProjectByName(ops.ctx.db, name)!);
 }
 
+/** 引き渡しで用意する開発のプロジェクト(フェーズ9)。repoPath は必須、name を省くと企画のプロジェクトに足す */
+function devProjectOf(v: unknown): { repoPath: string; name?: string } | undefined {
+  if (v === undefined) return undefined;
+  if (!isObject(v) || typeof v.repoPath !== "string" || !v.repoPath.trim()) throw new HttpError(400, "リポジトリのフォルダ(devProject.repoPath)を指定してください");
+  const name = typeof v.name === "string" && v.name.trim() ? v.name.trim() : undefined;
+  return { repoPath: v.repoPath.trim(), ...(name ? { name } : {}) };
+}
+
+/** プロジェクト把握担当を裏で動かす(数分かかるため、操作の応答は待たない)。進み具合はプロジェクトの実行(runs)で見える */
+function startProfiling(ops: Ops, name: string): void {
+  void reprofileProject(ops.ctx, name)
+    .then((r) => notifyHuman(ops.ctx, r.ok ? `${name} のプロファイルができました。確認して承認してください` : `${name} のプロファイルを作れませんでした: ${r.reason}`))
+    .catch((e: Error) => notifyHuman(ops.ctx, `${name} のプロファイルを作れませんでした: ${e.message}`));
+}
+
+/** プロジェクトのプロファイルの承認・作り直し(GUI から。フェーズ9) */
+function profileAction(ops: Ops, projectId: number, body: unknown): { message: string; project: ProjectSummary } {
+  const project = getProject(ops.ctx.db, projectId);
+  if (!project) throw new HttpError(404, "プロジェクトがありません");
+  if (!isObject(body) || (body.action !== "approve" && body.action !== "reprofile")) throw new HttpError(400, "action は approve / reprofile です");
+  let message: string;
+  if (listRepos(ops.ctx.db, projectId).length === 0) throw new HttpError(409, "リポジトリがありません");
+  if (body.action === "approve") {
+    try {
+      const r = approveProfile(ops.ctx, project.name, { allowWithoutTests: body.allowWithoutTests === true });
+      message = r.testInfraTask ? `承認しました。テスト基盤整備のタスク #${r.testInfraTask.id} を作りました` : "承認しました";
+    } catch (e) {
+      throw new HttpError(409, (e as Error).message);
+    }
+    ops.worker?.kick();
+  } else {
+    startProfiling(ops, project.name);
+    message = "プロファイルを作り直しています(数分)";
+  }
+  return { message, project: projectSummary(ops.ctx.db, getProject(ops.ctx.db, projectId)!) };
+}
+
 async function toggleWorker(ops: Ops, body: unknown): Promise<WorkerView> {
   if (!ops.worker) throw new HttpError(409, "自動実行なし(--no-worker)で起動しています");
   if (!isObject(body) || typeof body.paused !== "boolean") throw new HttpError(400, "paused を true / false で指定してください");
@@ -115,8 +157,18 @@ async function act(ops: Ops, taskId: number, body: unknown): Promise<ActionResul
           if (typeof d?.architect !== "boolean" || typeof d?.designer !== "boolean") throw new HttpError(400, "design は { architect, designer } を true / false で指定してください");
           design = { architect: d.architect, designer: d.designer };
         }
-        approveTask(ctx, taskId, kind(), comment, design, { split: req.split === true, targetProject: typeof req.targetProject === "string" && req.targetProject ? req.targetProject : undefined });
+        const devProject = devProjectOf(req.devProject);
+        approveTask(ctx, taskId, kind(), comment, design, {
+          split: req.split === true,
+          targetProject: typeof req.targetProject === "string" && req.targetProject ? req.targetProject : undefined,
+          devProject,
+        });
         message = "承認しました";
+        if (devProject) {
+          const name = devProject.name ?? getProject(ctx.db, getTask(ctx.db, taskId)!.projectId)!.name;
+          startProfiling(ops, name);
+          message = `承認し、プロジェクト ${name} にリポジトリを登録しました。プロジェクト把握担当がプロファイルを作っています(数分)。プロジェクトの画面でプロファイルを承認すると開発が始まります`;
+        }
         break;
       }
       case "reject":

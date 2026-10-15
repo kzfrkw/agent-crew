@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ChevronRightIcon } from "lucide-react";
 
@@ -48,7 +49,11 @@ export function ActionPanel({
   const [split, setSplit] = useState(false);
   // 引き渡しの承認での、開発のタスクを作るプロジェクト(9a)
   const targetAction = compact ? undefined : shown.find((a) => a.targets);
-  const [target, setTarget] = useState<string>(targetAction?.targets?.selected ?? "");
+  // 値は既存のプロジェクト名か、":attach"(企画のプロジェクトにリポジトリを登録)・":new"(新しいプロジェクト)。名前に : は使えないので重ならない
+  const [target, setTarget] = useState<string>(targetAction?.targets?.selected ?? (targetAction?.targets?.attachTo ? ":attach" : ""));
+  const [repoPath, setRepoPath] = useState("");
+  const [newName, setNewName] = useState("");
+  const preparing = target === ":attach" || target === ":new";
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState<NextAction | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +64,7 @@ export function ActionPanel({
   const send = async (a: NextAction) => {
     const text = a.input ? (values[a.input.field] ?? "") : "";
     const design = a.options?.length && !compact ? Object.fromEntries(a.options.map((o) => [o.key, choices[o.key] ?? o.value])) : undefined;
-    const body = { ...a.request, ...(a.input ? { [a.input.field]: text } : {}), ...(design ? { design } : {}), ...(a.split && split ? { split: true } : {}), ...(a.targets && target ? { targetProject: target } : {}) } as ActionRequest;
+    const body = { ...a.request, ...(a.input ? { [a.input.field]: text } : {}), ...(design ? { design } : {}), ...(a.split && split ? { split: true } : {}), ...(a.targets ? targetRequest() : {}) } as ActionRequest;
     setBusy(true);
     try {
       const r = await postJson<ActionResult>(`/api/tasks/${taskId}/actions`, body);
@@ -73,9 +78,18 @@ export function ActionPanel({
     }
   };
 
+  /** 引き渡し先: 既存のプロジェクトは名前、用意するものはリポジトリのフォルダ(と新しい名前) */
+  const targetRequest = () => {
+    if (!target) return {};
+    if (!preparing) return { targetProject: target };
+    return { devProject: { repoPath: repoPath.trim(), ...(target === ":new" ? { name: newName.trim() } : {}) } };
+  };
+
   const press = (a: NextAction) => {
     setError(null);
     setMessage(null);
+    if (a.targets && preparing && !repoPath.trim()) return setError("リポジトリのフォルダを書いてください");
+    if (a.targets && target === ":new" && !newName.trim()) return setError("新しいプロジェクトの名前を書いてください");
     // compact では、入力が必須の操作だけ欄を開いてから送る(任意のコメントは省いてそのまま送る)
     if (a.input?.required && !opened) return setOpened(true);
     const text = a.input ? (values[a.input.field] ?? "") : "";
@@ -139,9 +153,20 @@ export function ActionPanel({
                 {p}
               </option>
             ))}
+            {targetAction.targets!.attachTo && <option value=":attach">{targetAction.targets!.attachTo} にリポジトリを登録する</option>}
+            <option value=":new">新しいプロジェクトを作る</option>
           </select>
           {targetAction.optionsNote && <span className="basis-full text-muted-foreground">{targetAction.optionsNote}</span>}
         </label>
+      )}
+      {targetAction && preparing && (
+        <div className="flex flex-col gap-1.5 text-xs">
+          {target === ":new" && (
+            <Input className="max-w-[260px] bg-card text-xs" aria-label="新しいプロジェクトの名前" placeholder="名前(英数字と - _)" value={newName} onChange={(e) => setNewName(e.target.value)} disabled={busy} />
+          )}
+          <Input className="bg-card font-mono text-xs" aria-label="リポジトリのフォルダ" placeholder="/Users/me/dev/app(絶対パス)" value={repoPath} onChange={(e) => setRepoPath(e.target.value)} disabled={busy} />
+          <span className="text-muted-foreground">手元のリポジトリか、空のフォルダ(無ければ作って git init します)。登録後、プロジェクト把握担当がプロファイルを作ります。プロジェクトの画面でそれを承認すると開発が始まります</span>
+        </div>
       )}
       <div className="flex flex-wrap items-center gap-2">
         {shown.map((a) => (

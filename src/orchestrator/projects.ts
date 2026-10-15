@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { basename, isAbsolute, join } from "node:path";
 import {
   addRepo,
@@ -70,22 +70,68 @@ export function defaultRepoName(repoPath: string): string {
   return name || "main";
 }
 
+const PROJECT_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+
+/** 新しいプロジェクトの名前を確かめる(登録の前に、何も変えずに) */
+export function checkNewProjectName(db: Db, name: string): void {
+  if (!PROJECT_NAME.test(name)) throw new Error(`プロジェクト名は英数字・-・_ だけにしてください: ${name}`);
+  if (getProjectByName(db, name)) throw new Error(`プロジェクト ${name} はすでに登録されています`);
+}
+
+/**
+ * 開発に使うリポジトリのフォルダを確かめる(フェーズ9: 企画からの引き渡し)。
+ * git リポジトリならそのまま、無いか空のフォルダなら新しく作る(init)。それ以外は使えない
+ */
+export function checkRepoDir(ctx: AppContext, path: string): "existing" | "init" {
+  if (!isAbsolute(path)) throw new Error(`リポジトリのフォルダは絶対パスで指定してください: ${path}`);
+  if (!existsSync(path)) return "init";
+  if (!statSync(path).isDirectory()) throw new Error(`フォルダではありません: ${path}`);
+  if (readdirSync(path).length === 0) return "init";
+  if (!existsSync(join(path, ".git"))) throw new Error(`空のフォルダか git リポジトリ(のルート)を指定してください: ${path}`);
+  inspectRepo(ctx, path);
+  return "existing";
+}
+
+function initRepo(ctx: AppContext, path: string): void {
+  mkdirSync(path, { recursive: true });
+  git(path, ["init", "-b", "main"], ctx.gitEnv);
+  git(path, ["commit", "--allow-empty", "-m", "最初のコミット(agent-crew が作成)"], ctx.gitEnv);
+}
+
+/**
+ * 企画の引き渡し先として、リポジトリを用意してプロジェクトに登録する(プロファイルはまだ作らない。reprofileProject で作る)。
+ * name を指定すれば新しいプロジェクトを作り、指定しなければ attachTo(企画のプロジェクト。リポジトリなし)に足す
+ */
+export function prepareDevProject(ctx: AppContext, o: { attachTo: Project; name?: string; repoPath: string }): Project {
+  if (o.name !== undefined) checkNewProjectName(ctx.db, o.name);
+  else if (listRepos(ctx.db, o.attachTo.id).length > 0) throw new Error(`プロジェクト ${o.attachTo.name} にはすでにリポジトリがあります`);
+  if (checkRepoDir(ctx, o.repoPath) === "init") initRepo(ctx, o.repoPath);
+  const { repoPath, defaultBranch } = inspectRepo(ctx, o.repoPath);
+  const project = o.name !== undefined ? createProject(ctx.db, { name: o.name }) : o.attachTo;
+  addRepo(ctx.db, { projectId: project.id, path: repoPath, role: defaultRepoName(repoPath), defaultBranch });
+  ensureDecisions(ctx, project.id);
+  return getProject(ctx.db, project.id)!;
+}
+
+function ensureDecisions(ctx: AppContext, projectId: number): void {
+  const dir = projectDir(ctx.home, projectId);
+  mkdirSync(dir, { recursive: true });
+  const decisions = join(dir, "decisions.md");
+  if (!existsSync(decisions)) {
+    writeFileSync(decisions, "# 設計判断ログ\n\n重要な設計判断とその理由を、新しいものを下に追記する。\n");
+  }
+}
+
 /** プロジェクトとリポジトリを登録し、プロジェクト把握担当にプロファイルを作らせる(設計メモ5.1) */
 export async function registerProject(ctx: AppContext, o: { name: string; repoPath: string; role?: string }): Promise<ProfileOutcome> {
-  if (!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(o.name)) throw new Error(`プロジェクト名は英数字・-・_ だけにしてください: ${o.name}`);
-  if (getProjectByName(ctx.db, o.name)) throw new Error(`プロジェクト ${o.name} はすでに登録されています`);
+  checkNewProjectName(ctx.db, o.name);
   if (o.role !== undefined && !ROLE_NAME.test(o.role)) throw new Error(`リポジトリの名前(--role)は英小文字・数字・-・_ だけにしてください: ${o.role}`);
   const { repoPath, defaultBranch } = inspectRepo(ctx, o.repoPath);
   const role = o.role ?? defaultRepoName(repoPath);
 
   const project = createProject(ctx.db, { name: o.name });
   const repo = addRepo(ctx.db, { projectId: project.id, path: repoPath, role, defaultBranch });
-  const dir = projectDir(ctx.home, project.id);
-  mkdirSync(dir, { recursive: true });
-  const decisions = join(dir, "decisions.md");
-  if (!existsSync(decisions)) {
-    writeFileSync(decisions, "# 設計判断ログ\n\n重要な設計判断とその理由を、新しいものを下に追記する。\n");
-  }
+  ensureDecisions(ctx, project.id);
   return profileRepo(ctx, project, repo);
 }
 

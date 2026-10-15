@@ -1,4 +1,6 @@
 import { PlusIcon } from "lucide-react";
+import { useState } from "react";
+import { postJson } from "../lib/api.ts";
 import { Link } from "../lib/router.tsx";
 import { Button } from "@/components/ui/button";
 import type { ProjectDetail } from "../../../src/server/api-types.ts";
@@ -50,14 +52,7 @@ function ProjectView({ d }: { d: ProjectDetail }) {
         <Badge variant={p.testInfra === "present" ? "done" : "outline"}>テスト基盤: {TEST_INFRA[p.testInfra] ?? p.testInfra}</Badge>
         {p.allowWithoutTests && <span>テスト基盤の整備前の通常タスクを許可</span>}
       </Meta>
-      {p.profileStatus === "draft" && (
-        <Alert variant="attention" role="status" className="mt-4">
-          <AlertTitle className="font-semibold">プロファイルの確認と承認が必要です</AlertTitle>
-          <AlertDescription className="w-full">
-            <CommandLine command={`agent-crew project approve ${p.name}`} />
-          </AlertDescription>
-        </Alert>
-      )}
+      <ProfileStatus d={d} />
 
       <div className="mt-6 grid grid-cols-1 items-start gap-6 min-[880px]:grid-cols-[minmax(0,1fr)_320px]">
         <div className="flex min-w-0 flex-col gap-6">
@@ -134,6 +129,90 @@ type ProfileJson = {
   commands?: Record<"install" | "build" | "test" | "start", string | null> & { analyze?: string | null; screens?: string | null };
   startUrl?: string | null;
 } | null;
+
+/**
+ * プロファイルの状態(フェーズ9)。承認待ちなら GUI で承認でき、作っている間・失敗もここに出す。
+ * 作っているかは、プロジェクトの実行(プロジェクト把握担当)で見る
+ */
+function ProfileStatus({ d }: { d: ProjectDetail }) {
+  const p = d.project;
+  const [allow, setAllow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const last = d.runs.filter((r) => r.role === "profiler").sort((a, b) => b.id - a.id)[0];
+  const send = async (body: object) => {
+    setBusy(true);
+    setError(null);
+    try {
+      setMessage((await postJson<{ message: string }>(`/api/projects/${p.id}/profile`, body)).message);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const result = (
+    <>
+      {error && (
+        <p className="m-0 text-xs text-destructive" role="alert">
+          {error}
+        </p>
+      )}
+      {message && (
+        <p className="m-0 text-xs text-run" role="status">
+          {message}
+        </p>
+      )}
+    </>
+  );
+  if (d.repos.length === 0 || p.profileStatus === "approved") return null;
+  if (last?.state === "running") {
+    return (
+      <Alert variant="running" role="status" className="mt-4">
+        <AlertTitle className="font-semibold">プロジェクト把握担当がプロファイルを作っています(数分)</AlertTitle>
+        <AlertDescription>できたらここで確認して承認してください。承認すると開発のタスクが始まります</AlertDescription>
+      </Alert>
+    );
+  }
+  if (p.profileStatus === "none") {
+    return (
+      <Alert variant="attention" className="mt-4">
+        <AlertTitle className="font-semibold">プロファイルがありません</AlertTitle>
+        <AlertDescription className="flex w-full flex-col gap-2">
+          {last?.state && last.state !== "succeeded" && <span>前回は作れませんでした: {last.error ?? last.state}</span>}
+          <div>
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => void send({ action: "reprofile" })}>
+              作り直す
+            </Button>
+          </div>
+          {result}
+        </AlertDescription>
+      </Alert>
+    );
+  }
+  return (
+    <Alert variant="attention" className="mt-4">
+      <AlertTitle className="font-semibold">プロファイルの確認と承認が必要です</AlertTitle>
+      <AlertDescription className="flex w-full flex-col gap-2">
+        <span>下の「プロファイル」と「役割に渡すコマンド」を確かめてください。承認すると、このプロジェクトのタスクが始まります</span>
+        {p.testInfra !== "present" && (
+          <label className="inline-flex cursor-pointer items-start gap-1.5 text-xs">
+            <input type="checkbox" className="mt-0.5 accent-foreground" checked={allow} onChange={(e) => setAllow(e.target.checked)} disabled={busy} />
+            <span>テスト基盤の整備を待たずに開発を始める(新しい空のリポジトリなら、最初のチケットでテストの仕組みも作るためおすすめ)</span>
+          </label>
+        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" disabled={busy} onClick={() => void send({ action: "approve", ...(allow ? { allowWithoutTests: true } : {}) })}>
+            プロファイルを承認する
+          </Button>
+          <CommandLine command={`agent-crew project approve ${p.name}${allow ? " --allow-without-tests" : ""}`} />
+        </div>
+        {result}
+      </AlertDescription>
+    </Alert>
+  );
+}
 
 /** 役割に渡すコマンド。正本は DB のプロファイル(profile.md を手で直しても反映されない)ので、直し方を添える */
 function ProfileCommands({ name, role, profile, env = {}, protect = [] }: { name: string; role?: string; profile: unknown; env?: Record<string, string>; protect?: string[] }) {

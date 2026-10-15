@@ -143,20 +143,30 @@ export function registerTaskCommands(program: Command): void {
     .description("計画(plan)・デザイン仕様(design)・最終確認(final)、企画の戦略(strategy)・要件(scope)・引き渡し(handoff)を承認する")
     .requiredOption("--kind <kind>", "plan | design | final | strategy | scope | handoff")
     .option("--target <project>", "引き渡し(handoff)の承認: 開発のタスクを作るプロジェクト(既定は企画のプロジェクト)")
+    .option("--repo <path>", "引き渡し(handoff)の承認: 開発に使うリポジトリ(絶対パス。無いか空のフォルダなら git init する)を企画のプロジェクトに登録する")
+    .option("--new-project <name>", "引き渡し(handoff)の承認: --repo のリポジトリで、別のプロジェクトを作る")
     .option("--comment <text>", "コメント")
     .option("--design", "計画の承認: 設計者を動かす(プランナーの判定を上書き)")
     .option("--no-design", "計画の承認: 設計者を動かさない")
     .option("--ui", "計画の承認: デザイナーを動かす(UI を伴う)")
     .option("--no-ui", "計画の承認: デザイナーを動かさない")
     .option("--split", "計画の承認: プランナーの案どおりに子タスクに分割して進める(8-2)")
-    .action((id: string, o: { kind: HumanApprovalKind; comment?: string; design?: boolean; ui?: boolean; split?: boolean; target?: string }) =>
+    .action((id: string, o: { kind: HumanApprovalKind; comment?: string; design?: boolean; ui?: boolean; split?: boolean; target?: string; repo?: string; newProject?: string }) =>
       withContext((ctx) => {
+        if (o.newProject && !o.repo) throw new Error("--new-project には --repo(リポジトリのフォルダ)が要ります");
         const t = mustTask(ctx, id);
         const override = o.kind === "plan" && (o.design !== undefined || o.ui !== undefined)
           ? { architect: o.design ?? t.design.architect, designer: o.ui ?? t.design.designer }
           : undefined;
-        approveTask(ctx, t.id, o.kind, o.comment, override, { split: o.split, targetProject: o.target });
+        const devProject = o.repo ? { repoPath: o.repo, ...(o.newProject ? { name: o.newProject } : {}) } : undefined;
+        approveTask(ctx, t.id, o.kind, o.comment, override, { split: o.split, targetProject: o.target, devProject });
         console.log(`承認しました: #${id}(${STATE_LABELS[getTask(ctx.db, Number(id))!.state]})`);
+        if (devProject) {
+          const name = o.newProject ?? getProject(ctx.db, t.projectId)!.name;
+          console.log(`リポジトリを ${name} に登録しました。プロファイルを作って承認すると、開発のタスクが始まります:`);
+          console.log(`  agent-crew project profile ${name}`);
+          console.log(`  agent-crew project approve ${name}(テスト基盤を待たずに始めるなら --allow-without-tests)`);
+        }
       }),
     );
 

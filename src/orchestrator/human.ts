@@ -6,7 +6,11 @@ import { headSha } from "../git/worktree.ts";
 import type { AppContext } from "./context.ts";
 import { applyEvent, ensureWorktrees } from "./engine.ts";
 import type { DesignPlan, HumanApprovalKind } from "./transitions.ts";
-import { getProjectByName } from "../db/store.ts";
+import { getProjectByName, type Project } from "../db/store.ts";
+import { prepareDevProject } from "./projects.ts";
+
+/** 引き渡しで用意する開発のプロジェクト(フェーズ9)。name を省くと企画のプロジェクトにリポジトリを足す */
+export type DevProjectRequest = { repoPath: string; name?: string };
 import { taskDir } from "./paths.ts";
 
 /** 人のコメント・回答。次に起動する役割の入力になる */
@@ -56,15 +60,23 @@ function approveSplit(ctx: AppContext, taskId: number, comment?: string): void {
  * 企画を開発に引き渡す(フェーズ9): まとめ担当のチケットから、開発のタスクを順番つきの子として作る。
  * 引き渡し先は、指定が無ければ企画のプロジェクト。リポジトリの無いプロジェクト(新サービスの企画)には作れない
  */
-function approveHandoff(ctx: AppContext, taskId: number, comment: string | undefined, targetProject: string | undefined): void {
+function approveHandoff(ctx: AppContext, taskId: number, comment: string | undefined, targetProject: string | undefined, devProject: DevProjectRequest | undefined): void {
   const task = getTask(ctx.db, taskId)!;
-  const target = targetProject ? getProjectByName(ctx.db, targetProject) : getProject(ctx.db, task.projectId);
-  if (!target) throw new Error(`引き渡し先のプロジェクト ${targetProject} がありません`);
-  if (listRepos(ctx.db, target.id).length === 0) {
-    throw new Error(`引き渡し先のプロジェクト(${target.name})にリポジトリがありません。リポジトリを登録したプロジェクトを引き渡し先に指定してください(task approve --kind handoff --target <名前>)`);
-  }
   const tickets = (listEvents(ctx.db, taskId, 2000).filter((e) => e.kind === "handoff").at(-1)?.payload as { tickets?: { title: string; body: string; acceptanceCriteria?: string[] }[] } | undefined)?.tickets ?? [];
   if (tickets.length === 0) throw new Error("引き渡すチケットがありません(まとめ担当の handoff.md を確認してください)");
+  // 状態遷移を受け付けるかを、リポジトリを用意する前に確かめる
+  if (task.state !== "awaiting_handoff_approval") throw new Error(`引き渡しの承認待ちではありません(${task.state})`);
+  let target: Project | null | undefined;
+  if (devProject) {
+    // 新サービス: リポジトリを用意して、企画のプロジェクトに足すか、別のプロジェクトを作る(プロファイルは後で作って人が承認する)
+    target = prepareDevProject(ctx, { attachTo: getProject(ctx.db, task.projectId)!, name: devProject.name, repoPath: devProject.repoPath });
+  } else {
+    target = targetProject ? getProjectByName(ctx.db, targetProject) : getProject(ctx.db, task.projectId);
+    if (!target) throw new Error(`引き渡し先のプロジェクト ${targetProject} がありません`);
+    if (listRepos(ctx.db, target.id).length === 0) {
+      throw new Error(`引き渡し先のプロジェクト(${target.name})にリポジトリがありません。リポジトリを登録したプロジェクトを引き渡し先に指定してください(task approve --kind handoff --target <名前>)`);
+    }
+  }
   applyEvent(ctx, taskId, { type: "approve", kind: "handoff" });
   addApproval(ctx.db, { taskId, kind: "handoff", result: "approved", comment });
   const dir = taskDir(ctx.home, taskId);
@@ -93,10 +105,10 @@ function approveHandoff(ctx: AppContext, taskId: number, comment: string | undef
   if (comment) appendHumanNote(ctx, taskId, "引き渡しの承認コメント", comment);
 }
 
-export function approveTask(ctx: AppContext, taskId: number, kind: HumanApprovalKind, comment?: string, design?: DesignPlan, o: { split?: boolean; targetProject?: string } = {}): void {
+export function approveTask(ctx: AppContext, taskId: number, kind: HumanApprovalKind, comment?: string, design?: DesignPlan, o: { split?: boolean; targetProject?: string; devProject?: DevProjectRequest } = {}): void {
   const task = getTask(ctx.db, taskId);
   if (!task) throw new Error(`タスク ${taskId} がありません`);
-  if (kind === "handoff") return approveHandoff(ctx, taskId, comment, o.targetProject);
+  if (kind === "handoff") return approveHandoff(ctx, taskId, comment, o.targetProject, o.devProject);
   if (o.split) {
     if (kind !== "plan") throw new Error("分割できるのは計画の承認だけです");
     approveSplit(ctx, taskId, comment);

@@ -106,7 +106,7 @@ export function nextActions(db: Db, task: Pick<Task, "id" | "state"> & { design?
           ...approve!,
           label: `handoff.md を確認し、開発のチケット ${tickets.length} 件を作る`,
           optionsNote: tickets.map((t, i) => `${i + 1}. ${t.title}`).join(" / ") || undefined,
-          targets: { projects, selected: projects.includes(own) ? own : null },
+          targets: { projects, selected: projects.includes(own) ? own : null, ...(projects.includes(own) ? {} : { attachTo: own }) },
         },
         reject!,
       ];

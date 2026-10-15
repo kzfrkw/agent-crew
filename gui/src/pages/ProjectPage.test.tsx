@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProjectDetail } from "../../../src/server/api-types.ts";
 import { ProjectPage } from "./ProjectPage.tsx";
@@ -81,5 +81,46 @@ describe("プロジェクト画面(Flutter、フェーズ6)", () => {
     render(<ProjectPage id={1} />);
     expect(await screen.findByText("flutter analyze")).toBeTruthy();
     expect(screen.getByText("Flutter(iOS)")).toBeTruthy();
+  });
+});
+
+describe("プロファイルの承認(フェーズ9: GUI から)", () => {
+  const stub = (d: ProjectDetail) => {
+    const posts: { url: string; body: unknown }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init: RequestInit = {}) => {
+        if (init.method === "POST") {
+          posts.push({ url, body: JSON.parse(String(init.body)) });
+          return new Response(JSON.stringify({ message: "承認しました", project: d.project }), { status: 200, headers: { "content-type": "application/json" } });
+        }
+        return new Response(JSON.stringify(d), { status: 200, headers: { "content-type": "application/json" } });
+      }),
+    );
+    return posts;
+  };
+  const run = (state: "running" | "failed", error: string | null = null) =>
+    ({ id: 5, taskId: null, projectId: 1, role: "profiler", model: null, state, verdict: null, summary: null, error, costUsd: null, startedAt: "2026-10-15T00:00:00Z", endedAt: null, durationSec: null }) as unknown as ProjectDetail["runs"][number];
+
+  it("承認待ちなら、テスト基盤を待たずに始めるかを選んで承認できる", async () => {
+    const posts = stub({ ...detail, project: { ...detail.project, profileStatus: "draft", testInfra: "none" } });
+    render(<ProjectPage id={1} />);
+    fireEvent.click(await screen.findByLabelText(/整備を待たずに開発を始める/));
+    fireEvent.click(screen.getByRole("button", { name: "プロファイルを承認する" }));
+    await waitFor(() => expect(posts).toHaveLength(1));
+    expect(posts[0]).toEqual({ url: "/api/projects/1/profile", body: { action: "approve", allowWithoutTests: true } });
+  });
+
+  it("作っている間はその旨を、失敗したら理由と「作り直す」を出す", async () => {
+    stub({ ...detail, project: { ...detail.project, profileStatus: "none" }, runs: [run("running")] });
+    render(<ProjectPage id={1} />);
+    expect(await screen.findByText(/プロジェクト把握担当がプロファイルを作っています/)).toBeTruthy();
+    cleanup();
+    const posts = stub({ ...detail, project: { ...detail.project, profileStatus: "none" }, runs: [run("failed", "時間切れ")] });
+    render(<ProjectPage id={1} />);
+    expect(await screen.findByText(/時間切れ/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "作り直す" }));
+    await waitFor(() => expect(posts).toHaveLength(1));
+    expect(posts[0]!.body).toEqual({ action: "reprofile" });
   });
 });
