@@ -63,7 +63,7 @@ export function FinalReview({ taskId, artifacts, files, screenshots }: { taskId:
         </div>
       )}
       <p className="m-0 text-xs text-muted-foreground">
-        手元で動かして確かめるなら「エディタで開く」か、worktree で起動してください。承認すると、統合担当が PR 本文の下書き(pr-draft.md)を作ります。push と PR は人が行います
+        手元で見るなら「エディタで開く(見るだけ)」で worktree を開けます(下の「worktree」の欄のパスで起動もできます)。直してほしい点があれば却下して差し戻してください。承認すると、統合担当が PR 本文の下書き(pr-draft.md)を作ります。push と PR は人が行います
       </p>
     </div>
   );

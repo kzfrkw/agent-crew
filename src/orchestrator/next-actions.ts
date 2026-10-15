@@ -95,7 +95,8 @@ export function nextActions(db: Db, task: Pick<Task, "id" | "state"> & { design?
     case "awaiting_design_approval":
       return approval("design", "ui-spec.md ");
     case "awaiting_final_approval":
-      return approval("final", "成果物");
+      // 承認の前に手元で変更を見られるように(見るだけ。直すなら「人が引き取る」)
+      return [...approval("final", "成果物"), { kind: "open_editor", label: "エディタで開く(見るだけ)", command: null, request: { action: "open_editor" } }];
     case "awaiting_strategy_approval":
       return approval("strategy", "strategy.md(戦略)");
     case "awaiting_scope_approval":

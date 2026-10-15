@@ -142,3 +142,11 @@ describe("テスト基盤整備では設計者・デザイナーを動かさな�
     expect(approve.options).toBeUndefined();
   });
 });
+
+describe("最終確認の操作", () => {
+  it("承認・却下のほかに、エディタで開く(worktree を見るだけ)を出す", async () => {
+    const { ctx, t } = await toQa({ design_reviewer: answer("design-review.md", "approve") }, fakeCapture([]));
+    expect(getTask(ctx.db, t.id)!.state).toBe("awaiting_final_approval");
+    expect(nextActions(ctx.db, getTask(ctx.db, t.id)!).map((a) => a.kind)).toEqual(["approve", "reject", "open_editor"]);
+  });
+});
