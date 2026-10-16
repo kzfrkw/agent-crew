@@ -165,7 +165,9 @@ export function ActionPanel({
             <Input className="max-w-[260px] bg-card text-xs" aria-label="新しいプロジェクトの名前" placeholder="名前(英数字と - _)" value={newName} onChange={(e) => setNewName(e.target.value)} disabled={busy} />
           )}
           <Input className="bg-card font-mono text-xs" aria-label="リポジトリのフォルダ" placeholder="/Users/me/dev/app(絶対パス)" value={repoPath} onChange={(e) => setRepoPath(e.target.value)} disabled={busy} />
-          <span className="text-muted-foreground">手元のリポジトリか、空のフォルダ(無ければ作って git init します)。登録後、プロジェクト把握担当がプロファイルを作ります。プロジェクトの画面でそれを承認すると開発が始まります</span>
+          <span className="text-muted-foreground">
+            手元のリポジトリか、空のフォルダ(無ければ作って git init します)。GitHub などにリポジトリを作る(作った)なら、先に clone したフォルダを指定してください(空のフォルダから始めると、リモートの main と履歴がつながらず PR を作れません)。登録後、プロジェクト把握担当がプロファイルを作ります。プロジェクトの画面でそれを承認すると開発が始まります
+          </span>
         </div>
       )}
       <div className="flex flex-wrap items-center gap-2">

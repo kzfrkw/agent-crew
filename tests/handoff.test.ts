@@ -139,3 +139,42 @@ describe("ベース更新", () => {
     expect(() => updateBase(ctx, t.id)).toThrow();
   });
 });
+
+describe("ベースの作り直し(タスクのブランチに独自のコミットがまだ無いとき)", () => {
+  /** 計画で人の判断待ちになったタスク(worktree はあるが、コミットはまだ無い) */
+  async function heldAtPlanning() {
+    const runner = new ScriptedRunner({ ...scripts, planner: answer("plan.md", "need_human", { acceptanceCriteria: ["a"], testFirstException: false, design: { architect: false, designer: false, reason: "r" } }) });
+    const ctx = testContext(runner);
+    const p = await approvedProject(ctx);
+    const t = newTask(ctx, p.project.id);
+    await runUntilIdle(ctx);
+    expect(getTask(ctx.db, t.id)).toMatchObject({ state: "needs_input", heldFromState: "planning" });
+    return { ctx, t, wt: listTaskRepos(ctx.db, t.id)[0]!.worktreePath, ...p };
+  }
+
+  it("ベースが共通の祖先の無い履歴に置き換わっていても、今の既定ブランチから作り直し、覚えているベースも更新する。状態は変えない", async () => {
+    const { ctx, t, wt, repo } = await heldAtPlanning();
+    // GitHub 側で作った別の最初のコミットに main を置き換えた、のと同じ状況
+    git(repo, "checkout", "-q", "--orphan", "other");
+    writeFileSync(join(repo, "README.md"), "from github\n");
+    git(repo, "add", ".");
+    git(repo, "commit", "-q", "-m", "Initial commit");
+    git(repo, "branch", "-M", "main");
+    const main = git(repo, "rev-parse", "main");
+    const r = updateBase(ctx, t.id);
+    expect(r).toMatchObject({ updated: true });
+    expect(r.message).toContain("作り直し");
+    expect(git(wt, "rev-parse", "HEAD")).toBe(main);
+    expect(listTaskRepos(ctx.db, t.id)[0]!.baseSha).toBe(main);
+    expect(getTask(ctx.db, t.id)).toMatchObject({ state: "needs_input", heldFromState: "planning" });
+  });
+
+  it("未コミットの変更があれば作り直さない", async () => {
+    const { ctx, t, wt, repo } = await heldAtPlanning();
+    writeFileSync(join(repo, "up.txt"), "x");
+    git(repo, "add", ".");
+    git(repo, "commit", "-q", "-m", "upstream");
+    writeFileSync(join(wt, "local.txt"), "x");
+    expect(() => updateBase(ctx, t.id)).toThrow(/未コミット/);
+  });
+});

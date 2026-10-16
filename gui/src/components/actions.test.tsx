@@ -160,6 +160,8 @@ describe("引き渡しの承認: 開発のプロジェクトを選ぶか作る(�
     expect(select().value).toBe(":attach");
     expect([...select().options].filter((o) => o.value).map((o) => o.textContent)).toEqual(["shop", "newsvc にリポジトリを登録する", "新しいプロジェクトを作る"]);
     expect(screen.getByText(/空のフォルダ\(無ければ作って git init します\)/)).toBeTruthy();
+    // リモート(GitHub など)があるなら clone したフォルダを使う。空から始めるとリモートの main と履歴がつながらない
+    expect(screen.getByText(/先に clone したフォルダ/)).toBeTruthy();
     press();
     expect(screen.getByRole("alert").textContent).toContain("フォルダ");
     expect(posts()).toEqual([]);

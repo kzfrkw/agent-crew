@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { addEvent, getRepo, getTask, listEvents, listTaskRepos } from "../db/store.ts";
+import { addEvent, getRepo, getTask, listEvents, listTaskRepos, setTaskRepoBase } from "../db/store.ts";
 import { git } from "../git/git.ts";
 import { commitsSince, containsRef, diffFromBase, diffStat, headSha, isDirty } from "../git/worktree.ts";
 import type { AppContext } from "./context.ts";
@@ -81,10 +81,22 @@ export function updateBase(ctx: AppContext, taskId: number): { updated: boolean;
   if (task.state === "done" || task.state === "cancelled") throw new Error("終了したタスクです");
   if (runActive(ctx.db, taskId)) throw new Error("エージェントが実行中です");
   const env = { ...ctx.gitEnv, ...agentGitEnv("base-update") };
+  const trs = listTaskRepos(ctx.db, taskId);
+  for (const tr of trs) if (isDirty(tr.worktreePath, ctx.gitEnv)) throw new Error(`未コミットの変更があります: ${tr.worktreePath}`);
   let updated = false;
-  for (const tr of listTaskRepos(ctx.db, taskId)) {
+  const rebuilt: string[] = [];
+  for (const tr of trs) {
     const repo = getRepo(ctx.db, tr.repoId)!;
-    if (isDirty(tr.worktreePath, ctx.gitEnv)) throw new Error(`未コミットの変更があります: ${tr.worktreePath}`);
+    // このタスクのコミットがまだ無ければ、マージせずに今の既定ブランチから作り直す。
+    // 既定ブランチが共通の祖先の無い履歴に置き換わった(GitHub 側で作った最初のコミットなど)ときも、これで追従できる
+    if (commitsSince(tr.worktreePath, tr.baseSha, ctx.gitEnv).length === 0) {
+      const target = git(tr.worktreePath, ["rev-parse", `${repo.defaultBranch}^{commit}`], ctx.gitEnv);
+      if (headSha(tr.worktreePath, ctx.gitEnv) === target) continue;
+      git(tr.worktreePath, ["reset", "-q", "--hard", target], ctx.gitEnv);
+      setTaskRepoBase(ctx.db, taskId, tr.repoId, target);
+      rebuilt.push(`${repo.role}: ${tr.baseSha.slice(0, 12)} → ${target.slice(0, 12)}`);
+      continue;
+    }
     if (containsRef(tr.worktreePath, repo.defaultBranch, ctx.gitEnv)) continue;
     try {
       git(tr.worktreePath, ["merge", "--no-edit", repo.defaultBranch], env);
@@ -100,7 +112,12 @@ export function updateBase(ctx: AppContext, taskId: number): { updated: boolean;
       return { updated: false, conflict: true, message: reason };
     }
   }
-  if (!updated) return { updated: false, message: "すでにベースに追従しています" };
+  if (rebuilt.length > 0) addEvent(ctx.db, { taskId, kind: "base_rebuilt", payload: { repos: rebuilt } });
+  if (!updated) {
+    return rebuilt.length > 0
+      ? { updated: true, message: `このタスクのコミットがまだ無いため、ベースを今の既定ブランチから作り直しました(${rebuilt.join("、")})` }
+      : { updated: false, message: "すでにベースに追従しています" };
+  }
   const next = applyEvent(ctx, taskId, { type: "base_updated" });
   return { updated: true, message: next.state === "reviewing" ? "ベースを取り込みました。レビューからやり直します" : "ベースを取り込みました" };
 }

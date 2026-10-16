@@ -104,7 +104,7 @@
 - 企画(フェーズ9): 新サービスは `project create <n>`(リポジトリなし)、既存サービスの新機能はそのプロジェクトで `task plan --project <n> --title ... --body ... --docs <絶対パス>`(GUI のチケット作成で「企画として作る」も可)。調査 → 戦略 → 要件 → 構造・骨格 → 引き渡しの順に、書く役と批評担当が進める。人の承認は `task approve <id> --kind strategy|scope|handoff`(引き渡しは `--target <開発のプロジェクト>`。新サービスは `--repo <フォルダ>` で企画のプロジェクトにリポジトリを登録するか、`--new-project <名前>` を足して別のプロジェクトを作る。空のフォルダなら git init する。GUI の引き渡しの欄でも選べ、プロファイルはプロジェクトの画面で承認する)。承認待ちに「人の判断が要る点」があれば承認のコメントで答える。通し確認は `npm run e2e:planning`
 - 導入: `docs/setup.md`(別のPC)、`docs/company-checklist.md`(会社で使う前の点検表)
 - デザインレビューで止まったとき(撮影できないなど): `task skip-design-review <id>`(飛ばして最終確認へ)か `task back-to-implementer <id> --comment ...`(GUI の人の判断待ちの欄にも出る)。デザイナーが `uiChanges: false` を返したタスクとテスト基盤整備では、デザインレビューを行わない
-- 人への引き継ぎ: `task takeover <id>` → worktree で作業してコミット → `task return <id>`。ベースへの追従: `task update-base <id>`
+- 人への引き継ぎ: `task takeover <id>` → worktree で作業してコミット → `task return <id>`。ベースへの追従: `task update-base <id>`(タスクのコミットがまだ無ければ、今の既定ブランチから作り直す。共通の祖先が無い履歴にも追従できる)
 - GUI: `npx agent-crew serve`(http://127.0.0.1:4300/ 。常駐ワーカーがタスクを自動で進め、GUI から承認・回答・停止・引き取り・チケット投入ができる。`--no-worker` で読み取り専用。GUI のビルドが無いか古ければ自動でビルドする。`--no-build` で抑止)。CLI の `run` とはロックで排他する(GUI で一時停止すると CLI の run を使える)
 - GUI のビルド: `npm run build:gui`(`npm install` 時にも `prepare` で実行される。結果は `dist/gui/`)
 - GUI の開発: `npx agent-crew serve` を起動したうえで `npm run dev:gui`(Vite。`/api` と `/files` を 4300 に中継。`AGENT_CREW_PORT` で変更可)

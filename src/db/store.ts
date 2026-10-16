@@ -246,6 +246,11 @@ export function listTaskRepos(db: Db, taskId: number): TaskRepo[] {
   }));
 }
 
+/** タスクのブランチを作り直したときに、覚えているベースを更新する */
+export function setTaskRepoBase(db: Db, taskId: number, repoId: number, baseSha: string): void {
+  db.prepare("UPDATE task_repos SET base_sha = ? WHERE task_id = ? AND repo_id = ?").run(baseSha, taskId, repoId);
+}
+
 // ---- runs / events / artifacts ----
 
 export type RunState = "running" | "succeeded" | "failed" | "timeout" | "cancelled";

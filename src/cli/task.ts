@@ -143,7 +143,7 @@ export function registerTaskCommands(program: Command): void {
     .description("計画(plan)・デザイン仕様(design)・最終確認(final)、企画の戦略(strategy)・要件(scope)・引き渡し(handoff)を承認する")
     .requiredOption("--kind <kind>", "plan | design | final | strategy | scope | handoff")
     .option("--target <project>", "引き渡し(handoff)の承認: 開発のタスクを作るプロジェクト(既定は企画のプロジェクト)")
-    .option("--repo <path>", "引き渡し(handoff)の承認: 開発に使うリポジトリ(絶対パス。無いか空のフォルダなら git init する)を企画のプロジェクトに登録する")
+    .option("--repo <path>", "引き渡し(handoff)の承認: 開発に使うリポジトリ(絶対パス。無いか空のフォルダなら git init する。GitHub などにリポジトリがあるなら clone したフォルダを指定する)を企画のプロジェクトに登録する")
     .option("--new-project <name>", "引き渡し(handoff)の承認: --repo のリポジトリで、別のプロジェクトを作る")
     .option("--comment <text>", "コメント")
     .option("--design", "計画の承認: 設計者を動かす(プランナーの判定を上書き)")
