@@ -189,3 +189,16 @@ describe("引き渡しの承認: 開発のプロジェクトを選ぶか作る(�
     expect(posts()[0]!.body).toEqual({ action: "approve", kind: "handoff", targetProject: "shop" });
   });
 });
+
+describe("確認つきの操作の色", () => {
+  it("止める・取り消す以外(main の最新を取り込む など)は、確認を出しても危険の色にしない", async () => {
+    const update: NextAction = { kind: "update_base", label: "main の最新を取り込む", command: null, request: { action: "update_base" }, confirm: "作り直します" };
+    render(<ActionPanel taskId={1} actions={[update, stop]} />);
+    expect(screen.getByRole("button", { name: "main の最新を取り込む" }).className).not.toMatch(/text-destructive/);
+    expect(screen.getByRole("button", { name: "実行中の役割を停止する" }).className).toMatch(/text-destructive/);
+    fireEvent.click(screen.getByRole("button", { name: "main の最新を取り込む" }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText("作り直します")).toBeTruthy();
+    expect(within(dialog).getByRole("button", { name: "main の最新を取り込む" }).className).not.toMatch(/bg-destructive/);
+  });
+});

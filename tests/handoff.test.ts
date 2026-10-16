@@ -6,6 +6,7 @@ import { commitsSince, isDirty } from "../src/git/worktree.ts";
 import { latestNeedsInputReason, runnableTasks, runUntilIdle } from "../src/orchestrator/engine.ts";
 import { returnTask, takeoverTask, updateBase } from "../src/orchestrator/handoff.ts";
 import { approveTask } from "../src/orchestrator/human.ts";
+import { nextActions } from "../src/orchestrator/next-actions.ts";
 import { taskDir } from "../src/orchestrator/paths.ts";
 import type { RunSpec } from "../src/runner/types.ts";
 import { testContext } from "./helpers/context.ts";
@@ -176,5 +177,25 @@ describe("ベースの作り直し(タスクのブランチに独自のコミッ
     git(repo, "commit", "-q", "-m", "upstream");
     writeFileSync(join(wt, "local.txt"), "x");
     expect(() => updateBase(ctx, t.id)).toThrow(/未コミット/);
+  });
+
+  it("操作の名前は「main の最新を取り込む…」。確認で何が起きるか(まだコミットが無ければ作り直す)を説明する", async () => {
+    const { ctx, t } = await heldAtPlanning();
+    const a = nextActions(ctx.db, getTask(ctx.db, t.id)!).find((x) => x.kind === "update_base")!;
+    expect(a.label).toBe("main の最新を取り込む");
+    expect(a.confirm).toContain("まだコミットが無い");
+    expect(a.confirm).toContain("作り直します");
+  });
+});
+
+describe("main の最新を取り込む(コミットがあるとき)の説明", () => {
+  it("マージすること、実装の後ならレビューからやり直すこと、衝突したら人の作業になることを説明する", async () => {
+    const { ctx, t } = await awaitingFinal();
+    const { updateTaskState } = await import("../src/db/store.ts");
+    updateTaskState(ctx.db, t.id, { state: "needs_input", heldFromState: "reviewing" });
+    const a = nextActions(ctx.db, getTask(ctx.db, t.id)!).find((x) => x.kind === "update_base")!;
+    expect(a.confirm).toMatch(/マージ/);
+    expect(a.confirm).toMatch(/レビューからやり直/);
+    expect(a.confirm).toMatch(/衝突/);
   });
 });

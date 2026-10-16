@@ -18,6 +18,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ChevronRightIcon } from "lucide-react";
 
+/** 危険の色にする操作(確認を出す操作でも、これ以外は通常の色) */
+const DANGER: NextAction["kind"][] = ["stop", "cancel"];
+
 /**
  * 人の操作のボタンと入力欄(docs/skeleton.md「フェーズ3」、docs/surface.md の Button・AlertDialog)。
  * どのボタンを出すか・何を送るかはサーバーの nextActions が決め、ここは入力を集めて送るだけ。CLI のコマンドは折りたたんで残す。
@@ -176,7 +179,7 @@ export function ActionPanel({
             key={a.kind}
             type="button"
             size="sm"
-            variant={a.primary && !compact ? "default" : a.confirm ? "destructive-outline" : "outline"}
+            variant={a.primary && !compact ? "default" : DANGER.includes(a.kind) ? "destructive-outline" : "outline"}
             disabled={busy}
             onClick={() => press(a)}
           >
@@ -217,7 +220,7 @@ export function ActionPanel({
           <AlertDialogFooter>
             <AlertDialogCancel>やめる</AlertDialogCancel>
             <AlertDialogAction
-              variant="destructive"
+              variant={confirming && DANGER.includes(confirming.kind) ? "destructive" : "default"}
               onClick={() => {
                 const a = confirming!;
                 setConfirming(null);

@@ -57,13 +57,13 @@ describe("next-actions", () => {
     expect(nextActions(db, task)[0]!.command).toBe(`agent-crew task approve ${task.id} --kind final`);
   });
 
-  it("回答待ち: 回答と引き取り", () => {
+  it("回答待ち: 回答と引き取り(worktree がまだ無ければ、main の最新を取り込むは出さない)", () => {
     const { db, task } = setup("needs_input", "planning");
     expect(attentionOf(task)).toBe("answer");
     const a = nextActions(db, task);
-    expect(a.map((x) => x.kind)).toEqual(["answer", "takeover", "update_base", "cancel"]);
+    expect(a.map((x) => x.kind)).toEqual(["answer", "takeover", "cancel"]);
     expect(a[0]).toMatchObject({ request: { action: "answer" }, input: { field: "message", required: true }, primary: true });
-    expect(a[3]!.confirm).toBeTruthy();
+    expect(a[2]!.confirm).toBeTruthy();
   });
 
   it("人が作業中: 戻す", () => {

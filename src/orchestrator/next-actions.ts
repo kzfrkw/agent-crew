@@ -1,5 +1,6 @@
 import type { Db } from "../db/connection.ts";
-import { getProject, getTask, listEvents, listProjects, listRepos, type Task } from "../db/store.ts";
+import { getProject, getRepo, getTask, listEvents, listProjects, listRepos, listTaskRepos, type Task } from "../db/store.ts";
+import { commitsSince } from "../git/worktree.ts";
 import type { ApprovalKindView, Attention, NextAction } from "../server/api-types.ts";
 import { runActive } from "./engine.ts";
 
@@ -146,7 +147,7 @@ export function nextActions(db: Db, task: Pick<Task, "id" | "state"> & { design?
             ] satisfies NextAction[])
           : []),
         takeover,
-        { kind: "update_base", label: "ベースを取り込む", command: `agent-crew task update-base ${id}`, request: { action: "update_base" } },
+        ...updateBaseAction(db, id),
         cancel,
       ];
     case "human_working":
@@ -166,4 +167,32 @@ export function nextActions(db: Db, task: Pick<Task, "id" | "state"> & { design?
     default:
       return [];
   }
+}
+
+/**
+ * 「main の最新を取り込む」(task update-base)。何が起きるかを確認のダイアログで説明する:
+ * タスクのコミットがまだ無ければ作り直し、あればマージする(実装の後ならレビューからやり直す)。worktree が無ければ出さない
+ */
+function updateBaseAction(db: Db, id: number): NextAction[] {
+  const trs = listTaskRepos(db, id);
+  if (trs.length === 0) return [];
+  const branches = [...new Set(trs.map((tr) => getRepo(db, tr.repoId)!.defaultBranch))].join(" / ");
+  const empty = trs.every((tr) => {
+    try {
+      return commitsSince(tr.worktreePath, tr.baseSha).length === 0;
+    } catch {
+      return false;
+    }
+  });
+  return [
+    {
+      kind: "update_base",
+      label: `${branches} の最新を取り込む`,
+      command: `agent-crew task update-base ${id}`,
+      request: { action: "update_base" },
+      confirm: empty
+        ? `このタスクのブランチにはまだコミットが無いので、最新の ${branches} から作り直します(失うものはありません)。${branches} の履歴が置き換わったとき(GitHub で作った最初のコミットなど)もこれで追従できます。状態は変わりません`
+        : `最新の ${branches} を、このタスクのブランチにマージします。実装の後の段階なら、変更の前提が変わるのでレビューからやり直します。衝突したら人の作業(引き取って worktree で解決)になります`,
+    },
+  ];
 }
