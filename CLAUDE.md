@@ -1,127 +1,43 @@
 # CLAUDE.md
 
-このリポジトリは、複数のAIエージェント(役割別)に自律的に開発を進めさせ、その状況をローカルのWeb GUIで閲覧・操作するための基盤ツールです。
-詳細な設計は `docs/design-memo.md` を参照してください。設計判断に迷ったらまずそちらを読み、実態と食い違ったら、コードではなくメモ側も更新します。
+複数のAIエージェント(役割別)に自律的に開発を進めさせ、その状況をローカルのWeb GUIで閲覧・操作するための基盤ツールです。
+
+- 設計の正本は `docs/design-memo.md`。迷ったらまず読み、実態と食い違ったらメモ側も更新する
+- コマンドと運用の手順は `docs/commands.md`。GUIの設計は `docs/strategy.md` → `scope.md` → `structure.md` → `skeleton.md` → `surface.md`(画面を変えるときは該当する層も更新する)。安全設定の詳細は `docs/safety.md`
 
 ## 現在地
 
-- 現在のフェーズ: **フェーズ9a(企画の流れ)まで実装済み(2026-10-14、`npm run e2e:planning` で一周を確認)。** 方針は `docs/design-memo.md` の「v0.19で決めたこと」。次はフェーズ10(進行管理を LLM のコーディネーターに移す。方針は「v0.21で決めたこと」)で、10-1 から始める。会社のリポジトリでの試しの一周は人が `docs/company-checklist.md` に沿って行う
-- GUIの設計は `docs/strategy.md` → `scope.md` → `structure.md` → `skeleton.md` → `surface.md`(ギャレットの5階層)。画面を変えるときは該当する層も更新する
-- Notion API連携、Maestro、Android にはまだ着手しない
-- フェーズ定義は `docs/design-memo.md` の第13章
+- フェーズ9a(企画の流れ)まで実装済み(2026-10-14)。次はフェーズ10(進行管理を LLM のコーディネーターに移す。設計メモの「v0.21で決めたこと」)で、10-1 から始める
+- Notion API連携、Maestro、Android にはまだ着手しない。フェーズ定義は設計メモの13章
 
-## 基本方針(要約)
+## 基本方針
 
-1. エージェントの実行基盤は自作しない。Claude Codeのヘッドレス実行/Agent SDKをワーカーとして使う
-2. 進め方(次にどの役割をどの順で呼ぶか)は LLM のコーディネーターが決め、守り(安全、テストの合否、人の承認の関門、差し戻しと費用の上限、利用枠、記録)はオーケストレーターが通常のコードで受け持つ。オーケストレーターはコーディネーターの一手を検証してから実行する。コーディネーターは役割を新しく作れない(v0.21。フェーズ10で移行するまでは固定の状態遷移で動く)
-3. 作る役と検証する役は別エージェント・別コンテキスト
-4. 役割間の受け渡しは会話ではなく成果物(ファイル)。判定は列挙値で返し、守りの検証はそれと実行の記録だけを見て行う
-5. 状態の正本はローカルSQLite。外部サービスはチケットの入口として軽く使うだけ
-6. 固定パイプライン(`docs/design-memo.md` の5章と企画の流れ)は「既定の進め方」としてコーディネーターに渡す。進め方の自由は広げるが、守りは広げない
-7. 小さくても最初から最後まで動く「縦の薄い実装」を積み上げる
-8. 「セッションは消耗品、ファイルが真実」。各役割は新しいセッションで起動し、成果物と判断ログ(`decisions.md`)を読んで動く
-9. 各役割の返答は「要約+判定」だけ。詳細は成果物に書く
-10. 役割ごとにモデルを使い分ける(`roles/*.md` の `model` で指定)。判断が重い役割は高性能、定型的な役割は標準モデル
-11. テストは原則テスト先行(失敗確認 → 実装 → 通す)。実装者はテストを弱める・削除する・スキップすることを禁止、レビュワーはテストの差分を重点確認する
-12. プロジェクト登録時に、プロジェクト把握担当がプロファイルを作る。テスト基盤が無ければ「テスト基盤整備」タスクを作り、計画承認を経て実装する
-13. エージェントと人は同じコードに交互に作業する(同時には触らない)。人はタスクのworktreeを開いて作業し、「人が引き取る(`human_working`、エージェントは起動しない)」「エージェントに戻す」で引き継ぐ。人が変更した後は、レビューとQAをやり直す
-14. レビューの指摘には重大度(must / should / nit)を付け、Must の有無を判定と一致させる。Must 指摘は別のエージェント(auditor。レビュワーの内部で動く)が事実確認してから差し戻す(`docs/design-memo.md` の4章)
-15. Claude Codeのサンドボックスを、許可設定・`pre-push` フック・認証情報を渡さない仕組みと重ねて使う(`docs/design-memo.md` の7.3)
-16. プロジェクトは「1つ以上のリポジトリのまとまり」。フェーズ1の実装は1リポジトリだが、データの形(`projects` / `repos` / `task_repos`)は最初から複数リポジトリを許す。複数リポジトリにまたがるタスクの扱いは `docs/design-memo.md` の5.3(フェーズ5で実装)
-
-## 実行方式と課金・認証
-
-- ワーカーは `claude -p`(ヘッドレス実行)に決定。呼び出しは `src/runner/` に閉じ込め、後からAgent SDKに差し替えられるようにする
-- **サブスク(Pro/Max)の範囲で動かす前提。** 追加課金が発生するのは、追加利用(extra usage)をオンにしたときと、`ANTHROPIC_API_KEY` が設定されているとき
-- **`ANTHROPIC_API_KEY` を設定しない。** `doctor` は設定されていたら警告する
-- `--bare` はAPIキー専用でサブスクでは使えない。安全設定は `--bare` に頼らず、ツール側から渡す設定・deny・フックで効かせる。エージェントの起動の標準形(`--setting-sources ""`、`--strict-mcp-config`、実行ごとの `--settings`)は `docs/safety.md` を参照
-- `--bare` なしの `-p` は、対象リポジトリの `.claude/settings.json` のフックや `.mcp.json` を信頼確認なしで実行する。会社のリポジトリを扱うときは注意する
-- 利用枠はチャットや対話利用と共有される。同時実行数は1〜2から始め、消費ペースを見て調整する
-- 仕様(利用枠、課金)は変わりやすい。実装前に最新の公式ドキュメントを確認する
+1. エージェントの実行基盤は自作しない。Claude Code のヘッドレス実行(`claude -p`)をワーカーとして使い、呼び出しは `src/runner/` に閉じ込める
+2. 進め方(次にどの役割をどの順で呼ぶか)は LLM のコーディネーターが決め、守り(安全、テストの合否、人の承認の関門、上限、利用枠、記録)はオーケストレーターがコードで受け持つ。コーディネーターの一手は検証してから実行し、コーディネーターは役割を新しく作れない(v0.21。移行するまでは固定の状態遷移で動く)
+3. 作る役と検証する役は別エージェント・別コンテキスト。受け渡しは会話ではなく成果物(ファイル)、判定は列挙値
+4. 状態の正本はローカル SQLite。「セッションは消耗品、ファイルが真実」(各役割は新しいセッションで起動し、成果物と `decisions.md` を読む)
+5. 各役割の返答は「要約+判定」だけ。役割ごとにモデルを使い分ける(`roles/*.md` の `model`)
+6. テスト先行。実装者はテストを弱める・削除する・スキップしない。テストの合否はツールが判定する
+7. 人とエージェントは同じコードを交互に触る(同時には触らない)。人が変更した後はレビューとQAをやり直す
+8. 小さくても最初から最後まで動く「縦の薄い実装」を積み上げる
 
 ## 安全方針(このツールの開発中も、このツールが動かすエージェントにも適用)
 
-- **remoteへのpush、PR作成、リモートブランチ操作は行わない。** `git push`、`gh pr create` などは実行しない。pushとPR作成は人間が手元で行う
-- 作業はworktree/ローカルブランチの中だけ。worktree外への書き込みをしない
-- シークレット類(`.env`、鍵、認証情報ファイル)を読まない・コミットしない
-- 破壊的なコマンド(再帰的な削除、システム設定の変更など)は実行前に人間に確認する
-- 迷ったり詰まったりしたら、推測で進めずに人間に聞く
-- 会社固有の情報(社名、プロジェクト名、チケット内容、認証情報)をこのリポジトリに入れない。PC固有の設定とデータはリポジトリの外(`~/.agent-team/`)に置く
-
-## 技術スタック(初期の想定。確定したら更新する)
-
-- サーバー: Node.js(24 LTS以上)+ TypeScript(Nodeの型除去で直接実行)
-- GUI: React + Vite、shadcn/ui + Tailwind CSS v4 + Radix UI(部品と使い分けは `docs/surface.md`)
-- DB: SQLite(Node組み込みの `node:sqlite`)
-- リアルタイム配信: SSE
-- 役割定義: `roles/*.md`(1ファイル1役割)
-
-## ディレクトリ構成(想定)
-
-```
-.
-├── CLAUDE.md
-├── docs/
-│   └── design-memo.md      # 設計メモ(正本)
-├── roles/                  # 役割定義(Markdown。frontmatterに model / permissions / outputs)
-├── src/
-│   ├── orchestrator/       # 状態遷移(コーディネーターの一手の検証)、役割の起動、上限管理
-│   ├── runner/             # Claude Codeのヘッドレス実行のラッパー
-│   ├── db/                 # SQLiteスキーマとアクセス
-│   ├── cli/                # CLIエントリポイント、doctor
-│   └── server/             # ローカルサーバー(読み取りAPI、SSE、GUIの配信)。api-types.ts はGUIと共有
-├── gui/                    # GUI(React + Vite)。ビルド結果は dist/gui/(リポジトリに入れない)
-├── config.example.json     # 設定のサンプル(実設定はリポジトリ外)
-└── .claude/
-    └── settings.json       # 権限設定(pushの禁止など)
-```
+- **remoteへのpush、PR作成、リモートブランチ操作は行わない。** pushとPR作成は人間が手元で行う
+- 作業はworktree/ローカルブランチの中だけ。worktree外へ書き込まない
+- シークレット類(`.env`、鍵、認証情報ファイル)を読まない・コミットしない。**`ANTHROPIC_API_KEY` を設定しない**(サブスクの範囲で動かす)
+- 破壊的なコマンドは実行前に人間に確認する。迷ったら推測で進めずに人間に聞く
+- 会社固有の情報をこのリポジトリに入れない。PC固有の設定とデータはリポジトリの外(`~/.agent-team/`)に置く
+- **agent-crew のエージェント(このリポジトリを対象に動く役割)は、`npm run e2e*` と `doctor --probe-sandbox` を実行しない**(実機の claude を使うため、人が実行する)
 
 ## 開発ルール
 
-- 作業は小さなステップに分け、ステップごとに動作確認してからコミットする
-- 実装前に、そのステップで何を作るかを短く示してから着手する
-- テストを先に書いて失敗を確認し、実装して全テストが通ることを確認してから完了とする(テスト先行が基本)
+- 小さなステップに分け、何を作るかを短く示してから着手し、ステップごとに確認してコミットする
+- テストを先に書いて失敗を確認し、実装して全テストが通ってから完了とする
 - 設計メモに無い大きな判断(技術選定の変更、役割の追加、状態遷移の変更)は、実装前に人間に確認する
-- 依存パッケージを追加するときは、理由を一言添える
-- コマンド(ビルド、テスト、起動、lint)は確定したらここに追記する
-
-## コマンド
-
-- clone後に1回: `sh scripts/install-hooks.sh`(pre-pushフックを有効にする)
-- 安全設定の検査: `sh scripts/verify-safety.sh`
-- セットアップ: `npm install`(Node 24 LTS以上。ビルド工程は無く、TypeScriptをNodeの型除去で直接実行する)
-- テスト: `npm test`(vitest)
-- 型チェック: `npm run typecheck`(tsc --noEmit)。まとめて `npm run check`
-- CLI: `npx agent-crew --help`(または `./bin/agent-crew.js`)
-- 前提の検査: `npx agent-crew doctor`(`--json` 可。エラーがあれば終了コード1)。データディレクトリは `~/.agent-team`(`AGENT_CREW_HOME` で変更可)
-- 安全設定の実機検査: `npx agent-crew doctor --probe-sandbox`(claude -p を haiku で1回動かす。利用枠を少し使う。ランナーや安全設定を変えたら必ず実行する)
-- 基本の流れ: `project add <path> --name <n>` → `project approve <n>` → `task create --project <n> --title ... --body-file ...` → `run` → `task approve <id> --kind plan` → `run` → `task approve <id> --kind final` → `run`。人の対応待ちは `task list`(★)と `task show <id>`
-- プロファイルのコマンドの手直し: `project set <n> --start "..." --test "..."`(役割に渡すコマンドの正本は DB。`profile.md` を手で直しても反映されない。`-` で「なし」。`project show` とプロジェクト画面で確認できる)
-- 報告(API を使わない書き戻し): `task report <id>` で Notion などに貼る Markdown を出す(概要・受け入れ条件・QA・デザインレビュー・PR の下書き)。取り込み元の URL は `task create --source-url` で持たせる。投稿は人が行う
-- 読ませないパス: `project protect <n> --add <相対パス>`(鍵・本番の設定など。エージェントの Read / Bash とツールの実行のどれからも読めない。`project show` で確認)
-- 利用枠: 使用率が `limits.pauseAtUtilization`(既定 0.95)以上になると、常駐ワーカーと `run` は新しい役割を起動せず、リセットの後に再開する。GUI のヘッダーに使用率。人の対応待ちは macOS の通知(`notify`)。完了・取り消しのタスクの worktree は自動で片付く(ブランチは残る)
-- 自律(フェーズ8): 小さなタスクの計画の自動承認は `project set <n> --auto-approve-plan on`(既定 off)。大きいチケットはプランナーが分割を提案し、`task approve <id> --kind plan --split` で子タスクに分けて順に進める。同じ理由の差し戻しが2回続くと人に回る。完了したタスクは振り返り(`task retro <id> --adopt <番号>` で採用。`project set <n> --retrospective off` で止める)
-- 企画(フェーズ9): 新サービスは `project create <n>`(リポジトリなし)、既存サービスの新機能はそのプロジェクトで `task plan --project <n> --title ... --body ... --docs <絶対パス>`(GUI のチケット作成で「企画として作る」も可)。調査 → 戦略 → 要件 → 構造・骨格 → 引き渡しの順に、書く役と批評担当が進める。人の承認は `task approve <id> --kind strategy|scope|handoff`(引き渡しは `--target <開発のプロジェクト>`。新サービスは `--repo <フォルダ>` で企画のプロジェクトにリポジトリを登録するか、`--new-project <名前>` を足して別のプロジェクトを作る。空のフォルダなら git init する。GUI の引き渡しの欄でも選べ、プロファイルはプロジェクトの画面で承認する)。承認待ちに「人の判断が要る点」があれば承認のコメントで答える。通し確認は `npm run e2e:planning`
-- 導入: `docs/setup.md`(別のPC)、`docs/company-checklist.md`(会社で使う前の点検表)
-- デザインレビューで止まったとき(撮影できないなど): `task skip-design-review <id>`(飛ばして最終確認へ)か `task back-to-implementer <id> --comment ...`(GUI の人の判断待ちの欄にも出る)。デザイナーが `uiChanges: false` を返したタスクとテスト基盤整備では、デザインレビューを行わない
-- 人への引き継ぎ: `task takeover <id>` → worktree で作業してコミット → `task return <id>`。ベースへの追従: `task update-base <id>`(タスクのコミットがまだ無ければ、今の既定ブランチから作り直す。共通の祖先が無い履歴にも追従できる)
-- GUI: `npx agent-crew serve`(http://127.0.0.1:4300/ 。常駐ワーカーがタスクを自動で進め、GUI から承認・回答・停止・引き取り・チケット投入ができる。`--no-worker` で読み取り専用。GUI のビルドが無いか古ければ自動でビルドする。`--no-build` で抑止)。CLI の `run` とはロックで排他する(GUI で一時停止すると CLI の run を使える)
-- GUI のビルド: `npm run build:gui`(`npm install` 時にも `prepare` で実行される。結果は `dist/gui/`)
-- GUI の開発: `npx agent-crew serve` を起動したうえで `npm run dev:gui`(Vite。`/api` と `/files` を 4300 に中継。`AGENT_CREW_PORT` で変更可)
-- GUI の見本データ: `AGENT_CREW_HOME=<空のディレクトリ> node scripts/seed-demo.ts`(claude を使わずに全状態のタスクを作る。claudePath を /usr/bin/false にするので、常駐ワーカーが動いても利用枠は使わない)
-- shadcn/ui の部品の追加: `node scripts/shadcn-add.ts <名前...>`(公式レジストリから `gui/src/components/ui/` に置く。shadcn の CLI は GUI を `gui/` に分けた構成に合わないため使わない)。追加したら `docs/surface.md` の原則(影なし、状態の4色)に合わせて直す。画面のコードに色や px の値を直接書かない(トークン経由の Tailwind のクラスを使う)
-- サンドボックスに依存するテスト(`sandbox-exec` の撮影、プロセスの片付け)は、エージェントのサンドボックスの中(`AGENT_CREW_RUN=1`)では飛ばす(`tests/helpers/env.ts`)。人の環境の `npm test` では必ず実行される
-- GUI のテスト: `gui/src/**/*.test.{ts,tsx}`(vitest。DOM が要るものは先頭に `// @vitest-environment jsdom`)
-- 一周の通し確認: `npm run e2e`(実機の claude を使う。利用枠を消費する。結果は docs/e2e-log.md)。複数リポジトリは `npm run e2e:multi`(同梱の sample-api と sample-front)、Flutter は `npm run e2e:mobile`、ネイティブ iOS は `npm run e2e:ios`(同梱の sample-ios)
-- Flutter(フェーズ6): 把握担当が `pubspec.yaml` から種類を flutter にする(`project set <n> --platform flutter --analyze "flutter analyze"` でも直せる)。Flutter のテスト・解析はツールが sandbox-exec で代わりに実行し、エージェントには MCP の道具 `run_project_command` だけを渡す(`agent-crew mcp-exec` は内部用)。画面は `integration_test/screens_test.dart` をツール専用のシミュレータ `agent-crew-<番号>` で動かして撮る(機種は config.json の `simulatorDevice`)。通し確認は `npm run e2e:mobile`(同梱の sample-flutter。Xcode・iOS シミュレータ・Flutter が要る)
-- 複数リポジトリ: `project add-repo <n> <path> --role <役目>` → `project wire <n> --role frontend --env API_URL={origin:backend}`(起動のつなぎ方。{url:} は確認 URL そのまま、{origin:} はパスを除いたもの、{port:} はポート)
-- **agent-crew のエージェント(このリポジトリを対象に動く役割)は、`npm run e2e` と `doctor --probe-sandbox` を実行しない**(実機の claude を使うため、人が実行する)。テストは `npm test`、型チェックは `npm run typecheck` で確かめる
-- TypeScriptの制約: 型除去で動く構文だけを使う(`enum`・`namespace`・パラメータプロパティは不可。importは `.ts` 拡張子付き)
-
-## 別PCでの運用を壊さないために
-
-- `git clone` → `npm install` → 起動、で動く状態を保つ
-- 環境依存(パス、トークン、並列数など)は設定ファイルに切り出す
-- 前提ツールの不足は `doctor` コマンドで検出して知らせ、使えない機能は無効化して起動できるようにする。`ANTHROPIC_API_KEY` の設定も検出して警告する
-- プロジェクトごとの設計判断ログ(`decisions.md`)やプロファイルは、対象リポジトリではなくデータディレクトリ(`~/.agent-team/projects/<id>/`)に置く
-- OS固有の依存(Xcode、シミュレータなど)は、使える環境でのみ有効にする
+- 依存パッケージを追加するときは理由を一言添える。コマンドが確定したら `docs/commands.md` に追記する
+- 確認: `npm test`(vitest)、`npm run typecheck`。まとめて `npm run check`
+- TypeScript: Node の型除去で直接実行する。`enum`・`namespace`・パラメータプロパティは不可、import は `.ts` 拡張子付き
+- GUI: 画面のコードに色や px の値を直接書かない(トークン経由の Tailwind のクラス)。shadcn/ui の部品は `node scripts/shadcn-add.ts` で足し、`docs/surface.md` の原則に合わせる
+- サンドボックスに依存するテストは、エージェントのサンドボックスの中(`AGENT_CREW_RUN=1`)では飛ばす(`tests/helpers/env.ts`)
+- 別PCでも `git clone` → `npm install` → 起動で動く状態を保つ。環境依存は設定ファイルに切り出し、前提の不足は `doctor` で知らせる。プロジェクトごとのデータは対象リポジトリではなく `~/.agent-team/projects/<id>/` に置く
