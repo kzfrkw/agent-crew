@@ -151,6 +151,12 @@ export function describeEvent(e: EventView): EventLine {
     }
     case "retro_decision":
       return { tone: p.adopt ? "success" : "neutral", icon: p.adopt ? "✓" : "×", title: p.adopt ? "振り返りの提案を採用" : "振り返りの提案を却下", text: String(p.text ?? "") };
+    case "quota_wait":
+      return { tone: "attention", icon: "⏱", title: "利用枠の待ち", text: [p.reason, p.until ? `${formatTime(String(p.until))} まで` : ""].filter(Boolean).join(" / ") };
+    case "quota_paused":
+      return { tone: "attention", icon: "⏱", title: "利用枠で一時停止", text: [p.reason, p.until ? `${formatTime(String(p.until))} に再開` : ""].filter(Boolean).join(" / ") };
+    case "quota_resumed":
+      return { tone: "neutral", icon: "⏱", title: "利用枠の回復で再開", text: "" };
     case "bounce":
       return { tone: "attention", icon: "↩", title: "差し戻し", text: String(p.summary ?? "") };
     case "tool_command": {
@@ -183,15 +189,43 @@ export function describeEvent(e: EventView): EventLine {
   }
 }
 
-/** 見せても役に立たないもの(実況・アクティビティから外す。実行ログでは見せる) */
-export function isNoise(e: EventView): boolean {
-  if (e.kind === "rate_limit") return (e.payload as P | null)?.status === "allowed";
-  return e.kind === "system" || e.kind === "raw" || e.kind === "other";
+/**
+ * 経緯(S2)と最近の出来事(S1)に出す種類(docs/skeleton.md「経緯に出す出来事」)。API の kinds で絞るのに使う。
+ * 状態の変化は、完了と取り消しだけを isMilestone で残す(ほかはパイプラインと重なる)
+ */
+export const MILESTONE_KINDS = [
+  "bounce",
+  "review_findings",
+  "audit",
+  "auto_approved",
+  "auto_approve_skipped",
+  "needs_input",
+  "failed",
+  "warning",
+  "waiting_overlap",
+  "human_takeover",
+  "human_returned",
+  "integrated",
+  "decisions",
+  "retro_decision",
+  "quota_wait",
+  "quota_paused",
+  "quota_resumed",
+  "state_changed",
+];
+
+const MILESTONE_STATES = ["done", "cancelled"];
+
+/** 「なぜそうなったか」が分かる出来事か。細かい動き・記録だけの出来事・ほとんどの状態の変化は外す */
+export function isMilestone(e: EventView): boolean {
+  if (!MILESTONE_KINDS.includes(e.kind)) return false;
+  if (e.kind === "state_changed") return MILESTONE_STATES.includes(String((e.payload as P | null)?.to));
+  return true;
 }
 
-const RUN_DETAIL = ["init", "assistant_text", "tool_use", "tool_result", "result", "rate_limit", "system", "raw", "other"];
+const ACTION_KINDS = ["assistant_text", "tool_use"];
 
-/** 実行の中の細かい動き(タスクのアクティビティには出さず、実行ログで見る) */
-export function isRunDetail(e: EventView): boolean {
-  return e.runId !== null && RUN_DETAIL.includes(e.kind);
+/** 実行の今の動き(最新の発言かツール実行)。無ければ null */
+export function latestAction(events: EventView[]): EventView | null {
+  return events.findLast((e) => ACTION_KINDS.includes(e.kind)) ?? null;
 }

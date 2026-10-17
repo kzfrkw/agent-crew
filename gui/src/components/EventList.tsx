@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 /**
  * イベントの時系列(docs/skeleton.md S2・S4)。
  * - order="asc": 古い順で下に追記(実行ログ)。follow なら最新に追従してスクロールする
- * - order="desc": 新しい順(ダッシュボードの実況)
+ * - order="desc": 新しい順(ダッシュボードの最近の出来事)
  */
 export function EventList({
   events,
@@ -68,7 +68,8 @@ const TONE: Record<Tone, { title: string; icon: string; text: string }> = {
   human: { title: "text-human", icon: "text-human", text: "" },
 };
 
-function EventRow({ event, showTask, isNew }: { event: EventView; showTask: boolean; isNew: boolean }) {
+/** イベントの1行。経緯(Timeline)でも、実行・人の判断の行と並べて使う */
+export function EventRow({ event, showTask = false, isNew = false }: { event: EventView; showTask?: boolean; isNew?: boolean }) {
   const [open, setOpen] = useState(false);
   const d = describeEvent(event);
   const t = TONE[d.tone];

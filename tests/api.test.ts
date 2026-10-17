@@ -281,6 +281,17 @@ describe("読み取り API", () => {
     expect(latest.events).toEqual([expect.objectContaining({ id: all.lastId })]);
   });
 
+  it("events: kinds(カンマ区切り)で種類を絞る。limit は絞った後の件数", async () => {
+    const s = seed();
+    server = await startServer({ home: s.home, port: 0 });
+    const picked = await json<EventsPage>("api/events?kinds=needs_input,tool_use");
+    expect(picked.events.map((e) => e.kind)).toEqual(["needs_input", "tool_use"]);
+    const one = await json<EventsPage>("api/events?kinds=needs_input,tool_use&limit=1");
+    expect(one.events.map((e) => e.kind)).toEqual(["tool_use"]);
+    const withTask = await json<EventsPage>(`api/events?kinds=tool_use&task=${s.t2.id}`);
+    expect(withTask.events).toEqual([]);
+  });
+
   it("存在しないものは 404、不正な値は 400", async () => {
     const s = seed();
     server = await startServer({ home: s.home, port: 0 });

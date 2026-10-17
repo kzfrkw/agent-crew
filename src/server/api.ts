@@ -360,7 +360,8 @@ function intParam(q: URLSearchParams, name: string): number | undefined {
 function events(db: Db, q: URLSearchParams): EventsPage {
   const after = intParam(q, "after");
   const limit = Math.min(intParam(q, "limit") ?? 200, 1000);
-  const list = queryEvents(db, { after, taskId: intParam(q, "task"), runId: intParam(q, "run"), limit });
+  const kinds = q.get("kinds")?.split(",").map((k) => k.trim()).filter(Boolean);
+  const list = queryEvents(db, { after, taskId: intParam(q, "task"), runId: intParam(q, "run"), kinds, limit });
   return {
     events: list.map((e) => ({ id: e.id, taskId: e.taskId, runId: e.runId, kind: e.kind, payload: e.payload, createdAt: e.createdAt })),
     lastId: list.at(-1)?.id ?? after ?? 0,

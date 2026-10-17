@@ -2,20 +2,19 @@ import { ChevronRightIcon } from "lucide-react";
 import type { ArtifactSummary, TaskDetail } from "../../../src/server/api-types.ts";
 import { ActionPanel } from "../components/ActionPanel.tsx";
 import { Commands } from "../components/Commands.tsx";
-import { EventList } from "../components/EventList.tsx";
 import { Crumbs, Meta, PageTitle } from "../components/Layout.tsx";
 import { SectionHead } from "../components/Panel.tsx";
 import { Pipeline } from "../components/Pipeline.tsx";
-import { RunTable } from "../components/RunTable.tsx";
 import { Screenshots } from "../components/Screenshots.tsx";
 import { Report } from "../components/Report.tsx";
 import { RetroPanel } from "../components/Retro.tsx";
 import { FinalReview } from "../components/FinalReview.tsx";
 import { PlanningReview, planningApprovalTitle } from "../components/PlanningQuestions.tsx";
 import { StateBadge, VerdictBadge } from "../components/StateBadge.tsx";
+import { TaskTimeline } from "../components/Timeline.tsx";
 import { Async, Empty } from "../components/Status.tsx";
-import { useApi, useEvents } from "../lib/api.ts";
-import { isRunDetail } from "../lib/events.ts";
+import { useApi } from "../lib/api.ts";
+import { APPROVAL_LABELS } from "../lib/timeline.ts";
 import { formatCost, formatDateTime, formatDuration } from "../lib/format.ts";
 import { paths } from "../lib/routes.ts";
 import { Link } from "../lib/router.tsx";
@@ -101,13 +100,7 @@ function TaskView({ d, onDone }: { d: TaskDetail; onDone: () => void }) {
               <Report report={d.report} />
             </div>
           </section>
-          <section>
-            <SectionHead title="実行" note={d.runs.length} />
-            <div className="rounded-lg border bg-card">
-              <RunTable runs={d.runs} />
-            </div>
-          </section>
-          <Activity taskId={t.id} />
+          <TaskTimeline taskId={t.id} runs={d.runs} approvals={d.approvals} reviewRounds={t.reviewRounds} />
         </div>
         <aside className="flex flex-col gap-3">
           <SideCard title="費用と時間(合計)">
@@ -144,7 +137,7 @@ function TaskView({ d, onDone }: { d: TaskDetail; onDone: () => void }) {
                 {d.approvals.map((a) => (
                   <li key={a.id} className={cn("flex items-baseline gap-2", a.invalidatedAt && "opacity-55")}>
                     <span className={a.result === "approved" ? "text-run" : "text-destructive"}>{a.result === "approved" ? "✓" : "✗"}</span>
-                    <span>{APPROVAL[a.kind] ?? a.kind}</span>
+                    <span>{APPROVAL_LABELS[a.kind] ?? a.kind}</span>
                     {a.commitSha && <span className="font-mono text-subtle-foreground">{a.commitSha.slice(0, 7)}</span>}
                     {a.invalidatedAt && <span className="text-muted-foreground">失効</span>}
                   </li>
@@ -182,8 +175,6 @@ function SideCard({ title, children }: { title: string; children: React.ReactNod
     </div>
   );
 }
-
-const APPROVAL: Record<string, string> = { plan: "計画", design: "デザイン", final: "最終確認", review: "レビュー", qa: "QA", tests: "テストの再実行" };
 
 function Banner({ d, onDone }: { d: TaskDetail; onDone: () => void }) {
   const t = d.task;
@@ -298,19 +289,5 @@ function ArtifactList({ taskId, artifacts }: { taskId: number; artifacts: Artifa
         })}
       </TableBody>
     </Table>
-  );
-}
-
-function Activity({ taskId }: { taskId: number }) {
-  // タスクのイベントのうち、実行の中の細かいもの(発言・ツール)は実行ログで見る
-  const { events, loading } = useEvents({ task: taskId }, 500);
-  const shown = events.filter((e) => !isRunDetail(e));
-  return (
-    <section>
-      <SectionHead title="アクティビティ" note="状態の変化と出来事" />
-      <div className="rounded-lg border bg-card py-2">
-        {loading && shown.length === 0 ? <Empty>読み込み中…</Empty> : <EventList events={shown} order="desc" />}
-      </div>
-    </section>
   );
 }

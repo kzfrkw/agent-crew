@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { describeEvent, isNoise, isRunDetail } from "./events.ts";
+import { MILESTONE_KINDS, describeEvent, isMilestone, latestAction } from "./events.ts";
+import { buildTimeline } from "./timeline.ts";
 import { formatCost, formatDuration, formatTime, elapsedSec } from "./format.ts";
 import { pipelineOf } from "./pipeline.ts";
 import { countByFilter, matchesFilter } from "./taskFilter.ts";
@@ -177,18 +178,37 @@ describe("describeEvent", () => {
 describe("イベントの絞り込み", () => {
   const ev = (kind: string, payload: unknown, runId: number | null = 2) => ({ id: 1, taskId: 1, runId, kind, payload, createdAt: "2026-10-09T00:00:00.000Z" });
 
-  it("利用枠が通常(allowed)のときと、system・raw・other はノイズ", () => {
-    expect(isNoise(ev("rate_limit", { status: "allowed" }))).toBe(true);
-    expect(isNoise(ev("rate_limit", { status: "rejected" }))).toBe(false);
-    expect(isNoise(ev("system", { subtype: "commands_changed" }))).toBe(true);
-    expect(isNoise(ev("tool_use", { name: "Bash" }))).toBe(false);
+  it("経緯に出すのは「なぜそうなったか」が分かる出来事だけ", () => {
+    for (const k of ["bounce", "review_findings", "audit", "auto_approved", "auto_approve_skipped", "needs_input", "failed", "warning", "human_takeover", "human_returned", "quota_wait"]) {
+      expect(isMilestone(ev(k, {}, null))).toBe(true);
+    }
+    for (const k of ["tool_use", "assistant_text", "result", "cleanup", "screens", "tool_command", "test_command", "implemented", "plan", "run_failed"]) {
+      expect(isMilestone(ev(k, {}))).toBe(false);
+    }
   });
 
-  it("実行の中の細かい動き(発言・ツール)は実行ログで見るもの", () => {
-    expect(isRunDetail(ev("tool_use", {}))).toBe(true);
-    expect(isRunDetail(ev("result", {}))).toBe(true);
-    expect(isRunDetail(ev("plan", {}))).toBe(false);
-    expect(isRunDetail(ev("state_changed", {}, null))).toBe(false);
+  it("状態の変化は、完了と取り消しだけを経緯に出す", () => {
+    expect(isMilestone(ev("state_changed", { from: "qa", to: "done" }, null))).toBe(true);
+    expect(isMilestone(ev("state_changed", { from: "qa", to: "cancelled" }, null))).toBe(true);
+    expect(isMilestone(ev("state_changed", { from: "planning", to: "awaiting_plan_approval" }, null))).toBe(false);
+  });
+
+  it("MILESTONE_KINDS は API で絞るための種類の一覧(状態の変化を含み、細かい動きは含まない)", () => {
+    expect(MILESTONE_KINDS).toContain("state_changed");
+    expect(MILESTONE_KINDS).toContain("bounce");
+    expect(MILESTONE_KINDS).not.toContain("tool_use");
+  });
+
+  it("今の動きは、最新の発言かツール実行(結果や判定の後の終了は飛ばす)", () => {
+    const list = [
+      { ...ev("tool_use", { name: "Bash", input: { command: "npm test" } }), id: 1 },
+      { ...ev("assistant_text", { text: "直します" }), id: 2 },
+      { ...ev("tool_use", { name: "Edit", input: { file_path: "src/a.ts" } }), id: 3 },
+      { ...ev("tool_result", { content: "ok" }), id: 4 },
+      { ...ev("rate_limit", { status: "allowed" }), id: 5 },
+    ];
+    expect(latestAction(list)?.id).toBe(3);
+    expect(latestAction([{ ...ev("init", {}), id: 1 }])).toBeNull();
   });
 
   it("利用枠が制限中なら注意として表示し、生の JSON は見せない", () => {
@@ -262,3 +282,31 @@ describe("taskFilter(絞り込みの条件と件数)", () => {
     expect(countByFilter([], false)).toEqual({ all: 0, active: 0, attention: 0 });
   });
 });
+
+describe("buildTimeline(経緯)", () => {
+  const run = (id: number, startedAt: string) => ({
+    id, taskId: 1, projectId: 1, role: "planner", model: "sonnet", state: "succeeded" as const, verdict: "ready", summary: null, error: null, costUsd: 0.1, startedAt, endedAt: null, durationSec: 60,
+  });
+  const ev = (id: number, kind: string, createdAt: string, payload: unknown = {}, runId: number | null = null) => ({ id, taskId: 1, runId, kind, payload, createdAt });
+  const approval = (id: number, createdAt: string) => ({ id, kind: "plan", result: "approved" as const, commitSha: null, comment: "エラー時も", createdAt, invalidatedAt: null });
+
+  it("実行・人の判断・経緯の出来事を、古い順に1本にする。経緯に出さない出来事は落とす", () => {
+    const items = buildTimeline({
+      runs: [run(2, "2026-10-17T10:30:00.000Z"), run(1, "2026-10-17T10:20:00.000Z")],
+      events: [
+        ev(11, "bounce", "2026-10-17T10:31:00.000Z", { summary: "境界値" }),
+        ev(10, "state_changed", "2026-10-17T10:21:00.000Z", { from: "planning", to: "awaiting_plan_approval" }),
+        ev(12, "tool_use", "2026-10-17T10:30:30.000Z", { name: "Bash" }, 2),
+      ],
+      approvals: [approval(5, "2026-10-17T10:22:00.000Z")],
+    });
+    expect(items.map((i) => `${i.type}:${i.type === "run" ? i.run.id : i.type === "event" ? i.event.id : i.approval.id}`)).toEqual(["run:1", "approval:5", "run:2", "event:11"]);
+  });
+
+  it("同じ時刻なら、実行 → 人の判断 → 出来事の順(実行の開始が先にある)", () => {
+    const t = "2026-10-17T10:20:00.000Z";
+    const items = buildTimeline({ runs: [run(1, t)], events: [ev(10, "bounce", t)], approvals: [approval(5, t)] });
+    expect(items.map((i) => i.type)).toEqual(["run", "approval", "event"]);
+  });
+});
+

@@ -65,17 +65,19 @@ export function useApi<T>(path: string | null): ApiState<T> {
  * イベントの一覧。最初に API で最新の limit 件を取り、以後は SSE で届いたものを足す。
  * filter に合うものだけを、id 昇順で最大 limit 件持つ。
  */
-export function useEvents(filter: { task?: number; run?: number }, limit = 200): { events: EventView[]; loading: boolean } {
+/** kinds を渡すとその種類だけ(API の kinds と、SSE で届いたものの両方で絞る) */
+export function useEvents(filter: { task?: number; run?: number; kinds?: string[] }, limit = 200): { events: EventView[]; loading: boolean } {
   const { subscribe } = useStream();
   const [events, setEvents] = useState<EventView[]>([]);
   const [loading, setLoading] = useState(true);
-  const key = `${filter.task ?? ""}:${filter.run ?? ""}:${limit}`;
+  const key = `${filter.task ?? ""}:${filter.run ?? ""}:${filter.kinds?.join(",") ?? ""}:${limit}`;
 
   useEffect(() => {
     let alive = true;
     const pending: EventView[] = [];
     let loaded = false;
-    const match = (e: EventView) => (filter.task === undefined || e.taskId === filter.task) && (filter.run === undefined || e.runId === filter.run);
+    const match = (e: EventView) =>
+      (filter.task === undefined || e.taskId === filter.task) && (filter.run === undefined || e.runId === filter.run) && (filter.kinds === undefined || filter.kinds.includes(e.kind));
     const merge = (base: EventView[], add: EventView[]) => {
       const last = base.at(-1)?.id ?? 0;
       const next = [...base, ...add.filter((e) => e.id > last && match(e))];
@@ -90,6 +92,7 @@ export function useEvents(filter: { task?: number; run?: number }, limit = 200):
     const q = new URLSearchParams({ limit: String(limit) });
     if (filter.task !== undefined) q.set("task", String(filter.task));
     if (filter.run !== undefined) q.set("run", String(filter.run));
+    if (filter.kinds !== undefined) q.set("kinds", filter.kinds.join(","));
     getJson<EventsPage>(`/api/events?${q}`).then(
       (page) => {
         if (!alive) return;

@@ -6,6 +6,7 @@ import { App } from "../App.tsx";
 import { AttentionPanel } from "./dashboard/AttentionPanel.tsx";
 import { EventList } from "./EventList.tsx";
 import { TaskTable } from "./TaskTable.tsx";
+import { Timeline } from "./Timeline.tsx";
 
 afterEach(() => {
   cleanup();
@@ -145,10 +146,11 @@ describe("App(ダッシュボード)", () => {
     );
   });
 
-  it("対応待ち・実況・タスク一覧を表示し、完了は既定で隠す。件数をタブのタイトルに出す", async () => {
+  it("対応待ち・実行中・タスク一覧を表示し、完了は既定で隠す。件数をタブのタイトルに出す", async () => {
     render(<App />);
     await screen.findByRole("heading", { name: "対応待ち" });
-    expect(screen.getByRole("heading", { name: "実況" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "実行中" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "実況" })).toBeNull();
     const table = screen.getByRole("table");
     expect(within(table).getByText("検索を追加")).toBeTruthy();
     expect(within(table).getByText("implementer")).toBeTruthy();
@@ -156,6 +158,33 @@ describe("App(ダッシュボード)", () => {
     fireEvent.click(screen.getByLabelText("完了・取り消しも表示"));
     expect(within(screen.getByRole("table")).getByText("終わった")).toBeTruthy();
     await waitFor(() => expect(document.title).toBe("(1) agent-crew"));
+  });
+
+  it("実行中の役割ごとに今の動き1行を出し、下に最近の出来事(経緯の出来事だけ)を出す。イベントの流れは出さない", async () => {
+    overview.running = [{ id: 9, taskId: 7, projectId: 1, role: "implementer", model: "sonnet", state: "running", verdict: null, summary: null, error: null, costUsd: null, startedAt: new Date().toISOString(), endedAt: null, durationSec: null, taskTitle: "検索を追加" }];
+    const at = new Date().toISOString();
+    const fetchMock = vi.fn(async (url: string) => {
+      const q = new URL(url, "http://x").searchParams;
+      const body = url.startsWith("/api/overview")
+        ? overview
+        : q.get("run") === "9"
+          ? { events: [{ id: 1, taskId: 7, runId: 9, kind: "tool_use", payload: { name: "Bash", input: { command: "npm test" } }, createdAt: at }], lastId: 1 }
+          : q.get("kinds")
+            ? { events: [{ id: 2, taskId: 8, runId: null, kind: "bounce", payload: { summary: "境界値のテストがない" }, createdAt: at }], lastId: 2 }
+            : { events: [{ id: 3, taskId: 7, runId: 9, kind: "assistant_text", payload: { text: "流れの発言" }, createdAt: at }], lastId: 3 };
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      render(<App />);
+      await screen.findByText("npm test");
+      expect(screen.getByRole("heading", { name: "最近の出来事" })).toBeTruthy();
+      expect(await screen.findByText("境界値のテストがない")).toBeTruthy();
+      expect(screen.queryByText("流れの発言")).toBeNull();
+      expect(fetchMock.mock.calls.map(([u]) => String(u)).some((u) => u.startsWith("/api/events") && !u.includes("kinds=") && !u.includes("run="))).toBe(false);
+    } finally {
+      overview.running = [];
+    }
   });
 
   describe("絞り込みの件数", () => {
@@ -215,3 +244,41 @@ describe("App(ダッシュボード)", () => {
     expect(window.location.pathname).toBe("/tasks/7");
   });
 });
+
+describe("Timeline(タスクの経緯)", () => {
+  const run = (id: number, role: string, verdict: string, startedAt: string) => ({
+    id, taskId: 1, projectId: 1, role, model: "sonnet", state: "succeeded" as const, verdict, summary: null, error: null, costUsd: 0.09, startedAt, endedAt: null, durationSec: 100,
+  });
+  const props = {
+    runs: [run(44, "planner", "ready", "2026-10-17T01:20:00.000Z"), run(45, "reviewer", "changes_requested", "2026-10-17T01:30:00.000Z")],
+    events: [
+      { id: 1, taskId: 1, runId: null, kind: "bounce", payload: { summary: "境界値のテストがない" }, createdAt: "2026-10-17T01:31:00.000Z" },
+      { id: 2, taskId: 1, runId: null, kind: "state_changed", payload: { from: "planning", to: "awaiting_plan_approval" }, createdAt: "2026-10-17T01:21:00.000Z" },
+    ] as EventView[],
+    approvals: [{ id: 5, kind: "plan", result: "approved" as const, commitSha: null, comment: "エラー時の表示も", createdAt: "2026-10-17T01:22:00.000Z", invalidatedAt: null }],
+    reviewRounds: 1,
+  };
+
+  it("既定は畳み、見出しに差し戻しと実行の回数を出す", () => {
+    render(<Timeline {...props} />);
+    const toggle = screen.getByRole("button", { name: /経緯/ });
+    expect(toggle.textContent).toContain("差し戻し 1 回・実行 2 回");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByText("境界値のテストがない")).toBeNull();
+  });
+
+  it("開くと、実行(実行ログへのリンク)・人の判断・経緯の出来事を古い順に出す。状態の変化は出さない", () => {
+    render(<Timeline {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: /経緯/ }));
+    const items = screen.getAllByRole("listitem").map((li) => li.textContent ?? "");
+    expect(items).toHaveLength(4);
+    expect(items[0]).toContain("planner");
+    expect(items[1]).toContain("計画を承認");
+    expect(items[1]).toContain("エラー時の表示も");
+    expect(items[2]).toContain("reviewer");
+    expect(items[3]).toContain("境界値のテストがない");
+    expect(screen.getByRole("link", { name: /planner/ }).getAttribute("href")).toBe("/runs/44");
+    expect(screen.queryByText(/計画の承認待ち/)).toBeNull();
+  });
+});
+

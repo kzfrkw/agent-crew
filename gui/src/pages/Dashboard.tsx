@@ -3,7 +3,7 @@ import { PlusIcon } from "lucide-react";
 import type { Overview, ProjectSummary, TaskSummary } from "../../../src/server/api-types.ts";
 import { Button } from "@/components/ui/button";
 import { AttentionPanel } from "../components/dashboard/AttentionPanel.tsx";
-import { LivePanel } from "../components/dashboard/LivePanel.tsx";
+import { RunningPanel } from "../components/dashboard/RunningPanel.tsx";
 import { Async, Empty } from "../components/Status.tsx";
 import { TaskTable } from "../components/TaskTable.tsx";
 import { useApi } from "../lib/api.ts";
@@ -18,7 +18,7 @@ const FILTERS: { value: Filter; label: string }[] = [
   { value: "attention", label: "対応待ち" },
 ];
 
-/** S1 ダッシュボード: 対応待ちと実況を同じ重さで並べ、その下にタスク一覧 */
+/** S1 ダッシュボード: 対応待ちと実行中を同じ重さで並べ、その下にタスク一覧 */
 export function Dashboard() {
   const overview = useApi<Overview>("/api/overview");
   return (
@@ -27,7 +27,7 @@ export function Dashboard() {
         <>
           <div className="grid grid-cols-1 gap-4 min-[880px]:grid-cols-2">
             <AttentionPanel tasks={o.tasks} onDone={overview.reload} operable={o.worker.state !== "disabled"} />
-            <LivePanel running={o.running} />
+            <RunningPanel running={o.running} />
           </div>
           <ProjectsSection projects={o.projects} />
           <TaskSection overview={o} />

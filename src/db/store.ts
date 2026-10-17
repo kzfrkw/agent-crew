@@ -364,14 +364,15 @@ export function listEvents(db: Db, taskId: number, limit = 200): Event[] {
 
 /**
  * イベントを id 昇順で返す。after を指定すればそれより後を先頭から limit 件、
- * 指定しなければ最新の limit 件。
+ * 指定しなければ最新の limit 件。kinds を指定すればその種類だけ(limit は絞った後の件数)。
  */
-export function queryEvents(db: Db, f: { after?: number; taskId?: number; runId?: number; limit?: number }): Event[] {
+export function queryEvents(db: Db, f: { after?: number; taskId?: number; runId?: number; kinds?: string[]; limit?: number }): Event[] {
   const where: string[] = [];
-  const args: number[] = [];
+  const args: (number | string)[] = [];
   if (f.after !== undefined) (where.push("id > ?"), args.push(f.after));
   if (f.taskId !== undefined) (where.push("task_id = ?"), args.push(f.taskId));
   if (f.runId !== undefined) (where.push("run_id = ?"), args.push(f.runId));
+  if (f.kinds?.length) (where.push(`kind IN (${f.kinds.map(() => "?").join(", ")})`), args.push(...f.kinds));
   const cond = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const limit = f.limit ?? 200;
   const sql =
