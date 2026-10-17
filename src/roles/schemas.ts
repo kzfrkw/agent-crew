@@ -129,7 +129,22 @@ const HandoffExtra = z.object({
     .describe("開発のチケット(実装する順。2〜8枚)"),
 });
 
+/**
+ * コーディネーターの一手(設計メモ v0.21、フェーズ10)。判定(verdict)が一手の種類で、種類ごとに使う項目だけを埋める。
+ * 役割の中身(モデル、道具、書き込み範囲)を指定する項目は持たない(コーディネーターは役割を変えられない)
+ */
+export const COORDINATOR_GATES = ["plan", "design", "final", "strategy", "scope", "handoff"] as const;
+const CoordinatorExtra = z.object({
+  role: z.string().nullable().default(null).describe("run_role のとき: 起動する役割の名前(入力の「使える役割」から選ぶ)。それ以外は null"),
+  input: z.string().nullable().default(null).describe("run_role のとき: その役割に渡す指示(読む成果物、書くもの、直してほしい点)。それ以外は null"),
+  question: z.string().nullable().default(null).describe("ask_human のとき: 人への問い(選択肢と推奨案が分かるように1〜2文で)。それ以外は null"),
+  gate: z.enum(COORDINATOR_GATES).nullable().default(null).describe("request_approval のとき: 求める人の承認の種類。それ以外は null"),
+  reason: z.string().describe("この一手を選んだ理由(1〜3文)。既定の進め方から外れるなら、なぜ外れるか"),
+  deviatesFromDefault: z.boolean().describe("既定の進め方から外れる一手か"),
+});
+
 export const EXTRA_SCHEMAS: Record<string, z.ZodObject> = {
+  coordinator: CoordinatorExtra,
   critic: CriticExtra,
   researcher: PlanningWriterExtra,
   strategist: PlanningWriterExtra,

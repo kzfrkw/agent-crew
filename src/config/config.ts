@@ -28,6 +28,9 @@ const ConfigSchema = z.object({
       maxReviewRounds: z.number().int().positive().default(3),
       /** 利用枠(5時間・7日の窓)の使用率がこれ以上なら、新しい役割を起動しない(フェーズ7) */
       pauseAtUtilization: z.number().min(0).max(1).default(0.95),
+      /** 1タスクあたりの役割の起動回数(コーディネーター自身を含む)と費用の上限。超えると人に回す(フェーズ10、設計メモ v0.21) */
+      maxRunsPerTask: z.number().int().positive().default(60),
+      maxCostPerTaskUsd: z.number().positive().default(20),
     })
     .prefault({}),
   review: z

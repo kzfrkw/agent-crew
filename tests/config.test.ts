@@ -30,6 +30,13 @@ describe("loadConfig", () => {
     expect(c.limits.maxReviewRounds).toBe(DEFAULT_CONFIG.limits.maxReviewRounds);
   });
 
+  it("1タスクあたりの役割の起動回数と費用の上限(コーディネーターの守り。設計メモ v0.21)", () => {
+    expect(DEFAULT_CONFIG.limits).toMatchObject({ maxRunsPerTask: 60, maxCostPerTaskUsd: 20 });
+    const home = tmp();
+    writeFileSync(join(home, "config.json"), JSON.stringify({ limits: { maxRunsPerTask: 10, maxCostPerTaskUsd: 3 } }));
+    expect(loadConfig(home).limits).toMatchObject({ maxRunsPerTask: 10, maxCostPerTaskUsd: 3 });
+  });
+
   it("Must 指摘の監査は既定でオン。設定で止められる", () => {
     expect(DEFAULT_CONFIG.review.audit).toBe(true);
     const home = tmp();

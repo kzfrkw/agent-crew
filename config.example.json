@@ -5,7 +5,9 @@
     "runTimeoutSec": 1800,
     "runMaxBudgetUsd": 5,
     "maxReviewRounds": 3,
-    "pauseAtUtilization": 0.95
+    "pauseAtUtilization": 0.95,
+    "maxRunsPerTask": 60,
+    "maxCostPerTaskUsd": 20
   },
   "review": {
     "audit": true
