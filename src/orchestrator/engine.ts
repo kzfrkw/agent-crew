@@ -54,7 +54,9 @@ export function applyEvent(ctx: AppContext, taskId: number, event: TaskEvent, re
   updateTaskState(ctx.db, taskId, { state: next.state, heldFromState: next.heldFromState, assignee: next.assignee, reviewRounds: next.reviewRounds, design: next.design });
   addEvent(ctx.db, { taskId, kind: "state_changed", payload: { from: task.state, to: next.state, event: event.type, ...(reason ? { reason } : {}) } });
   if (next.state === "needs_input" || next.state === "failed") {
-    addEvent(ctx.db, { taskId, kind: next.state, payload: { reason: reason ?? describeEvent(event) } });
+    // event / from / role / verdict は、止まった理由を種類ごとに数えるため(設計メモ v0.22 の「理由の内訳」)
+    const cause = event.type === "verdict" ? { role: event.role, verdict: event.verdict } : {};
+    addEvent(ctx.db, { taskId, kind: next.state, payload: { reason: reason ?? describeEvent(event), event: event.type, from: task.state, ...cause } });
   }
   // 人の対応待ちになったら知らせる(設計メモ v0.17)
   if (!o.quiet && NEEDS_HUMAN.includes(next.state) && task.state !== next.state) notifyHuman(ctx, `#${taskId} ${STATE_LABELS[next.state]}: ${task.title}`);

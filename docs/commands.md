@@ -54,7 +54,7 @@
 │   └── design-memo.md      # 設計メモ(正本)
 ├── roles/                  # 役割定義(Markdown。frontmatterに model / permissions / outputs)
 ├── src/
-│   ├── orchestrator/       # 状態遷移(コーディネーターの一手の検証)、役割の起動、上限管理
+│   ├── orchestrator/       # 状態遷移(固定。フェーズ10でコーディネーターの一手の検証に移す)、役割の起動、上限管理
 │   ├── runner/             # Claude Codeのヘッドレス実行のラッパー
 │   ├── db/                 # SQLiteスキーマとアクセス
 │   ├── cli/                # CLIエントリポイント、doctor

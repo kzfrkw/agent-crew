@@ -111,6 +111,28 @@ describe("人の判断が必要なとき", () => {
     expect(getTask(ctx.db, t.id)!.state).toBe("needs_input");
     expect(latestNeedsInputReason(ctx.db, t.id)).toContain("plan.md");
   });
+
+  it("止まった出来事に、原因の種類と止まる前の状態を残す(理由の内訳の集計に使う。設計メモ v0.22)", async () => {
+    const runner = new ScriptedRunner({
+      planner: answer("plan.md", "need_human", { acceptanceCriteria: [], testFirstException: false, design: { architect: false, designer: false, reason: "小さな変更" } }),
+    });
+    const ctx = testContext(runner);
+    const { project } = await approvedProject(ctx);
+    const t = newTask(ctx, project.id);
+    await runUntilIdle(ctx);
+    const ev = listEvents(ctx.db, t.id).filter((e) => e.kind === "needs_input").at(-1)!;
+    expect(ev.payload).toMatchObject({ event: "verdict", from: "planning", role: "planner", verdict: "need_human" });
+    expect((ev.payload as { reason?: string }).reason).toContain("planner");
+  });
+
+  it("失敗の出来事にも原因の種類を残す", async () => {
+    const ctx = testContext(new ScriptedRunner({}));
+    const { project } = await approvedProject(ctx);
+    const t = newTask(ctx, project.id);
+    applyEvent(ctx, t.id, { type: "fail", reason: "worktree を作れません" }, "worktree を作れません");
+    const ev = listEvents(ctx.db, t.id).filter((e) => e.kind === "failed").at(-1)!;
+    expect(ev.payload).toEqual({ reason: "worktree を作れません", event: "fail", from: "queued" });
+  });
 });
 
 describe("計画の承認・却下・取り消し", () => {
