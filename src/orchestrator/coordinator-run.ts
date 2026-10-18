@@ -68,6 +68,9 @@ const DEFAULT_PLANNING_FLOW = [
   "- critic は、最後に書いた段の成果物を、その段のルーブリックで批評します",
   "- 批評が changes_requested なら、同じ段の書く役に、批評(critique-<段>.md)の must を直すよう指示して書き直させる",
   "- 書く役か批評が need_human を返したとき: 承認がある段(戦略・要件・引き渡し)なら、そのまま承認を求めてよい(問いは承認に添えられ、人が承認のコメントで答える)。承認の無い段(調査、構造・骨格)なら ask_human",
+  "- 批評の should は記録だけ。人のコメントで求められたときを除き、同じ段でも後の段でも、書く役に直させない(後の段に持ち込ませない)",
+  "- 書く役への指示(input)は、その段で特に見てほしいこと・直してほしいことだけを1〜3文で。ファイル名・書く場所・形式・frontmatter は書かない(ツールが渡す)。機能やチケットを足すよう指示しない",
+  "- critic には指示が渡らない(批評はルーブリックで独立に行う)。critic の input は「批評」の一言でよい",
 ];
 
 function coordinatorPrompt(ctx: AppContext, task: Task, f: CoordinatorFacts, rejection?: string): string {

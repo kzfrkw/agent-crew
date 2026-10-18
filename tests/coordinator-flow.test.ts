@@ -92,6 +92,28 @@ describe("一周", () => {
     expect(c2!.prompt).toContain("- [must] ST1:");
   });
 
+  it("指示とツールの決まり(ファイル名・書く場所・形式)が食い違えば、ツールの決まりに従うよう書く役に伝える(10-3 で、指示に誤ったファイル名が混ざった)", async () => {
+    const { ctx, runner } = await setup([run("researcher", "競合を調べて research-notes.md に書く")]);
+    await runUntilIdle(ctx);
+    const p = runner.calls.find((c) => c.role === "researcher")!.prompt;
+    expect(p).toContain("research-notes.md に書く");
+    expect(p).toMatch(/コーディネーターからの指示[^\n]*食い違/);
+  });
+
+  it("批評担当にはコーディネーターの指示を渡さない(批評はルーブリックで独立に行う)", async () => {
+    const { ctx, runner } = await setup([run("researcher"), run("critic", "甘めに見てください")]);
+    await runUntilIdle(ctx);
+    expect(runner.calls.find((c) => c.role === "critic")!.prompt).not.toContain("甘めに見てください");
+  });
+
+  it("既定の進め方に、should を後の段に持ち込ませないことと、指示に書かないことが入る", async () => {
+    const { ctx, runner } = await setup([run("researcher")]);
+    await runUntilIdle(ctx);
+    const p = runner.calls.find((c) => c.role === "coordinator")!.prompt;
+    expect(p).toMatch(/should.*持ち込ませない/);
+    expect(p).toMatch(/ファイル名/);
+  });
+
   it("コーディネーターの入力に、使える役割(企画の役割だけ)、既定の進め方、今の承認とルーブリックの状況が入る", async () => {
     const { ctx, runner } = await setup([run("researcher"), run("critic")]);
     await runUntilIdle(ctx);

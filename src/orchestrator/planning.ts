@@ -152,7 +152,8 @@ export function planningPrompt(ctx: AppContext, task: Task, stage: Stage, mode: 
     ...ref("人のコメント・回答(最優先で従う)", humanNotesPath(ctx.home, task.id)),
     "",
     ...rubricSection(stageRubric(ctx, stage.key), mode),
-    ...(instruction?.trim() ? ["## コーディネーターからの指示", instruction.trim(), ""] : []),
+    // ファイル名・書く場所・形式はこの入力の他の部分が正(10-3 で、指示に誤ったファイル名が混ざった)
+    ...(instruction?.trim() ? ["## コーディネーターからの指示(ファイル名・書く場所・形式がこの入力の他の部分と食い違えば、他の部分に従う)", instruction.trim(), ""] : []),
     "## 今回やること",
     mode === "write"
       ? `- ${ROLE_TASK[stage.key]}。前の版があれば、それを直す形で更新してください`
