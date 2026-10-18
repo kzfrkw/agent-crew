@@ -139,6 +139,8 @@ export type Task = {
   parentId: number | null;
   /** 子タスクの順番(1から)。子でなければ null */
   seq: number | null;
+  /** 進め方(フェーズ10)。fixed は固定の状態遷移、coordinator は LLM のコーディネーター */
+  flow: "fixed" | "coordinator";
   createdAt: string;
   updatedAt: string;
 };
@@ -159,21 +161,22 @@ const toTask = (r: Row): Task => ({
   repos: r.repos_json ? (JSON.parse(r.repos_json as string) as string[]) : null,
   parentId: (r.parent_id as number | null) ?? null,
   seq: (r.seq as number | null) ?? null,
+  flow: ((r.flow as string | undefined) ?? "fixed") as Task["flow"],
   createdAt: r.created_at as string,
   updatedAt: r.updated_at as string,
 });
 
 export function createTask(
   db: Db,
-  t: { projectId: number; title: string; body: string; sourceKind?: Task["sourceKind"]; sourceUrl?: string; kind?: Task["kind"]; parentId?: number; seq?: number },
+  t: { projectId: number; title: string; body: string; sourceKind?: Task["sourceKind"]; sourceUrl?: string; kind?: Task["kind"]; parentId?: number; seq?: number; flow?: Task["flow"] },
 ): Task {
   const ts = now();
   const { lastInsertRowid } = db
     .prepare(
-      `INSERT INTO tasks (project_id, title, body, source_kind, source_url, kind, state, parent_id, seq, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?)`,
+      `INSERT INTO tasks (project_id, title, body, source_kind, source_url, kind, state, parent_id, seq, flow, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?)`,
     )
-    .run(t.projectId, t.title, t.body, t.sourceKind ?? "local", t.sourceUrl ?? null, t.kind ?? "normal", t.parentId ?? null, t.seq ?? null, ts, ts);
+    .run(t.projectId, t.title, t.body, t.sourceKind ?? "local", t.sourceUrl ?? null, t.kind ?? "normal", t.parentId ?? null, t.seq ?? null, t.flow ?? "fixed", ts, ts);
   return getTask(db, Number(lastInsertRowid))!;
 }
 
@@ -510,7 +513,8 @@ export function setRepoProtect(db: Db, repoId: number, paths: string[]): void {
 }
 
 /** プロジェクトの設定(フェーズ8) */
-export type ProjectSettings = { autoApprovePlan?: boolean; retrospective?: boolean };
+/** coordinator: 新しい企画のタスクをコーディネーターで進める(フェーズ10。既定 off) */
+export type ProjectSettings = { autoApprovePlan?: boolean; retrospective?: boolean; coordinator?: boolean };
 
 export function getProjectSettings(db: Db, projectId: number): ProjectSettings {
   const r = db.prepare("SELECT settings_json FROM projects WHERE id = ?").get(projectId) as { settings_json: string | null } | undefined;

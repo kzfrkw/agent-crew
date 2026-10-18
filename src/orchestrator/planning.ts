@@ -1,6 +1,6 @@
 import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
-import { addArtifact, addEvent, createProject, createTask, getProject, getProjectByName, listEvents, listRepos, type Task } from "../db/store.ts";
+import { addArtifact, addEvent, createProject, createTask, getProject, getProjectByName, getProjectSettings, listEvents, listRepos, type Task } from "../db/store.ts";
 import type { BounceInfo } from "./bounce.ts";
 import { rubricPath, type Rubric } from "../roles/rubrics.ts";
 import { checkRubric, type RubricResult } from "./rubric-check.ts";
@@ -21,7 +21,7 @@ import type { Role } from "./transitions.ts";
 
 export type StageKey = "research" | "strategy" | "scope" | "ux" | "handoff";
 /** writerLabel は画面に出す担当名(内部の役割名 researcher などは出さない) */
-type Stage = { key: StageKey; writer: Role; writerLabel: string; label: string; files: string[] };
+export type Stage = { key: StageKey; writer: Role; writerLabel: string; label: string; files: string[] };
 
 export const STAGES: Record<string, Stage> = {
   p_researching: { key: "research", writer: "researcher", writerLabel: "調査担当", label: "調査", files: ["research.md"] },
@@ -44,7 +44,13 @@ export type PlanningQuestions = { stage: StageKey; questions: { from: string; te
  */
 export function planningQuestions(db: Db, taskId: number): PlanningQuestions | null {
   const events = listEvents(db, taskId, 2000);
-  const lastStart = events.filter((e) => e.kind === "state_changed" && STAGES[String((e.payload as { to?: unknown }).to)]).at(-1)?.id ?? 0;
+  // 段を書き始めた出来事: 固定の流れは段の状態に入ったとき、コーディネーターは書く役を動かす一手(フェーズ10)
+  const started = (e: (typeof events)[number]) => {
+    const p = e.payload as { to?: unknown; ok?: unknown; verdict?: unknown; role?: unknown };
+    if (e.kind === "state_changed") return !!STAGES[String(p.to)];
+    return e.kind === "coordinator_move" && p.ok === true && p.verdict === "run_role" && !!stageOfWriter(String(p.role));
+  };
+  const lastStart = events.filter(started).at(-1)?.id ?? 0;
   const q = events.filter((e) => e.kind === "planning_question" && e.id > lastStart).at(-1)?.payload as (Partial<PlanningQuestions> & { summary?: string }) | undefined;
   // 以前の形(問いを1つの文字列につないだもの)は、書く役と批評担当の部分に分けて読む
   if (q && !q.questions && q.summary) {
@@ -94,12 +100,14 @@ export function createPlanningProject(ctx: AppContext, name: string): void {
 }
 
 /** 企画のタスクを作る。docs は読ませる手元の資料(ファイルかフォルダの絶対パス) */
-export function createPlanningTask(ctx: AppContext, o: { projectName: string; title: string; body: string; docs: string[]; sourceUrl?: string }): Task {
+/** flow を省くと、プロジェクトの設定(coordinator)に従う。既定は固定の流れ(フェーズ10) */
+export function createPlanningTask(ctx: AppContext, o: { projectName: string; title: string; body: string; docs: string[]; sourceUrl?: string; flow?: Task["flow"] }): Task {
   const project = mustProject(ctx.db, o.projectName);
   for (const d of o.docs) {
     if (!isAbsolute(d) || !existsSync(d)) throw new Error(`読ませる資料が見つかりません(絶対パスで指定してください): ${d}`);
   }
-  const t = createTask(ctx.db, { projectId: project.id, title: o.title, body: o.body, kind: "planning", sourceKind: o.sourceUrl ? "paste" : "local", sourceUrl: o.sourceUrl });
+  const flow = o.flow ?? (getProjectSettings(ctx.db, project.id).coordinator ? "coordinator" : "fixed");
+  const t = createTask(ctx.db, { projectId: project.id, title: o.title, body: o.body, kind: "planning", sourceKind: o.sourceUrl ? "paste" : "local", sourceUrl: o.sourceUrl, flow });
   addEvent(ctx.db, { taskId: t.id, kind: "planning_inputs", payload: { docs: o.docs } });
   return t;
 }
@@ -117,7 +125,7 @@ const ROLE_TASK: Record<StageKey, string> = {
 };
 
 /** 企画の役割への入力(題材、資料、リポジトリ、ここまでの成果物、批評、人のコメント) */
-export function planningPrompt(ctx: AppContext, task: Task, stage: Stage, mode: "write" | "critique"): string {
+export function planningPrompt(ctx: AppContext, task: Task, stage: Stage, mode: "write" | "critique", instruction?: string): string {
   const dir = taskDir(ctx.home, task.id);
   const project = getProject(ctx.db, task.projectId)!;
   const repos = listRepos(ctx.db, task.projectId);
@@ -144,6 +152,7 @@ export function planningPrompt(ctx: AppContext, task: Task, stage: Stage, mode: 
     ...ref("人のコメント・回答(最優先で従う)", humanNotesPath(ctx.home, task.id)),
     "",
     ...rubricSection(stageRubric(ctx, stage.key), mode),
+    ...(instruction?.trim() ? ["## コーディネーターからの指示", instruction.trim(), ""] : []),
     "## 今回やること",
     mode === "write"
       ? `- ${ROLE_TASK[stage.key]}。前の版があれば、それを直す形で更新してください`
@@ -166,26 +175,41 @@ const failed = (r: Extract<InvokeResult, { ok: false }>, role: string): HandlerO
   reason: `${role}: ${r.reason}`,
 });
 
-/** 企画の段: 書く役 → 批評担当 */
-export const planningStage: Handler = async (ctx, task) => {
-  const stage = STAGES[task.state];
-  if (!stage) throw new Error(`企画の段ではありません: ${task.state}`);
+export type StageRunFailure = { ok: false; outcome: HandlerOutcome };
+export type WriterRun = { ok: true; runId: number; verdict: string; summary: string };
+export type CriticRun = { ok: true; runId: number; verdict: string; summary: string; detail: string; musts: string[]; shoulds: number; bounce?: BounceInfo };
+
+/** 書く役が担当する段 */
+export function stageOfWriter(role: string): Stage | undefined {
+  return Object.values(STAGES).find((s) => s.writer === role);
+}
+
+/** 人に決めてほしいこと(need_human のとき)を段ごとに残す。承認を求めるときに添える */
+function recordStageQuestions(ctx: AppContext, task: Task, stage: Stage, from: string, r: { runId: number; summary: string; extra: Record<string, unknown> }): void {
+  addEvent(ctx.db, { taskId: task.id, runId: r.runId, kind: "stage_questions", payload: { stage: stage.key, from, questions: questionsOf(r) } });
+}
+
+/** 企画の段の書く役を動かす。instruction はコーディネーターからの指示(フェーズ10) */
+export async function runPlanningWriter(ctx: AppContext, task: Task, stage: Stage, instruction?: string): Promise<WriterRun | StageRunFailure> {
   const dir = taskDir(ctx.home, task.id);
   mkdirSync(dir, { recursive: true });
-  const w = await invokeRole(ctx, { roleName: stage.writer, taskId: task.id, cwd: dir, artifactsDir: dir, prompt: planningPrompt(ctx, task, stage, "write") });
-  if (!w.ok) return failed(w, stage.writer);
-  const gated = HUMAN_GATE.includes(stage.key);
-  // 人の承認が無い段で書く役が止まったら、人の回答待ち
-  if (w.verdict === "need_human" && !gated) return { event: { type: "verdict", role: stage.writer, verdict: "need_human" }, reason: `${stage.writerLabel}が人の判断を求めています: ${w.summary}(詳細: ${dir})` };
+  const w = await invokeRole(ctx, { roleName: stage.writer, taskId: task.id, cwd: dir, artifactsDir: dir, prompt: planningPrompt(ctx, task, stage, "write", instruction) });
+  if (!w.ok) return { ok: false, outcome: failed(w, stage.writer) };
+  if (w.verdict === "need_human") recordStageQuestions(ctx, task, stage, stage.writerLabel, w);
   // 役割の出力以外の、この段のファイル(スライドの Markdown、structure.md など)も成果物として出す
   for (const f of stage.files) {
     const path = join(dir, f);
     if (f !== ctx.roles.get(stage.writer)?.output && existsSync(path)) addArtifact(ctx.db, { taskId: task.id, runId: w.runId, kind: f.replace(/\.md$/, ""), path });
   }
   if (stage.key === "handoff") addEvent(ctx.db, { taskId: task.id, runId: w.runId, kind: "handoff", payload: { tickets: w.extra.tickets ?? [] } });
+  return { ok: true, runId: w.runId, verdict: w.verdict, summary: w.summary };
+}
 
+/** 企画の段の批評担当を動かし、ルーブリックで判定を検査する。差し戻しなら bounce を返す */
+export async function runPlanningCritic(ctx: AppContext, task: Task, stage: Stage): Promise<CriticRun | StageRunFailure> {
+  const dir = taskDir(ctx.home, task.id);
   const c = await invokeRole(ctx, { roleName: "critic", taskId: task.id, cwd: dir, artifactsDir: dir, prompt: planningPrompt(ctx, task, stage, "critique") });
-  if (!c.ok) return failed(c, "critic");
+  if (!c.ok) return { ok: false, outcome: failed(c, "critic") };
   copyFileSync(join(dir, "critique.md"), join(dir, `critique-${stage.key}.md`));
   addArtifact(ctx.db, { taskId: task.id, runId: c.runId, kind: `critique-${stage.key}`, path: join(dir, `critique-${stage.key}.md`), verdict: c.verdict });
   const issues = (c.extra.issues ?? []) as { severity: string; title: string; detail: string }[];
@@ -195,33 +219,55 @@ export const planningStage: Handler = async (ctx, task) => {
   const rubric = stageRubric(ctx, stage.key);
   const results = (c.extra.rubric ?? []) as RubricResult[];
   const rc = checkRubric(c.verdict, rubric, results);
-  if (!rc.ok) return { event: { type: "run_error", reason: rc.reason }, reason: `critic: ${rc.reason}${detail}` };
+  if (!rc.ok) return { ok: false, outcome: { event: { type: "run_error", reason: rc.reason }, reason: `critic: ${rc.reason}${detail}` } };
   const attempt = listEvents(ctx.db, task.id, 2000).filter((e) => e.kind === "rubric" && (e.payload as { stage?: unknown }).stage === stage.key).length + 1;
   addEvent(ctx.db, { taskId: task.id, runId: c.runId, kind: "rubric", payload: { stage: stage.key, rubric: rubric.name, verdict: c.verdict, results, mustFailed: rc.mustFailed, shouldFailed: rc.shouldFailed, attempt } });
+  if (c.verdict === "need_human") recordStageQuestions(ctx, task, stage, "批評担当", c);
   const itemText = (id: string) => `${id}: ${rubric.items.find((i) => i.id === id)!.text}`;
   const musts = [...rc.mustFailed.map(itemText), ...issues.filter((i) => i.severity === "must").map((i) => i.title)];
+  const bounce: BounceInfo | undefined =
+    c.verdict === "changes_requested"
+      ? { source: "critique", key: `${stage.key}:${[...rc.mustFailed].sort().join(",")}`, summary: `${stage.label}の批評の must: ${rc.mustFailed.map(itemText).join(" / ").slice(0, 200)}` }
+      : undefined;
+  return { ok: true, runId: c.runId, verdict: c.verdict, summary: c.summary, detail, musts, shoulds: issues.filter((i) => i.severity === "should").length, bounce };
+}
+
+/**
+ * 承認待ちに添える問い(planning_question)を、この段で出た問い(書く役か批評担当から)から作る。
+ * since より後(その段を最後に書き始めた後)の問いだけを使う。問いが無ければ何もしない
+ */
+export function recordPlanningQuestions(ctx: AppContext, task: Task, stage: Stage, o: { since: number; runId: number; musts: string[]; shoulds: number }): PlanningQuestions | null {
+  const asked = listEvents(ctx.db, task.id, 2000).filter((e) => e.kind === "stage_questions" && (e.runId ?? 0) >= o.since && (e.payload as { stage?: unknown }).stage === stage.key);
+  const questions = asked.flatMap((e) => {
+    const p = e.payload as { from: string; questions: string[] };
+    return p.questions.map((text) => ({ from: p.from, text }));
+  });
+  if (!questions.length) return null;
+  const q: PlanningQuestions = { stage: stage.key, questions, musts: o.musts, shoulds: o.shoulds };
+  addEvent(ctx.db, { taskId: task.id, runId: o.runId, kind: "planning_question", payload: q });
+  return q;
+}
+
+/** 企画の段(固定の流れ): 書く役 → 批評担当 */
+export const planningStage: Handler = async (ctx, task) => {
+  const stage = STAGES[task.state];
+  if (!stage) throw new Error(`企画の段ではありません: ${task.state}`);
+  const dir = taskDir(ctx.home, task.id);
+  const w = await runPlanningWriter(ctx, task, stage);
+  if (!w.ok) return w.outcome;
+  const gated = HUMAN_GATE.includes(stage.key);
+  // 人の承認が無い段で書く役が止まったら、人の回答待ち
+  if (w.verdict === "need_human" && !gated) return { event: { type: "verdict", role: stage.writer, verdict: "need_human" }, reason: `${stage.writerLabel}が人の判断を求めています: ${w.summary}(詳細: ${dir})` };
+  const c = await runPlanningCritic(ctx, task, stage);
+  if (!c.ok) return c.outcome;
 
   // 次に人の承認がある段で、書く役か批評担当が人の判断を求めたら、自動では差し戻さずに承認待ちへ進む。
   // 問いと批評の must を承認の理由に添え、人が承認のコメントで答えるか、却下して書き直させる(承認と回答を二度させない。実機の通し確認で発見)
   if (gated && (w.verdict === "need_human" || c.verdict === "need_human")) {
-    const q: PlanningQuestions = {
-      stage: stage.key,
-      questions: [
-        ...(w.verdict === "need_human" ? questionsOf(w).map((text) => ({ from: stage.writerLabel, text })) : []),
-        ...(c.verdict === "need_human" ? questionsOf(c).map((text) => ({ from: "批評担当", text })) : []),
-      ],
-      musts,
-      shoulds: issues.filter((i) => i.severity === "should").length,
-    };
-    addEvent(ctx.db, { taskId: task.id, runId: c.runId, kind: "planning_question", payload: q });
-    return { event: { type: "verdict", role: stage.writer, verdict: "ready" }, reason: `${stage.label}: 人の判断が要る点が ${q.questions.length} 件あります${detail}` };
+    const q = recordPlanningQuestions(ctx, task, stage, { since: w.runId, runId: c.runId, musts: c.musts, shoulds: c.shoulds });
+    return { event: { type: "verdict", role: stage.writer, verdict: "ready" }, reason: `${stage.label}: 人の判断が要る点が ${q?.questions.length ?? 0} 件あります${c.detail}` };
   }
-  if (c.verdict === "approve") return { event: { type: "verdict", role: stage.writer, verdict: "ready" }, reason: `${stage.label}: 批評が承認しました — ${c.summary}${detail}` };
-  if (c.verdict === "need_human") return { event: { type: "verdict", role: stage.writer, verdict: "need_human" }, reason: `批評担当が人の判断を求めています: ${c.summary}${detail}` };
-  const bounce: BounceInfo = {
-    source: "critique",
-    key: `${stage.key}:${[...rc.mustFailed].sort().join(",")}`,
-    summary: `${stage.label}の批評の must: ${rc.mustFailed.map(itemText).join(" / ").slice(0, 200)}`,
-  };
-  return { event: { type: "critique_bounce" }, reason: `${stage.label}: 批評が差し戻しました — ${c.summary}${detail}`, bounce };
+  if (c.verdict === "approve") return { event: { type: "verdict", role: stage.writer, verdict: "ready" }, reason: `${stage.label}: 批評が承認しました — ${c.summary}${c.detail}` };
+  if (c.verdict === "need_human") return { event: { type: "verdict", role: stage.writer, verdict: "need_human" }, reason: `批評担当が人の判断を求めています: ${c.summary}${c.detail}` };
+  return { event: { type: "critique_bounce" }, reason: `${stage.label}: 批評が差し戻しました — ${c.summary}${c.detail}`, bounce: c.bounce };
 };

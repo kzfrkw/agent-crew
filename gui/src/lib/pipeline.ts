@@ -44,10 +44,12 @@ function skipped(state: TaskState, design: DesignOptions): boolean {
   return false;
 }
 
-export function pipelineOf(state: TaskState, heldFrom: TaskState | null, design: DesignOptions = { architect: false, designer: false }, kind: string = "normal"): Stage[] {
+/** flowStage: コーディネーターで進めるタスク(状態 coordinating)の、最後に書いた段(フェーズ10。無ければ調査の前) */
+export function pipelineOf(state: TaskState, heldFrom: TaskState | null, design: DesignOptions = { architect: false, designer: false }, kind: string = "normal", flowStage: TaskState | null = null): Stage[] {
   if (kind === "planning") {
     const hold = HOLD[state];
-    const at = PLANNING_STAGES.findIndex((s) => s.state === (hold ? heldFrom : state));
+    const where = hold ? heldFrom : state;
+    const at = PLANNING_STAGES.findIndex((s) => s.state === (where === "coordinating" ? (flowStage ?? "p_researching") : where));
     return PLANNING_STAGES.map((s, i) => ({
       ...s,
       status: state === "done" || i < at ? "done" : i > at || at < 0 ? "todo" : (hold ?? (WAITING.includes(state) ? "blocked" : "current")),

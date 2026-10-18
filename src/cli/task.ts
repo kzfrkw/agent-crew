@@ -65,10 +65,14 @@ export function registerTaskCommands(program: Command): void {
     .option("--body-file <path>", "本文のファイル(- で標準入力)")
     .option("--docs <path>", "読ませる手元の資料(ファイルかフォルダの絶対パス。複数回指定できる)", (v: string, acc: string[]) => [...acc, v], [] as string[])
     .option("--source-url <url>", "取り込み元のページ(Notion など)の URL")
-    .action((o: { project: string; title: string; body?: string; bodyFile?: string; docs: string[]; sourceUrl?: string }) =>
+    .option("--coordinator", "LLM のコーディネーターで進める(フェーズ10。省くとプロジェクトの設定に従う。既定は固定の流れ)")
+    .option("--fixed", "固定の流れで進める(プロジェクトでコーディネーターをオンにしていても)")
+    .action((o: { project: string; title: string; body?: string; bodyFile?: string; docs: string[]; sourceUrl?: string; coordinator?: boolean; fixed?: boolean }) =>
       withContext((ctx) => {
-        const t = createPlanningTask(ctx, { projectName: o.project, title: o.title, body: readText(o.body, o.bodyFile), docs: o.docs, sourceUrl: o.sourceUrl });
-        console.log(`企画を作りました: #${t.id} ${t.title}(agent-crew run で調査から始めます)`);
+        if (o.coordinator && o.fixed) throw new Error("--coordinator と --fixed は同時に指定できません");
+        const flow = o.coordinator ? "coordinator" : o.fixed ? "fixed" : undefined;
+        const t = createPlanningTask(ctx, { projectName: o.project, title: o.title, body: readText(o.body, o.bodyFile), docs: o.docs, sourceUrl: o.sourceUrl, flow });
+        console.log(`企画を作りました: #${t.id} ${t.title}(${t.flow === "coordinator" ? "コーディネーターで進めます" : "調査から始めます"}。agent-crew run で進みます)`);
       }),
     );
 

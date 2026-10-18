@@ -35,8 +35,8 @@ import { projectDir, runDir, taskDir } from "../orchestrator/paths.ts";
 import { buildTaskReport } from "../orchestrator/report.ts";
 import { getUsage } from "../orchestrator/usage.ts";
 import { retroView } from "../orchestrator/retro.ts";
-import { criticQuestion, planningQuestions } from "../orchestrator/planning.ts";
-import { STATE_LABELS } from "../orchestrator/states.ts";
+import { criticQuestion, planningQuestions, STAGES } from "../orchestrator/planning.ts";
+import { STATE_LABELS, type TaskState } from "../orchestrator/states.ts";
 import type {
   ArtifactDetail,
   ArtifactSummary,
@@ -155,7 +155,18 @@ function taskSummary(db: Db, t: Task, running: Map<number, RunRow>, costs: Map<n
     running: r ? { id: r.id, role: r.role, model: r.model, startedAt: r.startedAt } : null,
     primaryAction: attention ? (nextActions(db, t)[0] ?? null) : null,
     costUsd: costs.get(t.id) ?? null,
+    flow: t.flow,
+    flowStage: t.flow === "coordinator" ? lastWrittenStage(db, t.id) : null,
   };
+}
+
+/** 最後に書いた企画の段(コーディネーターのタスクのパイプライン。フェーズ10) */
+function lastWrittenStage(db: Db, taskId: number): TaskState | null {
+  for (const r of listRuns(db, { taskId }).reverse()) {
+    const entry = Object.entries(STAGES).find(([, s]) => s.writer === r.role);
+    if (entry) return entry[0] as TaskState;
+  }
+  return null;
 }
 
 function runningByTask(db: Db): Map<number, RunRow> {

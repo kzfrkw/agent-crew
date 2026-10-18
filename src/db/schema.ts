@@ -141,4 +141,8 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE tasks ADD COLUMN parent_id INTEGER REFERENCES tasks(id);
   ALTER TABLE tasks ADD COLUMN seq INTEGER;
   `,
+  // v9(フェーズ10): 進め方。fixed は固定の状態遷移、coordinator は LLM のコーディネーター(設計メモ v0.21)
+  `
+  ALTER TABLE tasks ADD COLUMN flow TEXT NOT NULL DEFAULT 'fixed';
+  `,
 ];

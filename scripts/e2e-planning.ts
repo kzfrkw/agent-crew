@@ -9,6 +9,9 @@
  * 環境変数:
  *   E2E_MODEL  全役割のモデルを上書きする(既定 sonnet。"roles" なら roles/*.md の値をそのまま使う)
  *   E2E_KEEP   1 にすると、成功しても作業ディレクトリを残す
+ *   E2E_FLOW   coordinator にすると、LLM のコーディネーターで進める(フェーズ10。既定は固定の流れ)。10-3 で同じ題材を両方の方式で比べる
+ *
+ * 人の回答待ちで止まったら、推奨案で進めるよう答えて続ける(回数は「人の介入」として記録する)
  */
 import { execFileSync } from "node:child_process";
 import { appendFileSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -23,6 +26,9 @@ import type { TaskState } from "../src/orchestrator/states.ts";
 const root = new URL("..", import.meta.url).pathname;
 const bin = join(root, "bin/agent-crew.js");
 const model = process.env.E2E_MODEL ?? "sonnet";
+const flow = process.env.E2E_FLOW === "coordinator" ? "coordinator" : "fixed";
+/** 人の回答待ちに答えた回数 */
+let answers = 0;
 
 // Claude Code のセッション内から実行すると TMPDIR が Claude の一時ディレクトリになり、サンドボックスが書き込みを拒否する。
 // macOS では OS 本来の一時ディレクトリを使う
@@ -69,7 +75,14 @@ function report(id: number): { summary: string; ok: boolean } {
     const dir = taskDir(home, id);
     const research = existsSync(join(dir, "research.md")) ? readFileSync(join(dir, "research.md"), "utf8") : "";
     const kids = listChildren(db, id);
-    const critiques = listEvents(db, id, 2000).filter((e) => e.kind === "critique").map((e) => e.payload as { stage: string; verdict: string });
+    const events = listEvents(db, id, 5000);
+    const critiques = events.filter((e) => e.kind === "critique").map((e) => e.payload as { stage: string; verdict: string });
+    // 方式の比較の項目(設計メモ v0.22 の 3)
+    const rubrics = events.filter((e) => e.kind === "rubric").map((e) => e.payload as { stage: string; attempt: number; mustFailed: string[] });
+    const firstPass = ["research", "strategy", "scope", "ux", "handoff"].filter((s) => rubrics.find((r) => r.stage === s && r.attempt === 1)?.mustFailed.length === 0);
+    const stops = events.filter((e) => e.kind === "needs_input").map((e) => (e.payload as { event?: string }).event ?? "?");
+    const bounces = events.filter((e) => e.kind === "bounce").length;
+    const moves = events.filter((e) => e.kind === "coordinator_move").map((e) => e.payload as { ok: boolean; deviatesFromDefault: boolean });
     const checks = [
       ...["research", "strategy", "strategy.slides", "scope", "scope.slides", "structure", "skeleton", "handoff"].map((k) => [`成果物 ${k}`, kinds.has(k)] as const),
       ["調査に Web の出典(URL)がある", /https?:\/\//.test(research)],
@@ -80,8 +93,11 @@ function report(id: number): { summary: string; ok: boolean } {
       ["1つ目の開発のタスクが計画まで進んだ", kids[0] ? getTask(db, kids[0].id)!.state === "awaiting_plan_approval" : false],
     ] as const;
     const lines = [
-      `## ${new Date().toISOString()} 企画の流れ(モデル: ${model})`,
+      `## ${new Date().toISOString()} 企画の流れ(${flow === "coordinator" ? "コーディネーター" : "固定の流れ"}、モデル: ${model})`,
       "",
+      `- 止まった回数: ${stops.length}${stops.length ? `(${stops.join("、")})` : ""}、差し戻しの回数: ${bounces}、人の介入(回答): ${answers}`,
+      `- ルーブリックの must の初回の合格: ${firstPass.length}/5 段(${firstPass.join("、") || "なし"})`,
+      ...(flow === "coordinator" ? [`- コーディネーターの一手: ${moves.length}(却下 ${moves.filter((m) => !m.ok).length}、既定の進め方から外れた ${moves.filter((m) => m.ok && m.deviatesFromDefault).length})`] : []),
       `- 所要時間: ${Math.round((Date.now() - started) / 60000)}分`,
       `- 費用(見積もり)の合計: $${total.toFixed(3)}`,
       `- 批評: ${critiques.map((c) => `${c.stage}=${c.verdict}`).join("、")}`,
@@ -108,7 +124,7 @@ async function main(): Promise<void> {
   mkdirSync(docs, { recursive: true });
   writeFileSync(join(docs, "要望メモ.md"), "# 店長からの要望\n\n- 月末の棚卸しのとき、在庫が少ないアイテムを一目で知りたい\n- 発注の目安になる数(しきい値)はアイテムごとに違う\n- 店長はスマホで見ることが多い\n");
   if (model !== "roles") {
-    const names = ["profiler", "planner", "researcher", "strategist", "product", "ux", "handoff", "critic"];
+    const names = ["profiler", "planner", "researcher", "strategist", "product", "ux", "handoff", "critic", "coordinator"];
     writeFileSync(join(home, "config.json"), JSON.stringify({ notify: false, roles: Object.fromEntries(names.map((r) => [r, { model }])) }, null, 2));
   }
 
@@ -116,7 +132,7 @@ async function main(): Promise<void> {
   const approved = cli("project", "approve", "stock", "--allow-without-tests");
   const infra = /整備タスクを作りました: #(\d+)/.exec(approved);
   if (infra) cli("task", "cancel", infra[1]!);
-  const created = cli("task", "plan", "--project", "stock", "--title", "在庫が少ないアイテムを知らせる", "--body", "在庫 API に、在庫が少ないアイテムを知らせる機能を足したい。小さな店の店長が使う。", "--docs", docs);
+  const created = cli("task", "plan", "--project", "stock", "--title", "在庫が少ないアイテムを知らせる", "--body", "在庫 API に、在庫が少ないアイテムを知らせる機能を足したい。小さな店の店長が使う。", "--docs", docs, ...(flow === "coordinator" ? ["--coordinator"] : []));
   const id = Number(/#(\d+)/.exec(created)![1]);
 
   const expect = (s: TaskState) => {
@@ -127,14 +143,24 @@ async function main(): Promise<void> {
     }
     log(`#${id}: ${actual} ✓`);
   };
-  cli("run");
+  // 進める。人の回答待ちで止まったら、推奨案で進めるよう答える(3回まで)
+  const run = () => {
+    cli("run");
+    for (let i = 0; i < 3 && state(id) === "needs_input"; i++) {
+      cli("task", "show", String(id));
+      cli("task", "answer", String(id), "--message", "推奨案で進めてください");
+      answers++;
+      cli("run");
+    }
+  };
+  run();
   expect("awaiting_strategy_approval");
   // 批評担当の問い(方針の選択)には、承認のコメントで答える
   cli("task", "approve", String(id), "--kind", "strategy", "--comment", "スマホで見られる画面も作る。しきい値はアイテムごとに設定できるようにする。この方向で進めてください");
-  cli("run");
+  run();
   expect("awaiting_scope_approval");
   cli("task", "approve", String(id), "--kind", "scope", "--comment", "問いがあれば推奨案で進めてください");
-  cli("run");
+  run();
   expect("awaiting_handoff_approval");
   cli("task", "approve", String(id), "--kind", "handoff", "--comment", "推奨案で進めてください");
   // 1つ目の開発のタスクを計画まで進める

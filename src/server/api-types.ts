@@ -123,6 +123,10 @@ export type TaskSummary = {
   primaryAction: NextAction | null;
   /** 費用が記録された実行の合計。1つも無ければ null */
   costUsd: number | null;
+  /** 進め方(フェーズ10)。fixed は固定の流れ、coordinator は LLM のコーディネーター */
+  flow: "fixed" | "coordinator";
+  /** コーディネーターで進める企画の、最後に書いた段(p_researching など)。パイプラインの現在地に使う。無ければ null */
+  flowStage: TaskState | null;
 };
 
 export type Overview = {

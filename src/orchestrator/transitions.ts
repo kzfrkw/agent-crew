@@ -7,7 +7,7 @@ import type { TaskState } from "./states.ts";
  */
 
 /** researcher〜handoff は企画の流れの書く役(フェーズ9。批評担当 critic は各段のハンドラーの中で動く) */
-export type Role = "planner" | "architect" | "designer" | "implementer" | "reviewer" | "qa" | "design_reviewer" | "integrator" | "researcher" | "strategist" | "product" | "ux" | "handoff";
+export type Role = "planner" | "architect" | "designer" | "implementer" | "reviewer" | "qa" | "design_reviewer" | "integrator" | "researcher" | "strategist" | "product" | "ux" | "handoff" | "coordinator";
 
 /** 人の承認の種類。strategy / scope / handoff は企画の流れ */
 export type HumanApprovalKind = "plan" | "design" | "final" | "strategy" | "scope" | "handoff";
@@ -29,6 +29,8 @@ const ROLE_BY_STATE: Partial<Record<TaskState, Role>> = {
   p_scoping: "product",
   p_ux: "ux",
   p_handing_off: "handoff",
+  // フェーズ10: coordinating ではコーディネーターが一手ずつ役割を選ぶ(ハンドラーの中で動かす)
+  coordinating: "coordinator",
 };
 
 /** その状態で起動する役割。人の承認待ちなど、エージェントが動かない状態では null */
@@ -56,6 +58,8 @@ const VERDICTS: Record<Role, Record<string, Outcome>> = {
   product: { ready: { to: "awaiting_scope_approval" }, need_human: "hold" },
   ux: { ready: { to: "p_handing_off" }, need_human: "hold" },
   handoff: { ready: { to: "awaiting_handoff_approval" }, need_human: "hold" },
+  // コーディネーターは判定(verdict)の出来事を返さない。一手の結果は coordinated などの出来事で返す
+  coordinator: {},
 };
 
 const PLANNING_ROLES: Role[] = ["researcher", "strategist", "product", "ux", "handoff"];
@@ -102,9 +106,27 @@ export type TaskEvent =
   /** 同じ理由の差し戻しが続いた(8-3)。上限を待たずに人に回す */
   | { type: "repeated_failure"; reason: string }
   /** 人が実行中の役割を止めた。その段で人の判断を待つ */
-  | { type: "stopped" };
+  | { type: "stopped" }
+  /** コーディネーターの一手を実行した(フェーズ10)。bounced は批評が差し戻した(差し戻しの回数を数える) */
+  | { type: "coordinated"; bounced?: boolean }
+  /** コーディネーターが人の承認を求めた */
+  | { type: "gate_requested"; kind: HumanApprovalKind }
+  /** コーディネーターが人に聞いた */
+  | { type: "ask_human"; question: string }
+  /** コーディネーターが完了にした(守りの検証を通ったもの) */
+  | { type: "complete" };
 
-export type TaskSnapshot = { state: TaskState; heldFromState: TaskState | null; reviewRounds: number; design?: DesignPlan; kind?: "normal" | "test_infra" | "planning" };
+export type TaskSnapshot = { state: TaskState; heldFromState: TaskState | null; reviewRounds: number; design?: DesignPlan; kind?: "normal" | "test_infra" | "planning"; flow?: "fixed" | "coordinator" };
+
+/** 人の承認を待つ状態 */
+const WAITING_FOR: Record<HumanApprovalKind, TaskState> = {
+  plan: "awaiting_plan_approval",
+  design: "awaiting_design_approval",
+  final: "awaiting_final_approval",
+  strategy: "awaiting_strategy_approval",
+  scope: "awaiting_scope_approval",
+  handoff: "awaiting_handoff_approval",
+};
 
 const NO_DESIGN: DesignPlan = { architect: false, designer: false };
 
@@ -163,7 +185,7 @@ export function transition(t: TaskSnapshot, e: TaskEvent, c: TransitionContext):
   switch (e.type) {
     case "start":
       if (t.state !== "queued") fail("開始できるのは queued だけです");
-      if (t.kind === "planning") return to("p_researching");
+      if (t.kind === "planning") return to(t.flow === "coordinator" ? "coordinating" : "p_researching");
       if (!c.testGateOpen) fail("テスト基盤の整備が完了していません(人が例外を承認すれば開始できます)");
       return to("planning");
 
@@ -199,7 +221,27 @@ export function transition(t: TaskSnapshot, e: TaskEvent, c: TransitionContext):
       if (t.state !== "split") fail("分割済みではありません");
       return to("needs_input", { heldFromState: "split" });
 
+    case "coordinated": {
+      if (t.state !== "coordinating") fail("コーディネーターが進めていません");
+      if (!e.bounced) return to("coordinating");
+      const rounds = t.reviewRounds + 1;
+      return rounds > c.maxReviewRounds ? to("needs_input", { heldFromState: "coordinating", reviewRounds: rounds }) : to("coordinating", { reviewRounds: rounds });
+    }
+
+    case "gate_requested":
+      if (t.state !== "coordinating") fail("コーディネーターが進めていません");
+      return to(WAITING_FOR[e.kind]);
+
+    case "ask_human":
+      if (t.state !== "coordinating") fail("コーディネーターが進めていません");
+      return hold("coordinating");
+
+    case "complete":
+      if (t.state !== "coordinating") fail("コーディネーターが進めていません");
+      return to("done");
+
     case "repeated_failure":
+      if (t.state === "coordinating") return hold("coordinating");
       if (PLANNING_STAGES.includes(t.state)) return to("needs_input", { heldFromState: t.state, reviewRounds: t.reviewRounds + 1 });
       if (!["reviewing", "qa", "design_reviewing"].includes(t.state)) fail("差し戻しの段ではありません");
       return to("needs_input", { heldFromState: "implementing", reviewRounds: t.reviewRounds + 1 });
@@ -210,15 +252,9 @@ export function transition(t: TaskSnapshot, e: TaskEvent, c: TransitionContext):
 
     case "approve":
     case "reject": {
-      const waiting = {
-        plan: "awaiting_plan_approval",
-        design: "awaiting_design_approval",
-        final: "awaiting_final_approval",
-        strategy: "awaiting_strategy_approval",
-        scope: "awaiting_scope_approval",
-        handoff: "awaiting_handoff_approval",
-      }[e.kind];
-      if (t.state !== waiting) fail(`${e.kind} の承認待ちではありません`);
+      if (t.state !== WAITING_FOR[e.kind]) fail(`${e.kind} の承認待ちではありません`);
+      // コーディネーターのタスクは、承認・却下のあとコーディネーターに戻る(引き渡しの承認は固定の流れと同じく子タスクを待つ)
+      if (t.flow === "coordinator" && !(e.type === "approve" && e.kind === "handoff")) return to("coordinating", { reviewRounds: 0 });
       if (e.type === "reject") {
         const back = { plan: "planning", design: "designing", final: "implementing", strategy: "p_strategizing", scope: "p_scoping", handoff: "p_handing_off" }[e.kind] as TaskState;
         // 企画の段の却下は、その段の差し戻しの回数を数え直す(開発の却下は従来どおり数えない)

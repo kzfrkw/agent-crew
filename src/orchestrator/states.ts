@@ -20,6 +20,8 @@ export const TASK_STATES = [
   "p_ux",
   "p_handing_off",
   "awaiting_handoff_approval",
+  /** コーディネーターが進め方を決めて役割を動かしている(フェーズ10。どの役割が動いているかは実行の記録から見る) */
+  "coordinating",
   "done",
   /** 分割した親。子タスクがすべて完了するのを待つ(フェーズ8) */
   "split",
@@ -52,6 +54,7 @@ export const STATE_LABELS: Record<TaskState, string> = {
   p_ux: "構造・骨格の設計中",
   p_handing_off: "引き渡しの準備中",
   awaiting_handoff_approval: "引き渡しの承認待ち",
+  coordinating: "進行中(コーディネーター)",
   done: "完了",
   split: "分割済み(子タスクの完了待ち)",
   needs_input: "人の回答待ち",

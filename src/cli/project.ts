@@ -161,10 +161,16 @@ export function registerProjectCommands(program: Command): void {
     .option("--role <role>", "直すリポジトリの役目(既定は1つ目)")
     .option("--auto-approve-plan <on|off>", "小さなタスクの計画の承認を自動で行う(条件は設計メモ v0.18。既定 off)")
     .option("--retrospective <on|off>", "完了したタスクの振り返り(規約・設計判断の提案)を動かす(既定 on)")
-    .action((name: string, o: { install?: string; build?: string; test?: string; start?: string; startUrl?: string; analyze?: string; screens?: string; platform?: string; role?: string; autoApprovePlan?: string; retrospective?: string }) => {
+    .option("--coordinator <on|off>", "新しい企画のタスクを LLM のコーディネーターで進める(フェーズ10。既定 off)")
+    .action((name: string, o: { install?: string; build?: string; test?: string; start?: string; startUrl?: string; analyze?: string; screens?: string; platform?: string; role?: string; autoApprovePlan?: string; retrospective?: string; coordinator?: string }) => {
       const ctx = createAppContext();
       try {
-        const { role, autoApprovePlan, retrospective, ...patch } = o;
+        const { role, autoApprovePlan, retrospective, coordinator, ...patch } = o;
+        if (coordinator !== undefined) {
+          if (!["on", "off"].includes(coordinator)) throw new Error("--coordinator は on か off で指定してください");
+          setProjectSettings(ctx, name, { coordinator: coordinator === "on" });
+          console.log(`新しい企画のタスクをコーディネーターで進める: ${coordinator}`);
+        }
         if (retrospective !== undefined) {
           if (!["on", "off"].includes(retrospective)) throw new Error("--retrospective は on か off で指定してください");
           setProjectSettings(ctx, name, { retrospective: retrospective === "on" });
@@ -175,7 +181,7 @@ export function registerProjectCommands(program: Command): void {
           setProjectSettings(ctx, name, { autoApprovePlan: autoApprovePlan === "on" });
           console.log(`小さなタスクの計画の自動承認: ${autoApprovePlan}`);
         }
-        if (Object.values(patch).every((v) => v === undefined) && (autoApprovePlan !== undefined || retrospective !== undefined)) return;
+        if (Object.values(patch).every((v) => v === undefined) && (autoApprovePlan !== undefined || retrospective !== undefined || coordinator !== undefined)) return;
         const p = setProfileCommands(ctx, name, patch, role);
         console.log(`直しました: ${name}`);
         printCommands(p);
@@ -246,7 +252,7 @@ export function registerProjectCommands(program: Command): void {
         const p = mustProject(ctx.db, name);
         console.log(`${p.name}  プロファイル: ${p.profileStatus}  テスト基盤: ${p.testInfra}${p.allowWithoutTests ? "(例外を許可済み)" : ""}`);
         console.log(`データ: ${projectDir(ctx.home, p.id)}`);
-        console.log(`小さなタスクの計画の自動承認: ${getProjectSettings(ctx.db, p.id).autoApprovePlan ? "on" : "off"}  振り返り: ${getProjectSettings(ctx.db, p.id).retrospective === false ? "off" : "on"}`);
+        console.log(`小さなタスクの計画の自動承認: ${getProjectSettings(ctx.db, p.id).autoApprovePlan ? "on" : "off"}  振り返り: ${getProjectSettings(ctx.db, p.id).retrospective === false ? "off" : "on"}  企画のコーディネーター: ${getProjectSettings(ctx.db, p.id).coordinator ? "on" : "off"}`);
         for (const r of listRepos(ctx.db, p.id)) {
           console.log(`  [${r.role}] ${r.path}(既定ブランチ: ${r.defaultBranch})`);
           const prof = getRepoProfile(ctx.db, r.id) as Profile | null;

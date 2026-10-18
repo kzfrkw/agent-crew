@@ -15,6 +15,7 @@ import { platformOf, resolveServiceEnv } from "./projects.ts";
 import { applyAudit, checkReviewConsistency, mustIndexes, type Finding } from "./review-findings.ts";
 import { taskPrompt } from "./prompts.ts";
 import { planningStage } from "./planning.ts";
+import { coordinatorStep } from "./coordinator-run.ts";
 import { baseRefFor } from "./engine.ts";
 import { testFailureKey, type BounceInfo } from "./bounce.ts";
 import type { Role, TaskEvent } from "./transitions.ts";
@@ -526,4 +527,5 @@ export const HANDLERS: Partial<Record<Role, Handler>> = {
   product: (ctx, task) => planningStage(ctx, task),
   ux: (ctx, task) => planningStage(ctx, task),
   handoff: (ctx, task) => planningStage(ctx, task),
+  coordinator: (ctx, task) => coordinatorStep(ctx, task),
 };

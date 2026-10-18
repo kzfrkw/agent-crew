@@ -104,6 +104,17 @@ describe("パイプライン(企画。9a)", () => {
   });
 });
 
+describe("パイプライン(コーディネーター。10-2)", () => {
+  it("coordinating では、最後に書いた段(flowStage)を現在地にする。止まったときもその段で止まって見せる", async () => {
+    const { pipelineOf } = await import("./pipeline.ts");
+    const st = pipelineOf("coordinating", null, undefined, "planning", "p_scoping");
+    expect(st.map((s) => s.status).slice(0, 5)).toEqual(["done", "done", "done", "current", "todo"]);
+    expect(pipelineOf("needs_input", "coordinating", undefined, "planning", "p_researching")[0]!.status).toBe("blocked");
+    // まだ何も書いていなければ、調査が現在地
+    expect(pipelineOf("coordinating", null, undefined, "planning", null)[0]!.status).toBe("current");
+  });
+});
+
 describe("パイプライン(分割済み。8-2)", () => {
   it("分割済みの親は、計画の承認までが済み、その先は未着手", async () => {
     const { pipelineOf } = await import("./pipeline.ts");

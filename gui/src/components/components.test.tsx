@@ -31,6 +31,8 @@ const task = (o: Partial<TaskSummary>): TaskSummary => ({
   running: null,
   primaryAction: null,
   costUsd: null,
+  flow: "fixed",
+  flowStage: null,
   ...o,
 });
 
