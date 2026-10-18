@@ -3,6 +3,7 @@ import { openAppDb } from "../app.ts";
 import { dataHome, loadConfig, type Config } from "../config/config.ts";
 import type { Db } from "../db/connection.ts";
 import { applyRoleOverrides, loadRoles, type RoleDef } from "../roles/roles.ts";
+import { loadRubrics, type Rubric } from "../roles/rubrics.ts";
 import { ClaudeRunner } from "../runner/claude.ts";
 import type { Runner } from "../runner/types.ts";
 import type { Shot } from "../browser/chrome.ts";
@@ -21,6 +22,8 @@ export type AppContext = {
   home: string;
   config: Config;
   roles: Map<string, RoleDef>;
+  /** 判定の基準(rubrics/*.md。v0.22) */
+  rubrics: Map<string, Rubric>;
   runner: Runner;
   /** ツール自身が実行する git の環境変数 */
   gitEnv: NodeJS.ProcessEnv;
@@ -46,6 +49,7 @@ export function createAppContext(dataDir: string = dataHome()): AppContext {
     home,
     config,
     roles: applyRoleOverrides(loadRoles(), config.roles),
+    rubrics: loadRubrics(),
     runner: new ClaudeRunner({ claudePath: config.claudePath }),
     gitEnv: process.env,
   };

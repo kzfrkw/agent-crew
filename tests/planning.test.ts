@@ -19,12 +19,18 @@ const TICKETS = [
   { title: "注文に状態を持たせる", body: "API の各注文に status を含める", acceptanceCriteria: ["GET /api/orders の各注文に status がある"] },
   { title: "一覧に状態を表示する", body: "画面に状態の列を足す", acceptanceCriteria: ["一覧に状態の列がある"] },
 ];
+/** 入力に載ったルーブリックの項目ごとの結果(10-1b)。failMust なら最初の must を不合格にする */
+const rubricResults = (spec: RunSpec, failMust = false) => {
+  const items = [...spec.prompt.matchAll(/^- \[(must|should)\] ([A-Z]+\d+):/gm)].map((m) => ({ severity: m[1]!, id: m[2]! }));
+  const failed = failMust ? items.find((i) => i.severity === "must")?.id : undefined;
+  return items.map((i) => ({ id: i.id, result: i.id === failed ? "fail" : "pass", evidence: `成果物の ${i.id} の箇所` }));
+};
 const critic =
   (verdicts: string[] = []): Script =>
   (spec, n) => {
     const v = verdicts[n] ?? "approve";
     writeArtifact(spec, "critique.md", v, "批評");
-    return { structuredOutput: { verdict: v, summary: "s", issues: v === "changes_requested" ? [{ severity: "must", title: "ペルソナが曖昧", detail: "d" }] : [] } };
+    return { structuredOutput: { verdict: v, summary: "s", issues: v === "changes_requested" ? [{ severity: "must", title: "ペルソナが曖昧", detail: "d" }] : [], rubric: rubricResults(spec, v === "changes_requested") } };
   };
 const scripts = (over: Record<string, Script> = {}): Record<string, Script> => ({
   researcher: write("research.md"),
@@ -168,6 +174,7 @@ describe("批評が人の判断を求めたとき(9a。実機の通し確認で�
           summary: n === 1 ? "方針の選択が2つある" : "ok",
           issues: n === 1 ? [{ severity: "should", title: "指標の基準が無い", detail: "d" }] : [],
           questions: n === 1 ? ["API だけか、画面も作るか(推奨: 画面も)", "見せる相手を社内だけにするか"] : [],
+          rubric: rubricResults(spec),
         },
       };
     };
@@ -219,11 +226,64 @@ describe("批評が人の判断を求めたとき(9a。実機の通し確認で�
   it("人の承認が無い段(調査、構造・骨格)では、従来どおり人の回答待ちにする", async () => {
     const asks: Script = (spec) => {
       writeArtifact(spec, "critique.md", "need_human", "批評");
-      return { structuredOutput: { verdict: "need_human", summary: "調べる範囲を決めて", issues: [] } };
+      return { structuredOutput: { verdict: "need_human", summary: "調べる範囲を決めて", issues: [], rubric: rubricResults(spec) } };
     };
     const { ctx, t } = await setup({ critic: asks });
     await runUntilIdle(ctx);
     expect(getTask(ctx.db, t.id)).toMatchObject({ state: "needs_input", heldFromState: "p_researching" });
+  });
+});
+
+describe("ルーブリック(10-1b。設計メモ v0.22)", () => {
+  it("批評担当の入力に段のルーブリックの項目が並び、書く役の入力にもルーブリックの場所がある", async () => {
+    const { ctx, runner } = await setup();
+    await runUntilIdle(ctx);
+    const [c1, c2] = runner.calls.filter((c) => c.role === "critic");
+    expect(c1!.prompt).toContain("- [must] RS1:");
+    expect(c1!.prompt).not.toContain("ST1");
+    expect(c2!.prompt).toContain("- [must] ST1:");
+    expect(runner.calls.find((c) => c.role === "researcher")!.prompt).toContain(join("rubrics", "planning-research.md"));
+  });
+
+  it("項目ごとの結果を出来事に残す(不合格の must と should、初回か)", async () => {
+    const { ctx, t } = await setup({ critic: critic(["changes_requested", "approve"]) });
+    await runUntilIdle(ctx);
+    const evs = listEvents(ctx.db, t.id).filter((e) => e.kind === "rubric").map((e) => e.payload as Record<string, unknown>);
+    expect(evs[0]).toMatchObject({ stage: "research", rubric: "planning-research", verdict: "changes_requested", mustFailed: ["RS1"], shouldFailed: [], attempt: 1 });
+    expect(evs[1]).toMatchObject({ stage: "research", verdict: "approve", mustFailed: [], attempt: 2 });
+    expect((evs[0]!.results as unknown[]).length).toBeGreaterThan(0);
+  });
+
+  it("差し戻しの理由の要点は、不合格の must の ID", async () => {
+    const { ctx, t } = await setup({ critic: critic(["changes_requested", "approve"]) });
+    await runUntilIdle(ctx);
+    const b = listEvents(ctx.db, t.id).find((e) => e.kind === "bounce")!.payload as { key: string; summary: string };
+    expect(b.key).toBe("research:RS1");
+    expect(b.summary).toContain("RS1");
+  });
+
+  it("判定と項目ごとの結果が食い違えば(must の不合格があるのに approve)、推測で進めずに人に回す", async () => {
+    const liar: Script = (spec) => {
+      writeArtifact(spec, "critique.md", "approve", "批評");
+      return { structuredOutput: { verdict: "approve", summary: "s", issues: [], rubric: rubricResults(spec, true) } };
+    };
+    const { ctx, t } = await setup({ critic: liar });
+    await runUntilIdle(ctx);
+    expect(getTask(ctx.db, t.id)).toMatchObject({ state: "needs_input", heldFromState: "p_researching" });
+    const { latestNeedsInputReason } = await import("../src/orchestrator/engine.ts");
+    expect(latestNeedsInputReason(ctx.db, t.id)).toContain("RS1");
+  });
+
+  it("人の承認がある段で must が不合格のまま人の判断を求めたら、不合格の項目を承認の理由に添える", async () => {
+    const asks: Script = (spec, n) => {
+      writeArtifact(spec, "critique.md", n === 1 ? "need_human" : "approve", "批評");
+      return { structuredOutput: { verdict: n === 1 ? "need_human" : "approve", summary: "s", issues: [], questions: n === 1 ? ["対象を法人に絞るか"] : [], rubric: rubricResults(spec, n === 1) } };
+    };
+    const { ctx, t } = await setup({ critic: asks });
+    await runUntilIdle(ctx);
+    expect(getTask(ctx.db, t.id)!.state).toBe("awaiting_strategy_approval");
+    const { planningQuestions } = await import("../src/orchestrator/planning.ts");
+    expect(planningQuestions(ctx.db, t.id)!.musts).toEqual([expect.stringMatching(/^ST1: /)]);
   });
 });
 

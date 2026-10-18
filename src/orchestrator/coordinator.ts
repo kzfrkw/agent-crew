@@ -24,6 +24,8 @@ export type CoordinatorFacts = {
   runCount: number;
   /** このタスクの費用の合計 */
   costUsd: number;
+  /** 企画: 最新の成果物への最新の批評で、ルーブリックの must がすべて合格した段(research / strategy / scope / ux / handoff。v0.22) */
+  rubricPassed: string[];
 };
 
 export type CoordinatorLimits = { maxRunsPerTask: number; maxCostPerTaskUsd: number };
@@ -85,6 +87,14 @@ const COMPLETE_REQUIRES: Record<TaskKind, HumanApprovalKind[]> = {
   planning: ["strategy", "scope", "handoff"],
 };
 
+/**
+ * 企画: 段を進める一手の前に、ルーブリックの must がすべて合格していなければならない段(v0.22)。
+ * 書き直しと批評は不合格のままでも呼べる(直すための一手)
+ */
+const PLANNING_ROLE_RUBRIC: Record<string, string> = { strategist: "research", handoff: "ux" };
+const PLANNING_GATE_RUBRIC: Partial<Record<HumanApprovalKind, string>> = { strategy: "strategy", scope: "scope", handoff: "handoff" };
+const rubricMissing = (stage: string | undefined, f: CoordinatorFacts) => (f.kind === "planning" && stage && !f.rubricPassed.includes(stage) ? stage : null);
+
 /** 却下が何回続いたら人に回すか */
 export const MAX_CONSECUTIVE_REJECTIONS = 2;
 
@@ -126,6 +136,8 @@ export function validateMove(output: unknown, f: CoordinatorFacts, roles: Map<st
       if (!ROLES_BY_KIND[f.kind].includes(role)) return reject(`役割 ${role} はこのタスク(${f.kind})では呼べません。使える役割: ${ROLES_BY_KIND[f.kind].join(", ")}`);
       const need = missing(ROLE_REQUIRES[role] ?? [], f);
       if (need.length) return reject(`役割 ${role} の前に、人の承認(${need.join(", ")})が要ります`);
+      const rubric = rubricMissing(PLANNING_ROLE_RUBRIC[role], f);
+      if (rubric) return reject(`役割 ${role} の前に、${rubric} の段のルーブリックの must がすべて合格している必要があります`);
       if (role === "integrator" && !f.testsPassed) return reject("統合の前に、テストの再実行が合格している必要があります");
       const limit = limitReason(f, l);
       if (limit) return { ok: false, kind: "limit", reason: limit };
@@ -143,12 +155,16 @@ export function validateMove(output: unknown, f: CoordinatorFacts, roles: Map<st
       if (f.approvals.includes(gate)) return reject(`承認 ${gate} はすでに承認済みです`);
       const need = missing(GATE_REQUIRES[gate] ?? [], f);
       if (need.length) return reject(`承認 ${gate} の前に、人の承認(${need.join(", ")})が要ります`);
+      const rubric = rubricMissing(PLANNING_GATE_RUBRIC[gate], f);
+      if (rubric) return reject(`承認 ${gate} を求める前に、${rubric} の段のルーブリックの must がすべて合格している必要があります`);
       if (gate === "final" && !f.testsPassed) return reject("最終確認の前に、テストの再実行が合格している必要があります");
       return { ok: true, move: { ...base, type: "request_approval", gate } };
     }
     case "complete": {
       const need = missing(COMPLETE_REQUIRES[f.kind], f);
       if (need.length) return reject(`完了の前に、人の承認(${need.join(", ")})が要ります`);
+      const rubric = rubricMissing("handoff", f);
+      if (rubric) return reject(`完了の前に、${rubric} の段のルーブリックの must がすべて合格している必要があります`);
       if (f.kind !== "planning") {
         if (!f.testsPassed) return reject("完了の前に、テストの再実行が合格している必要があります");
         if (!f.integrated) return reject("完了の前に、統合が済んでいる必要があります");

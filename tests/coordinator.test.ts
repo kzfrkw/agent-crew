@@ -7,7 +7,9 @@ import { afterRejection, limitReason, validateMove, type CoordinatorFacts, type 
 const roles = loadRoles();
 const limits: CoordinatorLimits = { maxRunsPerTask: 60, maxCostPerTaskUsd: 20 };
 
-const planning = (o: Partial<CoordinatorFacts> = {}): CoordinatorFacts => ({ kind: "planning", approvals: [], testsPassed: false, integrated: false, runCount: 0, costUsd: 0, ...o });
+/** 企画の段のルーブリックは、既定ではすべて合格にしておく(関門の検査を個別に見るため) */
+const ALL_STAGES = ["research", "strategy", "scope", "ux", "handoff"];
+const planning = (o: Partial<CoordinatorFacts> = {}): CoordinatorFacts => ({ kind: "planning", approvals: [], testsPassed: false, integrated: false, runCount: 0, costUsd: 0, rubricPassed: ALL_STAGES, ...o });
 const dev = (o: Partial<CoordinatorFacts> = {}): CoordinatorFacts => ({ ...planning(), kind: "normal", ...o });
 
 const move = (verdict: string, o: Record<string, unknown> = {}) => ({
@@ -162,6 +164,31 @@ describe("complete", () => {
     expect(rejected(move("complete"), dev({ approvals: ["plan", "final"], testsPassed: false, integrated: true }))).toMatch(/テスト/);
     expect(rejected(move("complete"), dev({ approvals: ["plan", "final"], testsPassed: true, integrated: false }))).toMatch(/統合/);
     expect(check(move("complete"), dev({ approvals: ["plan", "final"], testsPassed: true, integrated: true })).ok).toBe(true);
+  });
+});
+
+describe("ルーブリック(10-1b。設計メモ v0.22)", () => {
+  it("企画: 段を進める一手は、その段のルーブリックの must がすべて合格してから", () => {
+    // 調査 → 戦略を書く
+    expect(rejected(runRole("strategist"), planning({ rubricPassed: [] }))).toMatch(/research/);
+    expect(check(runRole("strategist"), planning({ rubricPassed: ["research"] })).ok).toBe(true);
+    // 戦略・要件・引き渡しの承認を求める
+    expect(rejected(move("request_approval", { gate: "strategy" }), planning({ rubricPassed: ["research"] }))).toMatch(/strategy/);
+    expect(rejected(move("request_approval", { gate: "scope" }), planning({ approvals: ["strategy"], rubricPassed: ["research", "strategy"] }))).toMatch(/scope/);
+    // 構造・骨格 → 引き渡しを書く
+    expect(rejected(runRole("handoff"), planning({ approvals: ["strategy", "scope"], rubricPassed: ["research", "strategy", "scope"] }))).toMatch(/ux/);
+    // 完了
+    expect(rejected(move("complete"), planning({ approvals: ["strategy", "scope", "handoff"], rubricPassed: ["research", "strategy", "scope", "ux"] }))).toMatch(/handoff/);
+  });
+
+  it("書き直しと批評は、ルーブリックが不合格のままでも呼べる(直すための一手)", () => {
+    expect(check(runRole("researcher"), planning({ rubricPassed: [] })).ok).toBe(true);
+    expect(check(runRole("critic"), planning({ rubricPassed: [] })).ok).toBe(true);
+    expect(check(runRole("product"), planning({ approvals: ["strategy"], rubricPassed: ["research", "strategy"] })).ok).toBe(true);
+  });
+
+  it("開発のタスクでは、まだルーブリックを見ない(10-4 で reviewer・qa に足す)", () => {
+    expect(check(move("request_approval", { gate: "plan" }), dev({ rubricPassed: [] })).ok).toBe(true);
   });
 });
 

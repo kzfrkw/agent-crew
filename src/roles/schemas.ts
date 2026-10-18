@@ -109,8 +109,16 @@ const RetrospectiveExtra = z.object({
 const questions = z.array(z.string()).default([]).describe("人に決めてほしいこと(need_human のとき)。1件ずつ、選択肢と推奨案を含めて1〜2文で。無ければ空配列");
 const PlanningWriterExtra = z.object({ questions });
 
+/** ルーブリックの項目ごとの結果(v0.22)。入力に並んだすべての項目に1回ずつ答える */
+export const RubricResultSchema = z.object({
+  id: z.string().describe("項目の ID(入力のルーブリックの RS1 など)"),
+  result: z.enum(["pass", "fail"]),
+  evidence: z.string().describe("根拠: 成果物のどこを見て判断したか(ファイルと見出し)。不合格なら何が足りないか"),
+});
+
 const CriticExtra = z.object({
   questions,
+  rubric: z.array(RubricResultSchema).describe("ルーブリックの項目ごとの合否と根拠(すべての項目に1回ずつ)。must が1つでも fail なら changes_requested"),
   issues: z
     .array(z.object({ severity: z.enum(["must", "should"]), title: z.string().describe("指摘の見出し(1文)"), detail: z.string().describe("何がなぜ問題か、どう直すか") }))
     .describe("指摘の一覧。無ければ空配列"),

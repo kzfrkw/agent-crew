@@ -2,6 +2,8 @@ import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { addArtifact, addEvent, createProject, createTask, getProject, getProjectByName, listEvents, listRepos, type Task } from "../db/store.ts";
 import type { BounceInfo } from "./bounce.ts";
+import { rubricPath, type Rubric } from "../roles/rubrics.ts";
+import { checkRubric, type RubricResult } from "./rubric-check.ts";
 import type { Db } from "../db/connection.ts";
 import type { AppContext } from "./context.ts";
 import type { Handler, HandlerOutcome } from "./handlers.ts";
@@ -60,6 +62,14 @@ export function planningQuestions(db: Db, taskId: number): PlanningQuestions | n
   // 以前は書く役を「書く役」と記録していた。段の担当名に読み替える
   const questions = q.questions.map((x) => (x.from === "書く役" ? { ...x, from: writerLabelOf(q.stage) } : x));
   return { stage: q.stage!, questions, musts: q.musts ?? [], shoulds: q.shoulds ?? 0 };
+}
+
+/** 段のルーブリック(rubrics/planning-<段>.md。v0.22) */
+const rubricName = (key: StageKey) => `planning-${key}`;
+function stageRubric(ctx: AppContext, key: StageKey): Rubric {
+  const r = ctx.rubrics.get(rubricName(key));
+  if (!r) throw new Error(`ルーブリック ${rubricName(key)} がありません(rubrics/${rubricName(key)}.md)`);
+  return r;
 }
 
 const writerLabelOf = (stage: StageKey | undefined) => Object.values(STAGES).find((s) => s.key === stage)?.writerLabel ?? "書く担当";
@@ -133,12 +143,22 @@ export function planningPrompt(ctx: AppContext, task: Task, stage: Stage, mode: 
     ...ref("前回のこの段の批評(must を必ず解消する)", join(dir, `critique-${stage.key}.md`)),
     ...ref("人のコメント・回答(最優先で従う)", humanNotesPath(ctx.home, task.id)),
     "",
+    ...rubricSection(stageRubric(ctx, stage.key), mode),
     "## 今回やること",
     mode === "write"
       ? `- ${ROLE_TASK[stage.key]}。前の版があれば、それを直す形で更新してください`
       : `- 「${stage.label}」の段の成果物(${stage.files.map((f) => join(dir, f)).join("、")})を批評し、成果物ディレクトリの \`critique.md\` に書いてください。成果物は変更しないでください`,
     "",
   ].join("\n");
+}
+
+/** 段のルーブリックの項目。批評担当はこのまま構造化出力の rubric で答え、書く役は満たすように書く */
+function rubricSection(r: Rubric, mode: "write" | "critique"): string[] {
+  const how =
+    mode === "critique"
+      ? "項目ごとに合否と根拠を、構造化出力の `rubric` で返してください(すべての項目に1回ずつ)。"
+      : `批評担当はこの基準で判定します。must をすべて満たすと次へ進めます(${rubricPath(r.name)})。`;
+  return [`## ルーブリック(${r.name}: ${r.description})`, how, ...r.items.map((i) => `- [${i.severity}] ${i.id}: ${i.text}`), ""];
 }
 
 const failed = (r: Extract<InvokeResult, { ok: false }>, role: string): HandlerOutcome => ({
@@ -171,7 +191,15 @@ export const planningStage: Handler = async (ctx, task) => {
   const issues = (c.extra.issues ?? []) as { severity: string; title: string; detail: string }[];
   addEvent(ctx.db, { taskId: task.id, runId: c.runId, kind: "critique", payload: { stage: stage.key, verdict: c.verdict, summary: c.summary, issues } });
   const detail = `(詳細: ${join(dir, `critique-${stage.key}.md`)})`;
-  const musts = issues.filter((i) => i.severity === "must");
+  // 判定は項目ごとの結果と一致していなければならない(v0.22)。食い違えば推測で進めず人に回す
+  const rubric = stageRubric(ctx, stage.key);
+  const results = (c.extra.rubric ?? []) as RubricResult[];
+  const rc = checkRubric(c.verdict, rubric, results);
+  if (!rc.ok) return { event: { type: "run_error", reason: rc.reason }, reason: `critic: ${rc.reason}${detail}` };
+  const attempt = listEvents(ctx.db, task.id, 2000).filter((e) => e.kind === "rubric" && (e.payload as { stage?: unknown }).stage === stage.key).length + 1;
+  addEvent(ctx.db, { taskId: task.id, runId: c.runId, kind: "rubric", payload: { stage: stage.key, rubric: rubric.name, verdict: c.verdict, results, mustFailed: rc.mustFailed, shouldFailed: rc.shouldFailed, attempt } });
+  const itemText = (id: string) => `${id}: ${rubric.items.find((i) => i.id === id)!.text}`;
+  const musts = [...rc.mustFailed.map(itemText), ...issues.filter((i) => i.severity === "must").map((i) => i.title)];
 
   // 次に人の承認がある段で、書く役か批評担当が人の判断を求めたら、自動では差し戻さずに承認待ちへ進む。
   // 問いと批評の must を承認の理由に添え、人が承認のコメントで答えるか、却下して書き直させる(承認と回答を二度させない。実機の通し確認で発見)
@@ -182,7 +210,7 @@ export const planningStage: Handler = async (ctx, task) => {
         ...(w.verdict === "need_human" ? questionsOf(w).map((text) => ({ from: stage.writerLabel, text })) : []),
         ...(c.verdict === "need_human" ? questionsOf(c).map((text) => ({ from: "批評担当", text })) : []),
       ],
-      musts: musts.map((i) => i.title),
+      musts,
       shoulds: issues.filter((i) => i.severity === "should").length,
     };
     addEvent(ctx.db, { taskId: task.id, runId: c.runId, kind: "planning_question", payload: q });
@@ -192,8 +220,8 @@ export const planningStage: Handler = async (ctx, task) => {
   if (c.verdict === "need_human") return { event: { type: "verdict", role: stage.writer, verdict: "need_human" }, reason: `批評担当が人の判断を求めています: ${c.summary}${detail}` };
   const bounce: BounceInfo = {
     source: "critique",
-    key: `${stage.key}:${musts.map((i) => i.title).sort().join("\n")}`,
-    summary: `${stage.label}の批評の must: ${musts.map((i) => i.title).join(" / ").slice(0, 200)}`,
+    key: `${stage.key}:${[...rc.mustFailed].sort().join(",")}`,
+    summary: `${stage.label}の批評の must: ${rc.mustFailed.map(itemText).join(" / ").slice(0, 200)}`,
   };
   return { event: { type: "critique_bounce" }, reason: `${stage.label}: 批評が差し戻しました — ${c.summary}${detail}`, bounce };
 };

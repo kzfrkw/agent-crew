@@ -18,7 +18,7 @@
 - 読ませないパス: `project protect <n> --add <相対パス>`(鍵・本番の設定など。エージェントの Read / Bash とツールの実行のどれからも読めない。`project show` で確認)
 - 利用枠: 使用率が `limits.pauseAtUtilization`(既定 0.95)以上になると、常駐ワーカーと `run` は新しい役割を起動せず、リセットの後に再開する。GUI のヘッダーに使用率。人の対応待ちは macOS の通知(`notify`)。完了・取り消しのタスクの worktree は自動で片付く(ブランチは残る)
 - 自律(フェーズ8): 小さなタスクの計画の自動承認は `project set <n> --auto-approve-plan on`(既定 off)。大きいチケットはプランナーが分割を提案し、`task approve <id> --kind plan --split` で子タスクに分けて順に進める。同じ理由の差し戻しが2回続くと人に回る。完了したタスクは振り返り(`task retro <id> --adopt <番号>` で採用。`project set <n> --retrospective off` で止める)
-- 企画(フェーズ9): 新サービスは `project create <n>`(リポジトリなし)、既存サービスの新機能はそのプロジェクトで `task plan --project <n> --title ... --body ... --docs <絶対パス>`(GUI のチケット作成で「企画として作る」も可)。調査 → 戦略 → 要件 → 構造・骨格 → 引き渡しの順に、書く役と批評担当が進める。人の承認は `task approve <id> --kind strategy|scope|handoff`(引き渡しは `--target <開発のプロジェクト>`。新サービスは `--repo <フォルダ>` で企画のプロジェクトにリポジトリを登録するか、`--new-project <名前>` を足して別のプロジェクトを作る。空のフォルダなら git init する。GUI の引き渡しの欄でも選べ、プロファイルはプロジェクトの画面で承認する)。承認待ちに「人の判断が要る点」があれば承認のコメントで答える。通し確認は `npm run e2e:planning`
+- 企画(フェーズ9): 新サービスは `project create <n>`(リポジトリなし)、既存サービスの新機能はそのプロジェクトで `task plan --project <n> --title ... --body ... --docs <絶対パス>`(GUI のチケット作成で「企画として作る」も可)。調査 → 戦略 → 要件 → 構造・骨格 → 引き渡しの順に、書く役と批評担当が進める。人の承認は `task approve <id> --kind strategy|scope|handoff`(引き渡しは `--target <開発のプロジェクト>`。新サービスは `--repo <フォルダ>` で企画のプロジェクトにリポジトリを登録するか、`--new-project <名前>` を足して別のプロジェクトを作る。空のフォルダなら git init する。GUI の引き渡しの欄でも選べ、プロファイルはプロジェクトの画面で承認する)。承認待ちに「人の判断が要る点」があれば承認のコメントで答える。批評担当は段ごとのルーブリック(`rubrics/planning-<段>.md`)の項目ごとに合否を返し、must の不合格があれば差し戻す(基準を変えるときはこのファイルを直す)。通し確認は `npm run e2e:planning`
 - 導入: `docs/setup.md`(別のPC)、`docs/company-checklist.md`(会社で使う前の点検表)
 - デザインレビューで止まったとき(撮影できないなど): `task skip-design-review <id>`(飛ばして最終確認へ)か `task back-to-implementer <id> --comment ...`(GUI の人の判断待ちの欄にも出る)。デザイナーが `uiChanges: false` を返したタスクとテスト基盤整備では、デザインレビューを行わない
 - 人への引き継ぎ: `task takeover <id>` → worktree で作業してコミット → `task return <id>`。ベースへの追従: `task update-base <id>`(タスクのコミットがまだ無ければ、今の既定ブランチから作り直す。共通の祖先が無い履歴にも追従できる)
@@ -53,6 +53,7 @@
 ├── docs/
 │   └── design-memo.md      # 設計メモ(正本)
 ├── roles/                  # 役割定義(Markdown。frontmatterに model / permissions / outputs)
+├── rubrics/                # 判定の基準(ルーブリック。人が書いて直す。形式は rubrics/README.md)
 ├── src/
 │   ├── orchestrator/       # 状態遷移(固定。フェーズ10でコーディネーターの一手の検証に移す)、役割の起動、上限管理
 │   ├── runner/             # Claude Codeのヘッドレス実行のラッパー
