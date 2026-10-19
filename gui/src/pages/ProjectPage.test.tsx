@@ -14,6 +14,8 @@ const detail: ProjectDetail = {
   decisionsMd: null,
   runs: [],
   tasks: [],
+  settings: { integrate: "pr", autoApprovePlan: false, retrospective: true, coordinator: false },
+  operable: true,
 };
 
 beforeEach(() => {
@@ -122,5 +124,33 @@ describe("プロファイルの承認(フェーズ9: GUI から)", () => {
     fireEvent.click(screen.getByRole("button", { name: "作り直す" }));
     await waitFor(() => expect(posts).toHaveLength(1));
     expect(posts[0]!.body).toEqual({ action: "reprofile" });
+  });
+});
+
+describe("設定の欄(v0.23)", () => {
+  it("取り込み方を2択で出し、選ぶと設定を送る。ほかの設定はチェックで切り替える", async () => {
+    const fetchMock = vi.fn(async (_u: string, init?: RequestInit) =>
+      new Response(JSON.stringify(init?.method === "POST" ? { message: "設定を変えました", settings: { ...detail.settings, integrate: "main" } } : detail), { status: 200, headers: { "content-type": "application/json" } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ProjectPage id={1} />);
+    const pr = (await screen.findByRole("radio", { name: /PR を作る/ })) as HTMLInputElement;
+    expect(pr.checked).toBe(true);
+    fireEvent.click(screen.getByRole("radio", { name: /main に取り込む/ }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, i]) => i?.method === "POST")).toBe(true));
+    const [url, init] = fetchMock.mock.calls.find(([, i]) => i?.method === "POST")!;
+    expect(url).toBe("/api/projects/1/settings");
+    expect(JSON.parse(String(init!.body))).toEqual({ integrate: "main" });
+    fireEvent.click(screen.getByRole("checkbox", { name: /計画の自動承認/ }));
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([, i]) => i?.method === "POST")).toHaveLength(2));
+    expect(JSON.parse(String(fetchMock.mock.calls.filter(([, i]) => i?.method === "POST")[1]![1]!.body))).toEqual({ autoApprovePlan: true });
+  });
+
+  it("読み取り専用では切り替えられず、CLI のコマンドを出す", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ...detail, operable: false }), { status: 200, headers: { "content-type": "application/json" } })));
+    render(<ProjectPage id={1} />);
+    const pr = (await screen.findByRole("radio", { name: /PR を作る/ })) as HTMLInputElement;
+    expect(pr.disabled).toBe(true);
+    expect(screen.getByText(/agent-crew project set agent-crew --integrate main/)).toBeTruthy();
   });
 });

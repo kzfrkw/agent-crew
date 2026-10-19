@@ -9,6 +9,7 @@ import {
   getArtifact,
   getProject,
   getProjectProfile,
+  getProjectSettings,
   getProjectWiring,
   getRepoProfile,
   getRepoProtect,
@@ -51,6 +52,7 @@ import type {
   TaskSummary,
   WorkerView,
   UsageView,
+  ProjectSettingsView,
 } from "./api-types.ts";
 import { fileUrl } from "./files.ts";
 
@@ -89,7 +91,7 @@ export function handleApi(home: string, path: string, query: URLSearchParams, wo
     if (m) {
       const id = Number(m[2]);
       const found =
-        m[1] === "tasks" ? taskDetail(home, db, id, worker.state !== "disabled") : m[1] === "runs" ? runDetail(home, db, id) : m[1] === "artifacts" ? artifactDetail(home, db, id) : projectDetail(home, db, id);
+        m[1] === "tasks" ? taskDetail(home, db, id, worker.state !== "disabled") : m[1] === "runs" ? runDetail(home, db, id) : m[1] === "artifacts" ? artifactDetail(home, db, id) : projectDetail(home, db, id, worker.state !== "disabled");
       if (!found) throw new HttpError(404, "ありません");
       return found;
     }
@@ -337,13 +339,21 @@ function runDetail(home: string, db: Db, id: number): RunDetail | undefined {
   };
 }
 
-function projectDetail(home: string, db: Db, id: number): ProjectDetail | undefined {
+/** 画面に出すプロジェクトの設定(未設定は既定値で補う) */
+export function projectSettingsView(db: Db, projectId: number): ProjectSettingsView {
+  const s = getProjectSettings(db, projectId);
+  return { integrate: s.integrate ?? "pr", autoApprovePlan: s.autoApprovePlan === true, retrospective: s.retrospective !== false, coordinator: s.coordinator === true };
+}
+
+function projectDetail(home: string, db: Db, id: number, operable: boolean): ProjectDetail | undefined {
   const p = getProject(db, id);
   if (!p) return undefined;
   const running = runningByTask(db);
   const costs = costByTask(db);
   return {
     project: projectSummary(db, p),
+    settings: projectSettingsView(db, id),
+    operable,
     repos: listRepos(db, id).map((r) => ({
       id: r.id,
       path: r.path,

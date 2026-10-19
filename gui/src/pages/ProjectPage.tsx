@@ -8,6 +8,7 @@ import { CommandLine } from "../components/Commands.tsx";
 import { Crumbs, Meta, PageTitle } from "../components/Layout.tsx";
 import { Markdown } from "../components/Markdown.tsx";
 import { SectionHead } from "../components/Panel.tsx";
+import { ProjectSettings } from "../components/ProjectSettings.tsx";
 import { RunTable } from "../components/RunTable.tsx";
 import { Async } from "../components/Status.tsx";
 import { TaskTable } from "../components/TaskTable.tsx";
@@ -20,10 +21,10 @@ import { Badge } from "@/components/ui/badge";
 /** S5 プロジェクト */
 export function ProjectPage({ id }: { id: number }) {
   const detail = useApi<ProjectDetail>(`/api/projects/${id}`);
-  return <Async state={detail}>{(d) => <ProjectView d={d} />}</Async>;
+  return <Async state={detail}>{(d) => <ProjectView d={d} reload={detail.reload} />}</Async>;
 }
 
-function ProjectView({ d }: { d: ProjectDetail }) {
+function ProjectView({ d, reload }: { d: ProjectDetail; reload: () => void }) {
   const p = d.project;
   return (
     <>
@@ -82,6 +83,7 @@ function ProjectView({ d }: { d: ProjectDetail }) {
           </section>
         </div>
         <aside className="flex flex-col gap-3">
+          <ProjectSettings projectId={p.id} name={p.name} defaultBranch={d.repos[0]?.defaultBranch ?? "既定ブランチ"} settings={d.settings} operable={d.operable} onChanged={reload} />
           <div className="rounded-lg border bg-card px-4 py-3">
             <h3 className="mt-0 mb-2 text-xs font-semibold text-muted-foreground">リポジトリ</h3>
             {d.repos.length === 0 && (
@@ -106,7 +108,7 @@ function ProjectView({ d }: { d: ProjectDetail }) {
                 <dt className="text-muted-foreground">ベースのブランチ</dt>
                 <dd className="m-0">
                   <span className="font-mono">{r.defaultBranch}</span>
-                  <span className="block text-subtle-foreground">タスクのブランチはここから作り、PR もここに向けて出す</span>
+                  <span className="block text-subtle-foreground">{d.settings.integrate === "main" ? "タスクのブランチはここから作り、最終確認の後にここへ取り込む" : "タスクのブランチはここから作り、PR もここに向けて出す"}</span>
                 </dd>
               </dl>
             ))}

@@ -225,8 +225,14 @@ export type RunDetail = {
   streamUrl: string | null;
 };
 
+/** プロジェクトの設定(画面で切り替える。v0.23)。integrate は最終確認の後の取り込み方 */
+export type ProjectSettingsView = { integrate: "pr" | "main"; autoApprovePlan: boolean; retrospective: boolean; coordinator: boolean };
+
 export type ProjectDetail = {
   project: ProjectSummary;
+  settings: ProjectSettingsView;
+  /** 書き込み API と常駐ワーカーがあり、画面から操作できる(読み取り専用の serve --no-worker では false) */
+  operable: boolean;
   /** リポジトリごとのプロファイル(役割に渡すコマンド)と、起動のつなぎ方の環境変数(フェーズ5) */
   repos: { id: number; path: string; role: string; defaultBranch: string; profile: unknown; env: Record<string, string>; protect: string[] }[];
   profile: unknown;

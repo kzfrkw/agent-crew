@@ -26,6 +26,8 @@ const overview: Overview = {
 };
 const detail = (id: number, name: string, repos: number): ProjectDetail => ({
   project: project(id, name, repos),
+  settings: { integrate: "pr", autoApprovePlan: false, retrospective: true, coordinator: false },
+  operable: true,
   repos: Array.from({ length: repos }, (_, i) => ({ id: i + 1, path: `/r/${name}`, role: "main", defaultBranch: "main", profile: null, env: {}, protect: [] })),
   profile: null,
   profileMd: null,

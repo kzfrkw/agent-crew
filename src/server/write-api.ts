@@ -1,17 +1,17 @@
 import { spawn } from "node:child_process";
-import { createTask, getProject, getProjectByName, getTask, listTaskRepos } from "../db/store.ts";
+import { createTask, getProject, getProjectByName, getTask, listTaskRepos, type ProjectSettings } from "../db/store.ts";
 import type { AppContext } from "../orchestrator/context.ts";
 import { requestStop } from "../orchestrator/engine.ts";
 import { returnTask, takeoverTask, updateBase } from "../orchestrator/handoff.ts";
 import { answerTask, approveTask, cancelTask, rejectTask, resolveDesignReview } from "../orchestrator/human.ts";
 import { decideRetro } from "../orchestrator/retro.ts";
 import { createPlanningProject, createPlanningTask } from "../orchestrator/planning.ts";
-import { approveProfile, reprofileProject } from "../orchestrator/projects.ts";
+import { approveProfile, reprofileProject, setProjectSettings } from "../orchestrator/projects.ts";
 import { notifyHuman } from "../orchestrator/notify.ts";
 import { listRepos } from "../db/store.ts";
 import type { Worker } from "../orchestrator/worker.ts";
-import type { ActionRequest, ApprovalKindView, ProjectSummary, ActionResult, CreateTaskRequest, DesignOptions, TaskSummary, WorkerView } from "./api-types.ts";
-import { HttpError, projectSummary, taskSummaryOf } from "./api.ts";
+import type { ActionRequest, ApprovalKindView, ProjectSettingsView, ProjectSummary, ActionResult, CreateTaskRequest, DesignOptions, TaskSummary, WorkerView } from "./api-types.ts";
+import { HttpError, projectSettingsView, projectSummary, taskSummaryOf } from "./api.ts";
 
 /**
  * 書き込み API(docs/structure.md「フェーズ3」)。人の操作は CLI と同じ関数を通し、
@@ -32,6 +32,8 @@ export async function handleWrite(ops: Ops, path: string, body: unknown): Promis
   if (m) return { status: 200, data: await act(ops, Number(m[1]), body) };
   const pm = /^projects\/(\d+)\/profile$/.exec(path);
   if (pm) return { status: 200, data: profileAction(ops, Number(pm[1]), body) };
+  const sm = /^projects\/(\d+)\/settings$/.exec(path);
+  if (sm) return { status: 200, data: settingsAction(ops, Number(sm[1]), body) };
   throw new HttpError(404, "ありません");
 }
 
@@ -99,6 +101,25 @@ function startProfiling(ops: Ops, name: string): void {
 }
 
 /** プロジェクトのプロファイルの承認・作り直し(GUI から。フェーズ9) */
+/** プロジェクトの設定を変える(書いた項目だけ。v0.23)。値を全部確かめてから書く */
+function settingsAction(ops: Ops, projectId: number, body: unknown): { message: string; settings: ProjectSettingsView } {
+  const project = getProject(ops.ctx.db, projectId);
+  if (!project) throw new HttpError(404, "プロジェクトがありません");
+  if (!isObject(body)) throw new HttpError(400, "本文は JSON のオブジェクトで送ってください");
+  const patch: ProjectSettings = {};
+  for (const [k, v] of Object.entries(body)) {
+    if (k === "integrate") {
+      if (v !== "pr" && v !== "main") throw new HttpError(400, "integrate は pr か main で指定してください");
+      patch.integrate = v;
+    } else if (k === "autoApprovePlan" || k === "retrospective" || k === "coordinator") {
+      if (typeof v !== "boolean") throw new HttpError(400, `${k} は true か false で指定してください`);
+      patch[k] = v;
+    } else throw new HttpError(400, `知らない設定です: ${k}`);
+  }
+  setProjectSettings(ops.ctx, project.name, patch);
+  return { message: "設定を変えました", settings: projectSettingsView(ops.ctx.db, projectId) };
+}
+
 function profileAction(ops: Ops, projectId: number, body: unknown): { message: string; project: ProjectSummary } {
   const project = getProject(ops.ctx.db, projectId);
   if (!project) throw new HttpError(404, "プロジェクトがありません");

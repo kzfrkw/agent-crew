@@ -295,3 +295,30 @@ describe("自動実行の切り替え", () => {
     expect((await post("/api/worker", { paused: true })).status).toBe(409);
   });
 });
+
+describe("プロジェクトの設定(GUI から。v0.23)", () => {
+  it("取り込み方・計画の自動承認・振り返り・企画のコーディネーターを切り替え、詳細に今の値と操作できるかを出す", async () => {
+    const { ctx, project } = await setup({}, { worker: true });
+    const { getProjectSettings } = await import("../src/db/store.ts");
+    const before = await call("GET", `/api/projects/${project.id}`);
+    expect(before.body.settings).toEqual({ integrate: "pr", autoApprovePlan: false, retrospective: true, coordinator: false });
+    expect(before.body.operable).toBe(true);
+    const r = await post(`/api/projects/${project.id}/settings`, { integrate: "main", coordinator: true });
+    expect(r.status).toBe(200);
+    expect(r.body.settings).toEqual({ integrate: "main", autoApprovePlan: false, retrospective: true, coordinator: true });
+    expect(getProjectSettings(ctx.db, project.id)).toMatchObject({ integrate: "main", coordinator: true });
+    // 書いていない項目は変えない
+    await post(`/api/projects/${project.id}/settings`, { retrospective: false });
+    expect(getProjectSettings(ctx.db, project.id)).toMatchObject({ integrate: "main", coordinator: true, retrospective: false });
+  });
+
+  it("不正な値や知らない項目は拒否し、何も変えない", async () => {
+    const { ctx, project } = await setup();
+    const { getProjectSettings } = await import("../src/db/store.ts");
+    expect((await post(`/api/projects/${project.id}/settings`, { integrate: "rebase" })).status).toBe(400);
+    expect((await post(`/api/projects/${project.id}/settings`, { coordinator: "yes" })).status).toBe(400);
+    expect((await post(`/api/projects/${project.id}/settings`, { integrate: "main", push: true })).status).toBe(400);
+    expect((await post(`/api/projects/999/settings`, { integrate: "main" })).status).toBe(404);
+    expect(getProjectSettings(ctx.db, project.id)).toEqual({});
+  });
+});
