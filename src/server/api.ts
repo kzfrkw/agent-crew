@@ -38,6 +38,7 @@ import { getUsage } from "../orchestrator/usage.ts";
 import { retroView } from "../orchestrator/retro.ts";
 import { criticQuestion, planningQuestions, STAGES } from "../orchestrator/planning.ts";
 import { STATE_LABELS, type TaskState } from "../orchestrator/states.ts";
+import { glossaryPath } from "../orchestrator/glossary.ts";
 import type {
   ArtifactDetail,
   ArtifactSummary,
@@ -288,6 +289,7 @@ function taskDetail(home: string, db: Db, id: number, operable: boolean): TaskDe
     runActive: runActive(db, id),
     screenshots: screenshotsOf(home, db, id),
     reviewFiles: { diff: fileUrl(home, join(taskDir(home, id), "diff.patch")), testChanges: fileUrl(home, join(taskDir(home, id), "test-changes.md")) },
+    settings: projectSettingsView(db, t.projectId),
     report: buildTaskReport(db, id),
     retro: retroView(db, id),
     planningQuestions: t.kind === "planning" && t.state.startsWith("awaiting_") ? planningQuestions(db, id) : null,
@@ -342,7 +344,7 @@ function runDetail(home: string, db: Db, id: number): RunDetail | undefined {
 /** 画面に出すプロジェクトの設定(未設定は既定値で補う) */
 export function projectSettingsView(db: Db, projectId: number): ProjectSettingsView {
   const s = getProjectSettings(db, projectId);
-  return { integrate: s.integrate ?? "pr", autoApprovePlan: s.autoApprovePlan === true, retrospective: s.retrospective !== false, coordinator: s.coordinator === true };
+  return { integrate: s.integrate ?? "pr", autoApprovePlan: s.autoApprovePlan === true, retrospective: s.retrospective !== false, coordinator: s.coordinator === true, explain: s.explain !== false };
 }
 
 function projectDetail(home: string, db: Db, id: number, operable: boolean): ProjectDetail | undefined {
@@ -354,6 +356,8 @@ function projectDetail(home: string, db: Db, id: number, operable: boolean): Pro
     project: projectSummary(db, p),
     settings: projectSettingsView(db, id),
     operable,
+    // 画面の節に見出しがあるので、ファイルの先頭の見出し(# 用語集)は除く
+    glossaryMd: readText(glossaryPath(home, id))?.replace(/^# .*\n+/, "") ?? null,
     repos: listRepos(db, id).map((r) => ({
       id: r.id,
       path: r.path,

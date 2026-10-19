@@ -131,4 +131,8 @@ const ROLE_INSTRUCTIONS: Record<PromptRole, string[]> = {
   ],
   design_reviewer: ["- 下のスクリーンショットを Read で見て、`ui-spec.md` とデザイン方針に照らし、成果物ディレクトリに `design-review.md` を書いてください"],
   integrator: ["- 成果物ディレクトリに `pr-draft.md` を書いてください。git の操作は行わないでください"],
+  explainer: [
+    "- 差分(下に場所を示します)とコードを読み、成果物ディレクトリに `explain.md` を書いてください。読み手は、このプロジェクトの技術に初めて触れる人です。コードは変更しないでください",
+    "- 新しく説明した用語は、構造化出力の `terms` に入れてください",
+  ],
 };

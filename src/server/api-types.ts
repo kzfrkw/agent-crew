@@ -196,6 +196,8 @@ export type TaskDetail = {
   planningQuestions: { stage: string; questions: { from: string; text: string }[]; musts: string[]; shoulds: number } | null;
   /** 最終確認の材料のうち、成果物として登録しないファイル(差分、テストの変更の検出結果)の URL。無ければ null */
   reviewFiles: { diff: string | null; testChanges: string | null };
+  /** プロジェクトの設定(取り込み方で最終確認の説明を変え、解説の段をパイプラインに出すかを決める) */
+  settings: ProjectSettingsView;
   /** 分割の親(8-2)。子でなければ null */
   parent: { id: number; title: string } | null;
   /** 分割した子タスク(順番どおり)。親でなければ空 */
@@ -226,13 +228,15 @@ export type RunDetail = {
 };
 
 /** プロジェクトの設定(画面で切り替える。v0.23)。integrate は最終確認の後の取り込み方 */
-export type ProjectSettingsView = { integrate: "pr" | "main"; autoApprovePlan: boolean; retrospective: boolean; coordinator: boolean };
+export type ProjectSettingsView = { integrate: "pr" | "main"; autoApprovePlan: boolean; retrospective: boolean; coordinator: boolean; explain: boolean };
 
 export type ProjectDetail = {
   project: ProjectSummary;
   settings: ProjectSettingsView;
   /** 書き込み API と常駐ワーカーがあり、画面から操作できる(読み取り専用の serve --no-worker では false) */
   operable: boolean;
+  /** プロジェクトの用語集(解説担当が説明した用語。v0.24)。無ければ null */
+  glossaryMd: string | null;
   /** リポジトリごとのプロファイル(役割に渡すコマンド)と、起動のつなぎ方の環境変数(フェーズ5) */
   repos: { id: number; path: string; role: string; defaultBranch: string; profile: unknown; env: Record<string, string>; protect: string[] }[];
   profile: unknown;

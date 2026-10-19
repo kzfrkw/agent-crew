@@ -15,10 +15,10 @@ const STAGE: Record<StageStatus, { text: string; dot: string }> = {
 };
 
 /** パイプライン上の位置(docs/surface.md) */
-export function Pipeline({ state, heldFrom, design, kind, flowStage }: { state: TaskState; heldFrom: TaskState | null; design?: DesignOptions; kind?: string; flowStage?: TaskState | null }) {
+export function Pipeline({ state, heldFrom, design, kind, flowStage, explain }: { state: TaskState; heldFrom: TaskState | null; design?: DesignOptions; kind?: string; flowStage?: TaskState | null; explain?: boolean }) {
   return (
     <ol className="mt-3 flex flex-wrap items-center text-xs" aria-label="パイプライン">
-      {pipelineOf(state, heldFrom, design, kind, flowStage).map((s, i) => (
+      {pipelineOf(state, heldFrom, design, kind, { flowStage, explain }).map((s, i) => (
         <li
           key={s.state}
           className={cn("flex items-center gap-1.5", STAGE[s.status].text)}

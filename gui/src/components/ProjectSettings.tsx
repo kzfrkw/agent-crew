@@ -3,9 +3,10 @@ import type { ProjectSettingsView } from "../../../src/server/api-types.ts";
 import { postJson } from "../lib/api.ts";
 import { CommandLine } from "./Commands.tsx";
 
-type Flag = "autoApprovePlan" | "retrospective" | "coordinator";
+type Flag = "explain" | "autoApprovePlan" | "retrospective" | "coordinator";
 
 const FLAGS: { key: Flag; label: string; note: string; option: string }[] = [
+  { key: "explain", label: "解説を作る", note: "最終確認の前に、変更の重要なロジックと使っている技術の解説(explain.md)を作る", option: "--explain" },
   { key: "autoApprovePlan", label: "計画の自動承認", note: "小さなタスクの計画を、人の承認なしで進める", option: "--auto-approve-plan" },
   { key: "retrospective", label: "振り返り", note: "完了したタスクから、規約と設計判断の提案を出す", option: "--retrospective" },
   { key: "coordinator", label: "企画をコーディネーターで進める", note: "新しく作る企画の既定(作るときに選び直せる)", option: "--coordinator" },

@@ -60,6 +60,7 @@ describe("pipelineOf", () => {
       "レビュー:todo",
       "QA:todo",
       "デザインレビュー:skipped",
+      "解説:skipped",
       "最終確認:todo",
       "統合:todo",
       "完了:todo",
@@ -74,7 +75,7 @@ describe("pipelineOf", () => {
 
   it("承認待ちは、人の対応待ちとして印を付ける", () => {
     expect(labels("awaiting_plan_approval")[1]).toBe("計画の承認:blocked");
-    expect(labels("awaiting_final_approval")[8]).toBe("最終確認:blocked");
+    expect(labels("awaiting_final_approval")[9]).toBe("最終確認:blocked");
   });
 
   it("設計の段: 動かす段は通常どおり、デザイナーを動かさなければデザインの承認は飛ばす", () => {
@@ -107,11 +108,22 @@ describe("パイプライン(企画。9a)", () => {
 describe("パイプライン(コーディネーター。10-2)", () => {
   it("coordinating では、最後に書いた段(flowStage)を現在地にする。止まったときもその段で止まって見せる", async () => {
     const { pipelineOf } = await import("./pipeline.ts");
-    const st = pipelineOf("coordinating", null, undefined, "planning", "p_scoping");
+    const st = pipelineOf("coordinating", null, undefined, "planning", { flowStage: "p_scoping" });
     expect(st.map((s) => s.status).slice(0, 5)).toEqual(["done", "done", "done", "current", "todo"]);
-    expect(pipelineOf("needs_input", "coordinating", undefined, "planning", "p_researching")[0]!.status).toBe("blocked");
+    expect(pipelineOf("needs_input", "coordinating", undefined, "planning", { flowStage: "p_researching" })[0]!.status).toBe("blocked");
     // まだ何も書いていなければ、調査が現在地
-    expect(pipelineOf("coordinating", null, undefined, "planning", null)[0]!.status).toBe("current");
+    expect(pipelineOf("coordinating", null, undefined, "planning", { flowStage: null })[0]!.status).toBe("current");
+  });
+});
+
+describe("パイプライン(解説。v0.24)", () => {
+  it("デザインレビューと最終確認の間に「解説」。解説を作らないプロジェクトでは飛ばす", async () => {
+    const { pipelineOf } = await import("./pipeline.ts");
+    const on = pipelineOf("explaining", null, undefined, "normal", { explain: true });
+    expect(on.map((s) => s.label).slice(-4)).toEqual(["解説", "最終確認", "統合", "完了"]);
+    expect(on.find((s) => s.label === "解説")!.status).toBe("current");
+    expect(on.find((s) => s.label === "QA")!.status).toBe("done");
+    expect(pipelineOf("awaiting_final_approval", null).find((s) => s.label === "解説")!.status).toBe("skipped");
   });
 });
 

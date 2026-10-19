@@ -518,7 +518,14 @@ export function setRepoProtect(db: Db, repoId: number, paths: string[]): void {
  * integrate: 最終確認の後の取り込み方。pr(既定)はブランチと PR の下書きを残して人が PR を作る。
  * main は、ツールがローカルの既定ブランチに fast-forward で取り込む(新規開発向け。push は人が行う。タスクは1つずつ進む)
  */
-export type ProjectSettings = { autoApprovePlan?: boolean; retrospective?: boolean; coordinator?: boolean; integrate?: "pr" | "main" };
+export type ProjectSettings = {
+  autoApprovePlan?: boolean;
+  retrospective?: boolean;
+  coordinator?: boolean;
+  integrate?: "pr" | "main";
+  /** 最終確認の前に変更の解説(explain.md)を作る(v0.24。既定 on。false で作らない) */
+  explain?: boolean;
+};
 
 export function getProjectSettings(db: Db, projectId: number): ProjectSettings {
   const r = db.prepare("SELECT settings_json FROM projects WHERE id = ?").get(projectId) as { settings_json: string | null } | undefined;

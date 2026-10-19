@@ -14,6 +14,7 @@ const STAGES: { state: TaskState; label: string }[] = [
   { state: "reviewing", label: "レビュー" },
   { state: "qa", label: "QA" },
   { state: "design_reviewing", label: "デザインレビュー" },
+  { state: "explaining", label: "解説" },
   { state: "awaiting_final_approval", label: "最終確認" },
   { state: "integrating", label: "統合" },
   { state: "done", label: "完了" },
@@ -37,15 +38,25 @@ const HOLD: Partial<Record<TaskState, StageStatus>> = { needs_input: "blocked", 
 /** 人の承認を待つ段(現在地だが、エージェントは動いていない) */
 const WAITING: TaskState[] = ["awaiting_plan_approval", "awaiting_design_approval", "awaiting_final_approval", "awaiting_strategy_approval", "awaiting_scope_approval", "awaiting_handoff_approval"];
 
-/** 設計の段は、動かす役割がなければ飛ばす。デザインの承認と実装後のデザインレビューは、デザイナーを動かすときだけ */
-function skipped(state: TaskState, design: DesignOptions): boolean {
+/** 設計の段は、動かす役割がなければ飛ばす。デザインの承認と実装後のデザインレビューは、デザイナーを動かすときだけ。解説はプロジェクトで作るときだけ */
+function skipped(state: TaskState, design: DesignOptions, explain: boolean): boolean {
+  if (state === "explaining") return !explain;
   if (state === "designing") return !design.architect && !design.designer;
   if (state === "awaiting_design_approval" || state === "design_reviewing") return !design.designer;
   return false;
 }
 
-/** flowStage: コーディネーターで進めるタスク(状態 coordinating)の、最後に書いた段(フェーズ10。無ければ調査の前) */
-export function pipelineOf(state: TaskState, heldFrom: TaskState | null, design: DesignOptions = { architect: false, designer: false }, kind: string = "normal", flowStage: TaskState | null = null): Stage[] {
+/**
+ * flowStage: コーディネーターで進めるタスク(状態 coordinating)の、最後に書いた段(フェーズ10。無ければ調査の前)。
+ * explain: 最終確認の前に解説を作るプロジェクトか(v0.24)
+ */
+export function pipelineOf(
+  state: TaskState,
+  heldFrom: TaskState | null,
+  design: DesignOptions = { architect: false, designer: false },
+  kind: string = "normal",
+  { flowStage = null, explain = false }: { flowStage?: TaskState | null; explain?: boolean } = {},
+): Stage[] {
   if (kind === "planning") {
     const hold = HOLD[state];
     const where = hold ? heldFrom : state;
@@ -58,13 +69,13 @@ export function pipelineOf(state: TaskState, heldFrom: TaskState | null, design:
   // 分割済みの親(8-2): 計画の承認までは済み、その先は子タスクで進む
   if (state === "split" || (HOLD[state] && heldFrom === "split")) {
     const plan = STAGES.findIndex((s) => s.state === "awaiting_plan_approval");
-    return STAGES.map((s, i) => ({ ...s, status: i <= plan ? "done" : skipped(s.state, design) ? "skipped" : "todo" }));
+    return STAGES.map((s, i) => ({ ...s, status: i <= plan ? "done" : skipped(s.state, design, explain) ? "skipped" : "todo" }));
   }
   const hold = HOLD[state];
   const at = state === "done" ? STAGES.length : STAGES.findIndex((s) => s.state === (hold ? heldFrom : state));
   return STAGES.map((s, i) => ({
     ...s,
-    status: skipped(s.state, design)
+    status: skipped(s.state, design, explain)
       ? "skipped"
       : state === "done"
         ? "done"

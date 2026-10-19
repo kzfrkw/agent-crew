@@ -110,6 +110,7 @@ const TOOLS: Record<RoleTool, ReactNode> = {
       <circle cx="38.5" cy="32.5" r=".9" className="fill-current" />
     </>
   ),
+  book: <path d="M38.5 27q-3-2.5-7-2v15q4-.5 7 2 3-2.5 7-2V25q-4-.5-7 2Zm0 0v15M34 30h2.5M34 33.5h2.5M41 30h2" />,
   baton: (
     <>
       <path d="M32 42 45 25M42 38v-5l3-1" />

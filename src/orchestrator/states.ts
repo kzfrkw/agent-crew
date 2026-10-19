@@ -9,6 +9,8 @@ export const TASK_STATES = [
   "reviewing",
   "qa",
   "design_reviewing",
+  /** 最終確認の前に、変更の解説(explain.md)を作る(v0.24。プロジェクトの設定で止められる) */
+  "explaining",
   "awaiting_final_approval",
   "integrating",
   // 企画の流れ(フェーズ9)。各段は書く役 → 批評の順に動く
@@ -44,6 +46,7 @@ export const STATE_LABELS: Record<TaskState, string> = {
   reviewing: "レビュー中",
   qa: "QA中",
   design_reviewing: "デザインレビュー中",
+  explaining: "解説の作成中",
   awaiting_final_approval: "最終確認待ち",
   integrating: "統合中",
   p_researching: "調査中",

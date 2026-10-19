@@ -8,7 +8,7 @@ import type { TaskState } from "./states.ts";
  * 一度実装を始めたタスクは止めない。先後は「すでに実装を始めたか」、どちらも未着手なら番号の小さいほうを先とする
  */
 
-const ACTIVE: TaskState[] = ["implementing", "reviewing", "qa", "design_reviewing", "awaiting_final_approval", "integrating"];
+const ACTIVE: TaskState[] = ["implementing", "reviewing", "qa", "design_reviewing", "explaining", "awaiting_final_approval", "integrating"];
 
 const filesOf = (db: Db, taskId: number): string[] =>
   ((listEvents(db, taskId, 2000).filter((e) => e.kind === "plan").at(-1)?.payload as { expectedFiles?: string[] } | undefined)?.expectedFiles ?? []).map((f) =>

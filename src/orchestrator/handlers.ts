@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { addApproval, addEvent, getProjectSettings, listEvents, listRepos, setTaskDesign, setTaskRepos, getRepo, getRepoProfile, listTaskRepos, listValidApprovals, setProjectProfile, setRepoProfile, type Task } from "../db/store.ts";
 import type { Judgment, Profile } from "../roles/schemas.ts";
@@ -16,6 +16,7 @@ import { applyAudit, checkReviewConsistency, mustIndexes, type Finding } from ".
 import { taskPrompt } from "./prompts.ts";
 import { planningStage } from "./planning.ts";
 import { coordinatorStep } from "./coordinator-run.ts";
+import { appendGlossary, glossaryPath } from "./glossary.ts";
 import { baseRefFor } from "./engine.ts";
 import { testFailureKey, type BounceInfo } from "./bounce.ts";
 import type { Role, TaskEvent } from "./transitions.ts";
@@ -528,6 +529,49 @@ const integrator: Handler = async (ctx, task) => {
   return outcomeOf(r, "integrator", `${dir}/pr-draft.md`);
 };
 
+/**
+ * 解説担当(v0.24)。最終確認の前に、変更の重要なロジックと使っている技術の解説(explain.md)を作る。
+ * 差分はツールがファイルにして渡す(解説担当は Bash を持たない)。新しく説明した用語はプロジェクトの用語集に足す。
+ * 解説は承認の判断材料なので、作れなくても止めずに最終確認へ進め、作れなかったことを残す
+ */
+const explainer: Handler = async (ctx, task) => {
+  const trs = orderedTaskRepos(ctx, task);
+  const multi = trs.length > 1;
+  const dir = taskDir(ctx.home, task.id);
+  const diffPath = join(dir, "explain-diff.patch");
+  writeFileSync(
+    diffPath,
+    trs
+      .map((tr) => {
+        const repo = getRepo(ctx.db, tr.repoId)!;
+        const diff = diffFromBase(tr.worktreePath, mergeBase(tr.worktreePath, baseRefFor(ctx, task, repo), ctx.gitEnv), ctx.gitEnv);
+        return multi ? `# [${tr.role}] ${tr.worktreePath}\n${diff}` : diff;
+      })
+      .join("\n\n"),
+  );
+  const glossary = glossaryPath(ctx.home, task.projectId);
+  const r = await invokeRole(ctx, {
+    roleName: "explainer",
+    taskId: task.id,
+    cwd: trs[0]!.worktreePath,
+    artifactsDir: dir,
+    prompt: taskPrompt(ctx, task, "explainer", [
+      `- 変更の差分(ベースからの差分。テストの変更も含む): ${diffPath}`,
+      ...(multi ? ["- 複数のリポジトリにまたがります。差分はリポジトリごとの節に分けてあります", ...trs.map((tr) => `  - [${tr.role}] ${tr.worktreePath}`)] : []),
+      existsSync(glossary) ? `- プロジェクトの用語集(ここにある用語は説明を繰り返さない): ${glossary}` : "- プロジェクトの用語集はまだありません(このタスクが最初の解説です)",
+      "- 読み手: このプロジェクトの技術(言語、フレームワーク、ライブラリ)に初めて触れる人",
+    ]),
+  });
+  if (!r.ok) {
+    // 人が止めたときは、ほかの役割と同じく人の判断待ち(エンジンが扱う)
+    if (r.failure === "cancelled") return { event: { type: "stopped" }, reason: r.reason };
+    addEvent(ctx.db, { taskId: task.id, runId: r.runId, kind: "explain_failed", payload: { reason: r.reason } });
+    return { event: { type: "verdict", role: "explainer", verdict: "done" }, reason: `解説を作れませんでした(${r.reason})。最終確認へ進みます` };
+  }
+  const added = appendGlossary(glossary, (r.extra.terms ?? []) as { term: string; explanation: string }[], `#${task.id}`);
+  return { event: { type: "verdict", role: "explainer", verdict: "done" }, reason: `解説を作りました(${join(dir, "explain.md")}。用語集に ${added} 語)` };
+};
+
 /** 状態ごとの処理 */
 export const HANDLERS: Partial<Record<Role, Handler>> = {
   planner,
@@ -537,6 +581,7 @@ export const HANDLERS: Partial<Record<Role, Handler>> = {
   qa,
   design_reviewer: designReview,
   integrator,
+  explainer,
   // 企画の段(フェーズ9)は1つのハンドラーで、段ごとの書く役と批評担当を動かす。
   // planning.ts とは循環して読み込まれるため、呼ぶときに参照する
   researcher: (ctx, task) => planningStage(ctx, task),

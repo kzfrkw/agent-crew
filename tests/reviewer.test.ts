@@ -49,7 +49,7 @@ describe("レビュワー", () => {
   it("テストの再実行が通ったらレビューし、approve で QA へ進む。承認は HEAD に紐づく", async () => {
     const { ctx, t, runner } = await implemented({ reviewer: review("approve") });
     expect(getTask(ctx.db, t.id)!.state).toBe("awaiting_final_approval");
-    expect(runner.rolesCalled()).toEqual(["planner", "implementer", "verifier", "reviewer", "qa"]);
+    expect(runner.rolesCalled()).toEqual(["planner", "implementer", "verifier", "reviewer", "qa", "explainer"]);
     const tr = listTaskRepos(ctx.db, t.id)[0]!;
     const approval = listValidApprovals(ctx.db, t.id).find((a) => a.kind === "review")!;
     expect(approval).toMatchObject({ result: "approved", commitSha: headSha(tr.worktreePath, ctx.gitEnv), repoId: tr.repoId });
@@ -156,7 +156,7 @@ describe("レビュワー: Must 指摘の監査(auditor)", () => {
       auditor: audit("overturned", [{ finding: 0, result: "invalid" }, { finding: 2, result: "invalid" }]),
     });
     expect(getTask(ctx.db, t.id)).toMatchObject({ state: "awaiting_final_approval", reviewRounds: 0 });
-    expect(runner.rolesCalled()).toEqual(["planner", "implementer", "verifier", "reviewer", "auditor", "qa"]);
+    expect(runner.rolesCalled()).toEqual(["planner", "implementer", "verifier", "reviewer", "auditor", "qa", "explainer"]);
     const tr = listTaskRepos(ctx.db, t.id)[0]!;
     expect(listValidApprovals(ctx.db, t.id).find((a) => a.kind === "review")).toMatchObject({ result: "approved", commitSha: headSha(tr.worktreePath, ctx.gitEnv) });
     const changed = listEvents(ctx.db, t.id).find((e) => e.kind === "state_changed" && (e.payload as any).from === "reviewing")!;

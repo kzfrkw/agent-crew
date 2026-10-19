@@ -14,8 +14,9 @@ const detail: ProjectDetail = {
   decisionsMd: null,
   runs: [],
   tasks: [],
-  settings: { integrate: "pr", autoApprovePlan: false, retrospective: true, coordinator: false },
+  settings: { integrate: "pr", autoApprovePlan: false, retrospective: true, coordinator: false, explain: true },
   operable: true,
+  glossaryMd: "- **ページング**: 一覧を一定件数ずつに分けて返すこと(#3)",
 };
 
 beforeEach(() => {
@@ -124,6 +125,15 @@ describe("プロファイルの承認(フェーズ9: GUI から)", () => {
     fireEvent.click(screen.getByRole("button", { name: "作り直す" }));
     await waitFor(() => expect(posts).toHaveLength(1));
     expect(posts[0]!.body).toEqual({ action: "reprofile" });
+  });
+});
+
+describe("解説と用語集(v0.24)", () => {
+  it("設定に「解説を作る」があり、用語集を出す", async () => {
+    render(<ProjectPage id={1} />);
+    expect(((await screen.findByRole("checkbox", { name: /解説を作る/ })) as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByRole("heading", { name: "用語集" })).toBeTruthy();
+    expect(screen.getByText(/一覧を一定件数ずつに分けて返すこと/)).toBeTruthy();
   });
 });
 

@@ -44,7 +44,7 @@ export type CoordinatorMove = Base &
 export type MoveCheck = { ok: true; move: CoordinatorMove } | { ok: false; kind: "rejected" | "limit"; reason: string };
 
 /** タスクの種類ごとに、コーディネーターが呼べる役割。コーディネーター自身、把握担当・振り返り(別の契機で動く)、監査・検証(ツールの内部で動く)は含めない */
-const DEV_ROLES = ["planner", "architect", "designer", "implementer", "reviewer", "qa", "design_reviewer", "integrator"];
+const DEV_ROLES = ["planner", "architect", "designer", "implementer", "reviewer", "qa", "design_reviewer", "explainer", "integrator"];
 export const ROLES_BY_KIND: Record<TaskKind, string[]> = {
   normal: DEV_ROLES,
   test_infra: DEV_ROLES,
@@ -69,6 +69,7 @@ const ROLE_REQUIRES: Record<string, HumanApprovalKind[]> = {
   reviewer: ["plan"],
   qa: ["plan"],
   design_reviewer: ["plan"],
+  explainer: ["plan"],
   integrator: ["plan", "final"],
 };
 

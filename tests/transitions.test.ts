@@ -348,3 +348,29 @@ describe("デザインレビューを行わないとき・撮影できなかっ�
     ).toMatchObject({ state: "implementing", design: { architect: false, designer: false } });
   });
 });
+
+describe("解説の段(explaining。最終確認の前に変更の解説を作る)", () => {
+  const ui = { architect: false, designer: true };
+  const on = ctx({ explain: true });
+  it("解説がオンなら、QA の合格・デザインレビューの承認・デザインレビューを飛ばす操作のあと、最終確認の前に解説を作る", () => {
+    expect(next(snap("qa"), { type: "verdict", role: "qa", verdict: "passed" }, on).state).toBe("explaining");
+    expect(next(snap("qa", { design: ui }), { type: "verdict", role: "qa", verdict: "passed" }, on).state).toBe("design_reviewing");
+    expect(next(snap("design_reviewing", { design: ui }), { type: "verdict", role: "design_reviewer", verdict: "approve" }, on).state).toBe("explaining");
+    expect(next(snap("needs_input", { heldFromState: "design_reviewing", design: ui }), { type: "skip_design_review" }, on).state).toBe("explaining");
+  });
+
+  it("解説担当が終わったら最終確認の承認待ち。役割は解説担当", () => {
+    expect(roleForState("explaining")).toBe("explainer");
+    expect(next(snap("explaining"), { type: "verdict", role: "explainer", verdict: "done" }, on).state).toBe("awaiting_final_approval");
+  });
+
+  it("解説がオフなら、これまでどおり最終確認へ", () => {
+    expect(next(snap("qa"), { type: "verdict", role: "qa", verdict: "passed" }).state).toBe("awaiting_final_approval");
+    expect(next(snap("qa"), { type: "verdict", role: "qa", verdict: "passed" }, ctx({ explain: false })).state).toBe("awaiting_final_approval");
+  });
+
+  it("解説の段で main の最新を取り込んだり、人が変更して戻したりしたら、レビューからやり直す", () => {
+    expect(next(snap("explaining"), { type: "base_updated" }, on).state).toBe("reviewing");
+    expect(next(snap("human_working", { heldFromState: "explaining" }), { type: "return", humanChanged: true }, on).state).toBe("reviewing");
+  });
+});

@@ -7,7 +7,7 @@ import type { TaskState } from "./states.ts";
  */
 
 /** researcher〜handoff は企画の流れの書く役(フェーズ9。批評担当 critic は各段のハンドラーの中で動く) */
-export type Role = "planner" | "architect" | "designer" | "implementer" | "reviewer" | "qa" | "design_reviewer" | "integrator" | "researcher" | "strategist" | "product" | "ux" | "handoff" | "coordinator";
+export type Role = "planner" | "architect" | "designer" | "implementer" | "reviewer" | "qa" | "design_reviewer" | "integrator" | "researcher" | "strategist" | "product" | "ux" | "handoff" | "coordinator" | "explainer";
 
 /** 人の承認の種類。strategy / scope / handoff は企画の流れ */
 export type HumanApprovalKind = "plan" | "design" | "final" | "strategy" | "scope" | "handoff";
@@ -23,6 +23,7 @@ const ROLE_BY_STATE: Partial<Record<TaskState, Role>> = {
   reviewing: "reviewer",
   qa: "qa",
   design_reviewing: "design_reviewer",
+  explaining: "explainer",
   integrating: "integrator",
   p_researching: "researcher",
   p_strategizing: "strategist",
@@ -52,6 +53,8 @@ const VERDICTS: Record<Role, Record<string, Outcome>> = {
   qa: { passed: { to: "awaiting_final_approval" }, failed: "bounce", need_human: "hold" },
   design_reviewer: { approve: { to: "awaiting_final_approval" }, changes_requested: "bounce", need_human: "hold" },
   integrator: { done: { to: "done" }, blocked: "hold" },
+  // 解説担当は判定を返さず done だけ(失敗しても最終確認へ進める。ハンドラーが done にする)
+  explainer: { done: { to: "awaiting_final_approval" } },
   // 企画の段: 批評担当が approve したら、書く役の ready として次へ進む
   researcher: { ready: { to: "p_strategizing" }, need_human: "hold" },
   strategist: { ready: { to: "awaiting_strategy_approval" }, need_human: "hold" },
@@ -66,9 +69,9 @@ const PLANNING_ROLES: Role[] = ["researcher", "strategist", "product", "ux", "ha
 const PLANNING_STAGES: TaskState[] = ["p_researching", "p_strategizing", "p_scoping", "p_ux", "p_handing_off"];
 
 /** 人が変更して戻したとき、レビューからやり直す対象になる段階(実装が存在する段階) */
-const AFTER_IMPLEMENTATION: TaskState[] = ["implementing", "reviewing", "qa", "design_reviewing", "awaiting_final_approval", "integrating"];
+const AFTER_IMPLEMENTATION: TaskState[] = ["implementing", "reviewing", "qa", "design_reviewing", "explaining", "awaiting_final_approval", "integrating"];
 /** ベースを取り込んだとき、レビューからやり直す段階(レビュー済みの内容が変わるため) */
-const REVIEWED: TaskState[] = ["reviewing", "qa", "design_reviewing", "awaiting_final_approval", "integrating"];
+const REVIEWED: TaskState[] = ["reviewing", "qa", "design_reviewing", "explaining", "awaiting_final_approval", "integrating"];
 const RESTART_REVIEW: Effect[] = [{ type: "invalidate_approvals", kinds: ["review", "qa", "final"] }];
 
 export type TaskEvent =
@@ -138,6 +141,8 @@ export type TransitionContext = {
   testGateOpen: boolean;
   /** デザイナーが「このタスクで UI は変わらない」と返した。実装後のデザインレビューを行わない */
   uiUnchanged?: boolean;
+  /** 最終確認の前に解説を作る(v0.24。プロジェクトの設定 explain。省くと作らない) */
+  explain?: boolean;
 };
 
 export type Effect = { type: "invalidate_approvals"; kinds: ApprovalKind[] };
@@ -200,6 +205,8 @@ export function transition(t: TaskSnapshot, e: TaskEvent, c: TransitionContext):
       // 企画の段は、次の段で差し戻しの回数を数え直す
       if (PLANNING_ROLES.includes(e.role)) return to(outcome!.to, { reviewRounds: 0 });
       if (e.role === "qa" && e.verdict === "passed" && t.design?.designer && !c.uiUnchanged) return to("design_reviewing");
+      // 最終確認の前に解説を作る(解説担当の後は最終確認へ)
+      if (outcome!.to === "awaiting_final_approval" && c.explain && e.role !== "explainer") return to("explaining");
       return to(outcome!.to);
     }
 
@@ -279,7 +286,7 @@ export function transition(t: TaskSnapshot, e: TaskEvent, c: TransitionContext):
     case "skip_design_review":
     case "back_to_implementer":
       if (t.state !== "needs_input" || t.heldFromState !== "design_reviewing") fail("デザインレビューで止まっていません");
-      if (e.type === "skip_design_review") return to("awaiting_final_approval");
+      if (e.type === "skip_design_review") return to(c.explain ? "explaining" : "awaiting_final_approval");
       return to("implementing", { reviewRounds: 0, effects: RESTART_REVIEW });
 
     case "takeover":

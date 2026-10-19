@@ -48,6 +48,7 @@ export function applyEvent(ctx: AppContext, taskId: number, event: TaskEvent, re
     runActive: runActive(ctx.db, taskId),
     testGateOpen: testGateOpen(ctx.db, taskId),
     uiUnchanged: (listEvents(ctx.db, taskId, 2000).filter((e) => e.kind === "ui_changes").at(-1)?.payload as { changed?: boolean } | undefined)?.changed === false,
+    explain: getProjectSettings(ctx.db, task.projectId).explain !== false,
   });
   for (const effect of next.effects) {
     if (effect.type === "invalidate_approvals") invalidateApprovals(ctx.db, taskId, effect.kinds);

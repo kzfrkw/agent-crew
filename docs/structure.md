@@ -145,5 +145,6 @@ flowchart LR
 - 承認すると、リポジトリを登録して開発のタスクを作り、裏でプロジェクト把握担当がプロファイルを作る(数分。終わったら macOS の通知)。開発のタスクはプロファイルを承認するまで始まらない
 - プロジェクト画面(S5)でプロファイルを承認できる。テスト基盤が無ければ「整備を待たずに開発を始める」を選べる(新しい空のリポジトリでは、最初のチケットでテストの仕組みも作るため)。作っている間はその旨、失敗したら理由と「作り直す」を出す
 - API: 承認の `devProject: { repoPath, name? }`(name を省くと企画のプロジェクトに足す)。`POST /api/projects/:id/profile`(`{ action: "approve", allowWithoutTests? }` か `{ action: "reprofile" }`)
+- API(v0.24): `GET /api/projects/:id` に `glossaryMd`(用語集。先頭の見出しは除く)、`GET /api/tasks/:id` に `settings`(プロジェクトの設定。最終確認の説明とパイプラインの解説の段に使う)。設定に `explain` を足す
 - API(v0.23): `POST /api/projects/:id/settings`(`{ integrate?: "pr" | "main", autoApprovePlan?, retrospective?, coordinator? }`。書いた項目だけ変える。知らない項目や不正な値は 400 で何も変えない)。`GET /api/projects/:id` に `settings`(未設定は既定値で補う)と `operable`(画面から操作できるか)
 - CLI: `task approve <id> --kind handoff --repo <フォルダ> [--new-project <名前>]`

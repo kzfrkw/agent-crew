@@ -11,7 +11,7 @@ type Item = { name: string; to: string; external: boolean; check: string };
  * 最終確認の欄。まず QA の結果(受け入れ条件ごと)を目立たせ、続けて確かめるもの(差分、テストの変更、レビュー、
  * デザインレビュー、実装のメモ)を、何を確かめるかつきで並べる
  */
-export function FinalReview({ taskId, artifacts, files, screenshots }: { taskId: number; artifacts: Artifact[]; files: TaskDetail["reviewFiles"]; screenshots: number }) {
+export function FinalReview({ taskId, artifacts, files, screenshots, integrate = "pr" }: { taskId: number; artifacts: Artifact[]; files: TaskDetail["reviewFiles"]; screenshots: number; integrate?: "pr" | "main" }) {
   const latest = (kind: string) => artifacts.filter((a) => a.kind === kind).at(-1);
   const art = (kind: string, check: string): Item[] => {
     const a = latest(kind);
@@ -19,6 +19,12 @@ export function FinalReview({ taskId, artifacts, files, screenshots }: { taskId:
   };
   const file = (url: string | null, name: string, check: string): Item[] => (url ? [{ name, to: url, external: true, check }] : []);
   const qa = latest("qa-report");
+  // 解説(v0.24): 変更を理解してから承認できるように、QA の結果より先に読む
+  const explain = latest("explain");
+  const first = [
+    ...(explain ? [{ a: explain, note: "変更の解説。重要なロジックと使っている技術(読む順番と、理解を確かめる問いつき)" }] : []),
+    ...(qa ? [{ a: qa, note: "QA の受け入れ条件ごとの結果(計画の条件をすべて満たしたか)" }] : []),
+  ];
   const design = latest("design-review");
   const items: Item[] = [
     ...file(files.diff, "diff.patch", "変更の中身。意図しないファイルや、計画にない変更が入っていないか"),
@@ -29,18 +35,21 @@ export function FinalReview({ taskId, artifacts, files, screenshots }: { taskId:
   ];
   return (
     <div className="mt-1 flex flex-col gap-3">
-      {qa && (
+      {first.length > 0 && (
         <div className="flex flex-col gap-1.5">
           <p className="m-0 text-xs font-semibold text-muted-foreground">まず読むもの</p>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button asChild size="sm">
-              <Link to={paths.artifact(taskId, qa.id)} className="no-underline">
-                <FileTextIcon />
-                {qa.fileName} を読む
-              </Link>
-            </Button>
-            <span className="text-xs text-muted-foreground">QA の受け入れ条件ごとの結果(計画の条件をすべて満たしたか)</span>
-          </div>
+          {first.map(({ a, note }, i) => (
+            <div key={a.id} className="flex flex-wrap items-center gap-2">
+              {/* 主な操作は1つだけ(docs/surface.md)。2つ目からは outline */}
+              <Button asChild size="sm" variant={i === 0 ? "default" : "outline"}>
+                <Link to={paths.artifact(taskId, a.id)} className="no-underline">
+                  <FileTextIcon />
+                  {a.fileName} を読む
+                </Link>
+              </Button>
+              <span className="text-xs text-muted-foreground">{note}</span>
+            </div>
+          ))}
         </div>
       )}
       {items.length > 0 && (
@@ -63,7 +72,10 @@ export function FinalReview({ taskId, artifacts, files, screenshots }: { taskId:
         </div>
       )}
       <p className="m-0 text-xs text-muted-foreground">
-        手元で見るなら「エディタで開く(見るだけ)」で worktree を開けます(下の「worktree」の欄のパスで起動もできます)。直してほしい点があれば却下して差し戻してください。承認すると、統合担当が PR 本文の下書き(pr-draft.md)を作ります。push と PR は人が行います
+        手元で見るなら「エディタで開く(見るだけ)」で worktree を開けます(下の「worktree」の欄のパスで起動もできます)。直してほしい点があれば却下して差し戻してください。
+        {integrate === "main"
+          ? "承認すると、ツールがローカルの既定ブランチに取り込みます(fast-forward)。push は人が行います"
+          : "承認すると、統合担当が PR 本文の下書き(pr-draft.md)を作ります。push と PR は人が行います"}
       </p>
     </div>
   );

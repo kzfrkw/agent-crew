@@ -69,7 +69,7 @@ describe("デザインレビュー(4c)", () => {
       fakeCapture(calls),
     );
     expect(calls).toEqual([[{ path: "/items", note: "在庫一覧" }]]);
-    expect(runner.rolesCalled().slice(-2)).toEqual(["qa", "design_reviewer"]);
+    expect(runner.rolesCalled().slice(-3)).toEqual(["qa", "design_reviewer", "explainer"]);
     expect(prompt).toContain("s1-1280-light.png");
     expect(prompt).toContain("ui-spec.md");
     expect(getTask(ctx.db, t.id)!.state).toBe("awaiting_final_approval");
@@ -117,7 +117,8 @@ describe("デザインレビューを行わないとき・撮影できなかっ�
     const kinds = nextActions(ctx.db, getTask(ctx.db, t.id)!).map((a) => a.kind);
     expect(kinds).toEqual(expect.arrayContaining(["answer", "skip_design_review", "back_to_implementer"]));
     resolveDesignReview(ctx, t.id, "skip", "UI は変わらない");
-    expect(getTask(ctx.db, t.id)!.state).toBe("awaiting_final_approval");
+    // 飛ばしたら、最終確認の前に解説を作る(v0.24)
+    expect(getTask(ctx.db, t.id)!.state).toBe("explaining");
     expect(readFileSync(humanNotesPath(ctx.home, t.id), "utf8")).toContain("UI は変わらない");
   });
 

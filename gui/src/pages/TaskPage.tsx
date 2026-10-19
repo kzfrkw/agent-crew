@@ -49,7 +49,7 @@ function TaskView({ d, onDone }: { d: TaskDetail; onDone: () => void }) {
         <span>作成 {formatDateTime(t.createdAt)}</span>
         <span>更新 {formatDateTime(t.updatedAt)}</span>
       </Meta>
-      <Pipeline state={t.state} heldFrom={t.heldFromState} design={t.design} kind={t.kind} flowStage={t.flowStage} />
+      <Pipeline state={t.state} heldFrom={t.heldFromState} design={t.design} kind={t.kind} flowStage={t.flowStage} explain={d.settings.explain} />
       <Banner d={d} onDone={onDone} />
 
       <div className="mt-6 grid grid-cols-1 items-start gap-6 min-[880px]:grid-cols-[minmax(0,1fr)_320px]">
@@ -243,7 +243,7 @@ function Banner({ d, onDone }: { d: TaskDetail; onDone: () => void }) {
         {t.attention === "approve_planning" ? (
           <PlanningReview taskId={t.id} state={t.state} q={d.planningQuestions} artifacts={d.artifacts} />
         ) : t.attention === "approve_final" ? (
-          <FinalReview taskId={t.id} artifacts={d.artifacts} files={d.reviewFiles} screenshots={d.screenshots.filter((x) => x.url).length} />
+          <FinalReview taskId={t.id} artifacts={d.artifacts} files={d.reviewFiles} screenshots={d.screenshots.filter((x) => x.url).length} integrate={d.settings.integrate} />
         ) : (
           t.reason && <p className="m-0 break-words whitespace-pre-wrap">{t.reason}</p>
         )}

@@ -22,7 +22,8 @@ export type RoleTool =
   | "wireframe"
   | "box"
   | "bubble"
-  | "baton";
+  | "baton"
+  | "book";
 
 /** scan: 左右に動かす(読む・見比べる)、type: 小刻みに上下(打つ)、write: 傾ける(書く)、wave: 大きく振る、stamp: 押す */
 export type RoleMotion = "scan" | "type" | "write" | "wave" | "stamp";
@@ -49,6 +50,7 @@ export const ROLE_META: Record<string, RoleMeta> = {
   handoff: { label: "まとめ担当", doing: "チケットにまとめています", tool: "box", motion: "stamp" },
   critic: { label: "批評担当", doing: "成果物を批評しています", tool: "bubble", motion: "wave" },
   coordinator: { label: "コーディネーター", doing: "次の一手を考えています", tool: "baton", motion: "wave" },
+  explainer: { label: "解説担当", doing: "変更の解説を書いています", tool: "book", motion: "write" },
 };
 
 /** 知らない役割(後から足したもので、ここに無いもの)は名前をそのまま出す */

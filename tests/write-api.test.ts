@@ -301,11 +301,12 @@ describe("プロジェクトの設定(GUI から。v0.23)", () => {
     const { ctx, project } = await setup({}, { worker: true });
     const { getProjectSettings } = await import("../src/db/store.ts");
     const before = await call("GET", `/api/projects/${project.id}`);
-    expect(before.body.settings).toEqual({ integrate: "pr", autoApprovePlan: false, retrospective: true, coordinator: false });
+    expect(before.body.settings).toEqual({ integrate: "pr", autoApprovePlan: false, retrospective: true, coordinator: false, explain: true });
     expect(before.body.operable).toBe(true);
     const r = await post(`/api/projects/${project.id}/settings`, { integrate: "main", coordinator: true });
     expect(r.status).toBe(200);
-    expect(r.body.settings).toEqual({ integrate: "main", autoApprovePlan: false, retrospective: true, coordinator: true });
+    expect(r.body.settings).toEqual({ integrate: "main", autoApprovePlan: false, retrospective: true, coordinator: true, explain: true });
+    expect((await post(`/api/projects/${project.id}/settings`, { explain: false })).body.settings.explain).toBe(false);
     expect(getProjectSettings(ctx.db, project.id)).toMatchObject({ integrate: "main", coordinator: true });
     // 書いていない項目は変えない
     await post(`/api/projects/${project.id}/settings`, { retrospective: false });
@@ -320,5 +321,17 @@ describe("プロジェクトの設定(GUI から。v0.23)", () => {
     expect((await post(`/api/projects/${project.id}/settings`, { integrate: "main", push: true })).status).toBe(400);
     expect((await post(`/api/projects/999/settings`, { integrate: "main" })).status).toBe(404);
     expect(getProjectSettings(ctx.db, project.id)).toEqual({});
+  });
+});
+
+describe("用語集(v0.24)", () => {
+  it("プロジェクトの詳細に用語集を出す。ファイルの先頭の見出しは除く(画面の節に見出しがあるため)", async () => {
+    const { ctx, project } = await setup();
+    const { appendGlossary, glossaryPath } = await import("../src/orchestrator/glossary.ts");
+    expect((await call("GET", `/api/projects/${project.id}`)).body.glossaryMd).toBeNull();
+    appendGlossary(glossaryPath(ctx.home, project.id), [{ term: "ページング", explanation: "一覧を分けて返すこと" }], "#1");
+    const md = (await call("GET", `/api/projects/${project.id}`)).body.glossaryMd as string;
+    expect(md).toContain("**ページング**");
+    expect(md).not.toMatch(/^# /);
   });
 });

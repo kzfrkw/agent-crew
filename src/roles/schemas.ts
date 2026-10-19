@@ -151,7 +151,16 @@ const CoordinatorExtra = z.object({
   deviatesFromDefault: z.boolean().describe("既定の進め方から外れる一手か"),
 });
 
+/** 解説担当(v0.24): 解説で新しく説明した用語(ツールがプロジェクトの用語集に足す) */
+const ExplainerExtra = z.object({
+  terms: z
+    .array(z.object({ term: z.string().describe("用語"), explanation: z.string().describe("1〜2文の説明(この変更に即して)") }))
+    .default([])
+    .describe("新しく説明した用語(用語集に無いもの)。無ければ空配列"),
+});
+
 export const EXTRA_SCHEMAS: Record<string, z.ZodObject> = {
+  explainer: ExplainerExtra,
   coordinator: CoordinatorExtra,
   critic: CriticExtra,
   researcher: PlanningWriterExtra,

@@ -76,6 +76,12 @@ function ProjectView({ d, reload }: { d: ProjectDetail; reload: () => void }) {
             </div>
           </section>
           <section>
+            <SectionHead title="用語集" note="解説担当が説明した用語(glossary.md)" />
+            <div className="rounded-lg border bg-card px-8 py-6 max-[879px]:px-4 max-[879px]:py-4">
+              {d.glossaryMd ? <Markdown text={d.glossaryMd} /> : <span className="text-muted-foreground">まだありません(最初の解説で作られます)</span>}
+            </div>
+          </section>
+          <section>
             <SectionHead title="設計判断ログ" note="decisions.md" />
             <div className="rounded-lg border bg-card px-8 py-6 max-[879px]:px-4 max-[879px]:py-4">
               {d.decisionsMd ? <Markdown text={d.decisionsMd} /> : <span className="text-muted-foreground">まだありません</span>}
