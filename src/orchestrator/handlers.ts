@@ -1,8 +1,8 @@
 import { appendFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { addApproval, addEvent, listEvents, listRepos, setTaskDesign, setTaskRepos, getRepo, getRepoProfile, listTaskRepos, listValidApprovals, setProjectProfile, setRepoProfile, type Task } from "../db/store.ts";
+import { addApproval, addEvent, getProjectSettings, listEvents, listRepos, setTaskDesign, setTaskRepos, getRepo, getRepoProfile, listTaskRepos, listValidApprovals, setProjectProfile, setRepoProfile, type Task } from "../db/store.ts";
 import type { Judgment, Profile } from "../roles/schemas.ts";
-import { changedFiles, commitsSince, containsRef, diffFromBase, diffStat, hasTrackedChanges, headSha, isDirty, mergeBase } from "../git/worktree.ts";
+import { changedFiles, commitsSince, containsRef, diffFromBase, diffStat, fastForward, fastForwardBlocker, hasTrackedChanges, headSha, isDirty, mergeBase } from "../git/worktree.ts";
 import { detectTestChanges, renderTestChanges } from "./test-changes.ts";
 import { testCommandFor, verifyTests } from "./verify.ts";
 import type { AppContext } from "./context.ts";
@@ -465,7 +465,7 @@ const integrator: Handler = async (ctx, task) => {
   const multi = trs.length > 1;
   const dir = taskDir(ctx.home, task.id);
   const finals = listValidApprovals(ctx.db, task.id).filter((a) => a.kind === "final");
-  const items = [];
+  const items: { tr: (typeof trs)[number]; repo: NonNullable<ReturnType<typeof getRepo>>; head: string; base: string; commits: ReturnType<typeof commitsSince>; stat: string }[] = [];
   for (const tr of trs) {
     const repo = getRepo(ctx.db, tr.repoId)!;
     const where = multi ? `[${tr.role}] ` : "";
@@ -480,6 +480,30 @@ const integrator: Handler = async (ctx, task) => {
     items.push({ tr, repo, head, base, commits: commitsSince(tr.worktreePath, base, ctx.gitEnv), stat: diffStat(tr.worktreePath, base, ctx.gitEnv) });
   }
   writeFileSync(join(dir, "diffstat.txt"), items.map((x) => (multi ? `# [${x.tr.role}]\n${x.stat}` : x.stat)).join("\n\n"));
+  const markTestInfra = () => {
+    if (task.kind !== "test_infra") return;
+    for (const x of items) {
+      const profile = getRepoProfile(ctx.db, x.repo.id) as Profile | null;
+      const command = testCommandFor(ctx, task, x.repo.id);
+      if (profile) setRepoProfile(ctx.db, x.repo.id, { ...profile, testInfra: "present", commands: { ...profile.commands, test: command } });
+    }
+    setProjectProfile(ctx.db, task.projectId, { testInfra: "present" });
+  };
+
+  // 新規開発: ローカルの既定ブランチに fast-forward で取り込む(PR の下書きは作らない。push は人)。全リポジトリを点検してから進める
+  if (getProjectSettings(ctx.db, task.projectId).integrate === "main") {
+    for (const x of items) {
+      const blocker = fastForwardBlocker(x.repo.path, x.repo.defaultBranch, x.head, ctx.gitEnv);
+      if (blocker) return stop(`${multi ? `[${x.tr.role}] ` : ""}${blocker}${blocker.includes("先に進んで") ? `。agent-crew task update-base ${task.id} で追従してください` : ""}`);
+    }
+    for (const x of items) {
+      fastForward(x.repo.path, x.repo.defaultBranch, x.head, ctx.gitEnv);
+      addEvent(ctx.db, { taskId: task.id, kind: "integrated", payload: { repo: x.repo.path, branch: x.tr.branchName, head: x.head, into: x.repo.defaultBranch } });
+    }
+    markTestInfra();
+    return { event: { type: "verdict", role: "integrator", verdict: "done" }, reason: `${items.map((x) => `${x.repo.defaultBranch}(${x.repo.path})`).join("、")} に取り込みました。push は人が行います` };
+  }
+
   const r = await invokeRole(ctx, {
     roleName: "integrator",
     taskId: task.id,
@@ -498,15 +522,8 @@ const integrator: Handler = async (ctx, task) => {
     ]),
   });
   if (r.ok && r.verdict === "done") {
-    for (const x of items) {
-      addEvent(ctx.db, { taskId: task.id, runId: r.runId, kind: "integrated", payload: { repo: x.repo.path, branch: x.tr.branchName, head: x.head } });
-      if (task.kind === "test_infra") {
-        const profile = getRepoProfile(ctx.db, x.repo.id) as Profile | null;
-        const command = testCommandFor(ctx, task, x.repo.id);
-        if (profile) setRepoProfile(ctx.db, x.repo.id, { ...profile, testInfra: "present", commands: { ...profile.commands, test: command } });
-      }
-    }
-    if (task.kind === "test_infra") setProjectProfile(ctx.db, task.projectId, { testInfra: "present" });
+    for (const x of items) addEvent(ctx.db, { taskId: task.id, runId: r.runId, kind: "integrated", payload: { repo: x.repo.path, branch: x.tr.branchName, head: x.head } });
+    markTestInfra();
   }
   return outcomeOf(r, "integrator", `${dir}/pr-draft.md`);
 };

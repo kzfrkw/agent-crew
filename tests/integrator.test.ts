@@ -14,26 +14,9 @@ import { testContext } from "./helpers/context.ts";
 import { git, sh } from "./helpers/gitrepo.ts";
 import { approvedProject, newTask } from "./helpers/project.ts";
 import { answer, ScriptedRunner, writeArtifact, type Script } from "./helpers/scripted-runner.ts";
+import { agentEnv as env, devScripts } from "./helpers/dev-scripts.ts";
 
-const env = (spec: RunSpec) => ({ ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", ...spec.extraEnv });
-const scripts = (over: Record<string, Script> = {}): Record<string, Script> => ({
-  planner: answer("plan.md", "ready", { acceptanceCriteria: ["a"], testFirstException: false, design: { architect: false, designer: false, reason: "小さな変更" } }),
-  implementer: (spec, n) => {
-    writeFileSync(join(spec.cwd, `f${n}.js`), "x");
-    sh(spec.cwd, "git", ["add", "."], env(spec));
-    sh(spec.cwd, "git", ["commit", "-q", "-m", `feat ${n}`], env(spec));
-    writeArtifact(spec, "impl-notes.md", "done");
-    return { structuredOutput: { verdict: "done", summary: "s", testCommand: null } };
-  },
-  verifier: (spec) => {
-    const command = /```sh\n(.*)\n```/.exec(spec.prompt)![1]!;
-    return { structuredOutput: { verdict: "passed", summary: "s" }, bashResults: [{ command, isError: false, output: "ok" }] };
-  },
-  reviewer: answer("review.md", "approve", { findings: [] }),
-  qa: answer("qa-report.md", "passed"),
-  integrator: answer("pr-draft.md", "done"),
-  ...over,
-});
+const scripts = devScripts;
 
 async function finalApproved(over: Record<string, Script> = {}, profile = {}) {
   const runner = new ScriptedRunner(scripts(over));

@@ -162,10 +162,16 @@ export function registerProjectCommands(program: Command): void {
     .option("--auto-approve-plan <on|off>", "小さなタスクの計画の承認を自動で行う(条件は設計メモ v0.18。既定 off)")
     .option("--retrospective <on|off>", "完了したタスクの振り返り(規約・設計判断の提案)を動かす(既定 on)")
     .option("--coordinator <on|off>", "新しい企画のタスクを LLM のコーディネーターで進める(フェーズ10。既定 off)")
-    .action((name: string, o: { install?: string; build?: string; test?: string; start?: string; startUrl?: string; analyze?: string; screens?: string; platform?: string; role?: string; autoApprovePlan?: string; retrospective?: string; coordinator?: string }) => {
+    .option("--integrate <pr|main>", "最終確認の後の取り込み方。pr(既定)はブランチと PR の下書きを残す。main はツールがローカルの既定ブランチに fast-forward で取り込み、タスクを1つずつ進める(新規開発向け。push は人)")
+    .action((name: string, o: { install?: string; build?: string; test?: string; start?: string; startUrl?: string; analyze?: string; screens?: string; platform?: string; role?: string; autoApprovePlan?: string; retrospective?: string; coordinator?: string; integrate?: string }) => {
       const ctx = createAppContext();
       try {
-        const { role, autoApprovePlan, retrospective, coordinator, ...patch } = o;
+        const { role, autoApprovePlan, retrospective, coordinator, integrate, ...patch } = o;
+        if (integrate !== undefined) {
+          if (!["pr", "main"].includes(integrate)) throw new Error("--integrate は pr か main で指定してください");
+          setProjectSettings(ctx, name, { integrate: integrate as "pr" | "main" });
+          console.log(integrate === "main" ? "取り込み方: main(最終確認の後、ローカルの既定ブランチに fast-forward で取り込みます。タスクは1つずつ進みます。push は人が行います)" : "取り込み方: pr(ブランチと PR の下書きを残します)");
+        }
         if (coordinator !== undefined) {
           if (!["on", "off"].includes(coordinator)) throw new Error("--coordinator は on か off で指定してください");
           setProjectSettings(ctx, name, { coordinator: coordinator === "on" });
@@ -181,7 +187,7 @@ export function registerProjectCommands(program: Command): void {
           setProjectSettings(ctx, name, { autoApprovePlan: autoApprovePlan === "on" });
           console.log(`小さなタスクの計画の自動承認: ${autoApprovePlan}`);
         }
-        if (Object.values(patch).every((v) => v === undefined) && (autoApprovePlan !== undefined || retrospective !== undefined || coordinator !== undefined)) return;
+        if (Object.values(patch).every((v) => v === undefined) && (autoApprovePlan !== undefined || retrospective !== undefined || coordinator !== undefined || integrate !== undefined)) return;
         const p = setProfileCommands(ctx, name, patch, role);
         console.log(`直しました: ${name}`);
         printCommands(p);
@@ -252,7 +258,7 @@ export function registerProjectCommands(program: Command): void {
         const p = mustProject(ctx.db, name);
         console.log(`${p.name}  プロファイル: ${p.profileStatus}  テスト基盤: ${p.testInfra}${p.allowWithoutTests ? "(例外を許可済み)" : ""}`);
         console.log(`データ: ${projectDir(ctx.home, p.id)}`);
-        console.log(`小さなタスクの計画の自動承認: ${getProjectSettings(ctx.db, p.id).autoApprovePlan ? "on" : "off"}  振り返り: ${getProjectSettings(ctx.db, p.id).retrospective === false ? "off" : "on"}  企画のコーディネーター: ${getProjectSettings(ctx.db, p.id).coordinator ? "on" : "off"}`);
+        console.log(`小さなタスクの計画の自動承認: ${getProjectSettings(ctx.db, p.id).autoApprovePlan ? "on" : "off"}  振り返り: ${getProjectSettings(ctx.db, p.id).retrospective === false ? "off" : "on"}  企画のコーディネーター: ${getProjectSettings(ctx.db, p.id).coordinator ? "on" : "off"}  取り込み方: ${getProjectSettings(ctx.db, p.id).integrate ?? "pr"}`);
         for (const r of listRepos(ctx.db, p.id)) {
           console.log(`  [${r.role}] ${r.path}(既定ブランチ: ${r.defaultBranch})`);
           const prof = getRepoProfile(ctx.db, r.id) as Profile | null;

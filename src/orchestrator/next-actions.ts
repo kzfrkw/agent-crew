@@ -161,7 +161,9 @@ export function nextActions(db: Db, task: Pick<Task, "id" | "state"> & { design?
       return listEvents(db, id, 1000)
         .filter((e) => e.kind === "integrated")
         .map((e) => {
-          const p = e.payload as { repo: string; branch: string };
+          const p = e.payload as { repo: string; branch: string; into?: string };
+          // 新規開発で既定ブランチに取り込んだもの(integrate: main)は、既定ブランチを push する
+          if (p.into) return { kind: "push", label: `${p.into} に取り込みました。push は人が行います`, command: `git -C ${p.repo} push origin ${p.into}`, request: null };
           return { kind: "push", label: "push と PR 作成は人が行います(PR本文の下書き: pr-draft.md)", command: `git -C ${p.repo} push origin ${p.branch}`, request: null };
         });
     default:

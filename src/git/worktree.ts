@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { git } from "./git.ts";
 import { installAgentHooks } from "./hooks.ts";
@@ -120,4 +120,46 @@ export function commitsSince(worktree: string, baseSha: string, env?: Env, head 
       const [sha, author, subject, role] = line.split("\x1f");
       return { sha: sha!, author: author!, subject: subject!, agentRole: role?.trim() || null };
     });
+}
+
+/** 今開いているブランチ(切り離された HEAD なら null) */
+function currentBranch(repoPath: string, env?: Env): string | null {
+  try {
+    return git(repoPath, ["symbolic-ref", "-q", "--short", "HEAD"], env);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * ローカルのブランチ branch を toSha まで fast-forward で進められるか(新規開発で main に積み上げる。push はしない)。
+ * 進められなければ理由を返す: fast-forward にならない、人のリポジトリで branch を開いていて未コミットの変更がある、
+ * 別の worktree で branch を開いている(作業ツリーが置き去りになる)
+ */
+export function fastForwardBlocker(repoPath: string, branch: string, toSha: string, env?: Env): string | null {
+  const old = git(repoPath, ["rev-parse", "--verify", `refs/heads/${branch}`], env);
+  try {
+    git(repoPath, ["merge-base", "--is-ancestor", old, toSha], env);
+  } catch {
+    return `${branch} が先に進んでいて、fast-forward で取り込めません`;
+  }
+  const self = realpathSync(repoPath);
+  const lines = git(repoPath, ["worktree", "list", "--porcelain"], env).split("\n");
+  let path = "";
+  for (const l of lines) {
+    if (l.startsWith("worktree ")) path = l.slice("worktree ".length);
+    if (l === `branch refs/heads/${branch}` && realpathSync(path) !== self) return `別の worktree(${path})で ${branch} を開いています`;
+  }
+  if (currentBranch(repoPath, env) === branch && hasTrackedChanges(repoPath, env)) return `リポジトリ(${repoPath})で ${branch} を開いていて、未コミットの変更があります。コミットするか退避してから、もう一度進めてください`;
+  return null;
+}
+
+/** branch を toSha まで fast-forward で進める。開いているブランチなら作業ツリーも追従させる(点検は fastForwardBlocker で済ませておく) */
+export function fastForward(repoPath: string, branch: string, toSha: string, env?: Env): void {
+  if (currentBranch(repoPath, env) === branch) {
+    git(repoPath, ["merge", "--ff-only", "-q", toSha], env);
+    return;
+  }
+  const old = git(repoPath, ["rev-parse", "--verify", `refs/heads/${branch}`], env);
+  git(repoPath, ["update-ref", `refs/heads/${branch}`, toSha, old], env);
 }

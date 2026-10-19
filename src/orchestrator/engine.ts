@@ -3,6 +3,7 @@ import {
   addEvent,
   attachRepoToTask,
   getProject,
+  getProjectSettings,
   getTask,
   invalidateApprovals,
   listEvents,
@@ -118,6 +119,7 @@ export function runnableTasks(ctx: AppContext): Task[] {
         const prev = listChildren(ctx.db, t.parentId).find((c) => c.seq === (t.seq ?? 1) - 1);
         if (prev && prev.state !== "done") return false;
       }
+      if (waitsForPrevious(ctx, t)) return false;
       return getProject(ctx.db, t.projectId)?.profileStatus === "approved" && testGateOpen(ctx.db, t.id);
     }
     const role = roleForState(t.state);
@@ -126,6 +128,18 @@ export function runnableTasks(ctx: AppContext): Task[] {
     // 確認 URL のポートでアプリを起動する段は、同じプロジェクトで1つずつ
     return !overlapBlocker(ctx.db, t) && !appStageBusy(ctx.db, t, ctx.stops?.keys() ?? []);
   });
+}
+
+/**
+ * 既定ブランチに取り込むプロジェクト(integrate: main)では、開発のタスクを1つずつ進める。
+ * 前のタスクが取り込まれる(完了)か取り消されるまで、次のタスクを始めない(次は取り込んだ後の既定ブランチから始まり、fast-forward で取り込める)。
+ * 待っているタスクのうち、先に作られたものから始める。分割済みの親と企画のタスクは数えない
+ */
+export function waitsForPrevious(ctx: AppContext, t: Task): boolean {
+  if (t.kind === "planning" || getProjectSettings(ctx.db, t.projectId).integrate !== "main") return false;
+  return listTasks(ctx.db, { projectId: t.projectId }).some(
+    (o) => o.id !== t.id && o.kind !== "planning" && o.state !== "split" && o.state !== "done" && o.state !== "cancelled" && (o.state !== "queued" || o.id < t.id),
+  );
 }
 
 /** タスクのベース: 分割の2つ目以降の子は、前の子のブランチ。それ以外はリポジトリの既定ブランチ(8-2) */
