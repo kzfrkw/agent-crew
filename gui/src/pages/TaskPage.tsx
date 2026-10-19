@@ -5,6 +5,8 @@ import { Commands } from "../components/Commands.tsx";
 import { Crumbs, Meta, PageTitle } from "../components/Layout.tsx";
 import { SectionHead } from "../components/Panel.tsx";
 import { Pipeline } from "../components/Pipeline.tsx";
+import { RoleAvatar } from "../components/RoleAvatar.tsx";
+import { roleMeta } from "../lib/roles.ts";
 import { Screenshots } from "../components/Screenshots.tsx";
 import { Report } from "../components/Report.tsx";
 import { RetroPanel } from "../components/Retro.tsx";
@@ -189,13 +191,22 @@ function Banner({ d, onDone }: { d: TaskDetail; onDone: () => void }) {
   if (d.runActive && t.running) {
     return (
       <Alert variant="running" role="status" className="mt-4">
-        <AlertTitle>
-          エージェントが実行中です(<Link to={paths.run(t.running.id)}>{t.running.role}</Link>)
-        </AlertTitle>
-        <AlertDescription className="text-foreground">
-          worktree を触らないでください
-          {actions}
-        </AlertDescription>
+        {/* 実行中の役割のキャラクター(docs/surface.md)。Alert の小さなアイコンの列ではなく、本文と並べて大きく出す */}
+        <div className="col-span-2 flex items-start gap-3">
+          <RoleAvatar role={t.running.role} size="lg" active />
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <AlertTitle>
+              <Link to={paths.run(t.running.id)}>{roleMeta(t.running.role).label}</Link>が{roleMeta(t.running.role).doing}
+            </AlertTitle>
+            <AlertDescription className="text-foreground">
+              <span>
+                {t.running.model && <span className="text-muted-foreground">{t.running.model} · </span>}
+                エージェントが作業中なので、worktree を触らないでください
+              </span>
+              {actions}
+            </AlertDescription>
+          </div>
+        </div>
       </Alert>
     );
   }

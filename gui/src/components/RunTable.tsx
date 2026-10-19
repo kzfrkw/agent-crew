@@ -5,6 +5,7 @@ import { Link, navigate } from "../lib/router.tsx";
 import { useNow } from "../lib/useNow.ts";
 import { RunStateBadge, VerdictBadge } from "./StateBadge.tsx";
 import { Empty } from "./Status.tsx";
+import { RoleName } from "./RoleAvatar.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 /** 実行の一覧(S2・S5)。狭い画面では補助の列を隠す */
@@ -33,7 +34,7 @@ export function RunTable({ runs, compact = false }: { runs: RunSummary[]; compac
             </TableCell>
             <TableCell className="whitespace-nowrap">
               <Link to={paths.run(r.id)} className="font-medium">
-                {r.role}
+                <RoleName role={r.role} active={r.state === "running"} />
               </Link>{" "}
               {r.model && <span className="text-xs text-muted-foreground">{r.model}</span>}
             </TableCell>

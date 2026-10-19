@@ -112,6 +112,43 @@
     from { background-color: var(--run-soft); }
     to { background-color: transparent; }
   }
+  /* 役割のキャラクターの動き(実行中だけ。値は 48×48 の viewBox の単位) */
+  --animate-role-bob: role-bob 2.4s ease-in-out infinite;
+  --animate-role-blink: role-blink 4s ease-in-out infinite;
+  --animate-role-scan: role-scan 2.4s ease-in-out infinite;
+  --animate-role-type: role-type 0.6s steps(2, jump-none) infinite;
+  --animate-role-write: role-write 1.4s ease-in-out infinite;
+  --animate-role-wave: role-wave 1.8s ease-in-out infinite;
+  --animate-role-stamp: role-stamp 1.6s ease-in infinite;
+  @keyframes role-bob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-1px); }
+  }
+  @keyframes role-blink {
+    0%, 92%, 100% { transform: scaleY(1); }
+    96% { transform: scaleY(0.1); }
+  }
+  @keyframes role-scan {
+    0%, 100% { transform: translateX(-2.5px); }
+    50% { transform: translateX(2.5px); }
+  }
+  @keyframes role-type {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(-1.2px); }
+  }
+  @keyframes role-write {
+    0%, 100% { transform: rotate(-5deg); }
+    50% { transform: rotate(5deg); }
+  }
+  @keyframes role-wave {
+    0%, 100% { transform: rotate(-10deg); }
+    50% { transform: rotate(8deg); }
+  }
+  @keyframes role-stamp {
+    0%, 55% { transform: translateY(-3px); }
+    70% { transform: translateY(0); }
+    100% { transform: translateY(-3px); }
+  }
 }
 
 @layer base {
@@ -157,7 +194,8 @@
   .md input[type="checkbox"] { @apply mr-1.5; }
 }
 
-/* 動きを減らす設定では、脈動とハイライトを止める */
+/* 動きを減らす設定では、脈動とハイライトと、役割のキャラクターの動きを止める */
 @media (prefers-reduced-motion: reduce) {
-  .animate-pulse-dot, .animate-flash { animation: none; }
+  .animate-pulse-dot, .animate-flash,
+  .animate-role-bob, .animate-role-blink, .animate-role-scan, .animate-role-type, .animate-role-write, .animate-role-wave, .animate-role-stamp { animation: none; }
 }

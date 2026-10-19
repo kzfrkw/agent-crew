@@ -6,6 +6,8 @@ import { paths } from "../../lib/routes.ts";
 import { Link } from "../../lib/router.tsx";
 import { useNow } from "../../lib/useNow.ts";
 import { EventList } from "../EventList.tsx";
+import { RoleAvatar } from "../RoleAvatar.tsx";
+import { roleMeta } from "../../lib/roles.ts";
 import { Panel } from "../Panel.tsx";
 import { PulseDot } from "../StateBadge.tsx";
 import { Empty } from "../Status.tsx";
@@ -42,11 +44,13 @@ function RunningRow({ run: r, now }: { run: Running; now: number }) {
   const line = action && describeEvent(action);
   const quiet = elapsedSec(action?.createdAt ?? r.startedAt, now);
   return (
-    <Link to={paths.run(r.id)} className="flex flex-col gap-1 px-4 py-3 no-underline hover:bg-muted max-sm:px-3">
+    <Link to={paths.run(r.id)} className="flex items-start gap-3 px-4 py-3 no-underline hover:bg-muted max-sm:px-3">
+      <RoleAvatar role={r.role} size="md" active />
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
       <span className="flex min-w-0 items-center gap-2">
-        <Badge variant="running">
+        <Badge variant="running" title={r.role}>
           <PulseDot />
-          {r.role}
+          {roleMeta(r.role).label}
         </Badge>
         {r.model && <span className="text-xs text-muted-foreground">{r.model}</span>}
         <span className="min-w-0 flex-1 truncate text-xs">
@@ -67,9 +71,10 @@ function RunningRow({ run: r, now }: { run: Running; now: number }) {
             <span className={cn("min-w-0 flex-1 truncate", line.tone === "tool" && "font-mono")}>{line.text}</span>
           </>
         ) : (
-          <span className="flex-1 text-muted-foreground">起動中…</span>
+          <span className="flex-1 text-muted-foreground">{roleMeta(r.role).doing}(起動中…)</span>
         )}
         <span className={cn("whitespace-nowrap tabular-nums", quiet > QUIET_SEC ? "font-semibold text-attn" : "text-subtle-foreground")}>{formatDuration(quiet)}前</span>
+      </span>
       </span>
     </Link>
   );

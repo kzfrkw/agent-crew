@@ -105,6 +105,14 @@ describe("TaskTable の費用の列", () => {
   });
 });
 
+describe("役割の見せ方(キャラクターと日本語の名前)", () => {
+  it("タスクの表の実行中の列に、役割のキャラクターと日本語の名前を出す", () => {
+    render(<TaskTable tasks={[task({ running: { id: 9, role: "reviewer", model: "sonnet", startedAt: "2026-10-09T00:00:00.000Z" } })]} />);
+    expect(screen.getByText("レビュワー")).toBeTruthy();
+    expect(document.querySelector("[data-tool]")).toBeTruthy();
+  });
+});
+
 describe("TaskTable の狭い画面", () => {
   it("狭い画面では状態の列を隠し、状態のバッジをタイトルの上に置く(長い状態名で表が広がらないように。自己適用で発見)", () => {
     render(<TaskTable tasks={[task({ id: 1, title: "t", state: "awaiting_design_approval", stateLabel: "デザイン仕様の承認待ち", attention: "approve_design" })]} />);
@@ -155,7 +163,7 @@ describe("App(ダッシュボード)", () => {
     expect(screen.queryByRole("heading", { name: "実況" })).toBeNull();
     const table = screen.getByRole("table");
     expect(within(table).getByText("検索を追加")).toBeTruthy();
-    expect(within(table).getByText("implementer")).toBeTruthy();
+    expect(within(table).getByText("実装者")).toBeTruthy();
     expect(within(table).queryByText("終わった")).toBeNull();
     fireEvent.click(screen.getByLabelText("完了・取り消しも表示"));
     expect(within(screen.getByRole("table")).getByText("終わった")).toBeTruthy();
@@ -274,12 +282,12 @@ describe("Timeline(タスクの経緯)", () => {
     fireEvent.click(screen.getByRole("button", { name: /経緯/ }));
     const items = screen.getAllByRole("listitem").map((li) => li.textContent ?? "");
     expect(items).toHaveLength(4);
-    expect(items[0]).toContain("planner");
+    expect(items[0]).toContain("プランナー");
     expect(items[1]).toContain("計画を承認");
     expect(items[1]).toContain("エラー時の表示も");
-    expect(items[2]).toContain("reviewer");
+    expect(items[2]).toContain("レビュワー");
     expect(items[3]).toContain("境界値のテストがない");
-    expect(screen.getByRole("link", { name: /planner/ }).getAttribute("href")).toBe("/runs/44");
+    expect(screen.getByRole("link", { name: /プランナー/ }).getAttribute("href")).toBe("/runs/44");
     expect(screen.queryByText(/計画の承認待ち/)).toBeNull();
   });
 });

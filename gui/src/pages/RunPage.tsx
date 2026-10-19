@@ -9,6 +9,8 @@ import { elapsedSec, formatCost, formatDateTime, formatDuration } from "../lib/f
 import { paths } from "../lib/routes.ts";
 import { Link } from "../lib/router.tsx";
 import { useNow } from "../lib/useNow.ts";
+import { RoleAvatar } from "../components/RoleAvatar.tsx";
+import { roleMeta } from "../lib/roles.ts";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 /** S4 実行ログ */
@@ -29,7 +31,12 @@ function RunView({ d }: { d: RunDetail }) {
   return (
     <>
       <Crumbs items={crumbs} />
-      <PageTitle id={r.id}>{r.role}</PageTitle>
+      <div className="flex items-center gap-3">
+        <RoleAvatar role={r.role} size="lg" active={running} decorative />
+        <PageTitle id={r.id}>
+          <span title={r.role}>{roleMeta(r.role).label}</span>
+        </PageTitle>
+      </div>
       <Meta>
         <RunStateBadge state={r.state} />
         {r.model && <span>{r.model}</span>}

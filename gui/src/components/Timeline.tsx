@@ -11,6 +11,8 @@ import { EventRow } from "./EventList.tsx";
 import { RunStateBadge, VerdictBadge } from "./StateBadge.tsx";
 import { Empty } from "./Status.tsx";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { RoleAvatar } from "./RoleAvatar.tsx";
+import { roleMeta } from "../lib/roles.ts";
 import { cn } from "@/lib/utils";
 
 type Props = { runs: RunSummary[]; events: EventView[]; approvals: ApprovalView[]; reviewRounds: number };
@@ -66,12 +68,12 @@ function RunRow({ run: r, now }: { run: RunSummary; now: number }) {
   return (
     <li className={ROW}>
       <span className={TIME}>{formatTime(r.startedAt)}</span>
-      <span className="text-center text-subtle-foreground" aria-hidden>
-        ⚙
+      <span className="flex justify-center" aria-hidden>
+        <RoleAvatar role={r.role} size="sm" active={r.state === "running"} decorative />
       </span>
       <span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
-        <Link to={paths.run(r.id)} className="font-semibold">
-          {r.role}
+        <Link to={paths.run(r.id)} className="font-semibold" title={r.role}>
+          {roleMeta(r.role).label}
         </Link>
         {r.model && <span className="text-muted-foreground">{r.model}</span>}
         {r.verdict ? <VerdictBadge verdict={r.verdict} /> : <RunStateBadge state={r.state} />}

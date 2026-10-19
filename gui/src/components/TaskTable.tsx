@@ -4,6 +4,7 @@ import { paths } from "../lib/routes.ts";
 import { Link, navigate } from "../lib/router.tsx";
 import { StateBadge } from "./StateBadge.tsx";
 import { Empty } from "./Status.tsx";
+import { RoleName } from "./RoleAvatar.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 /** タスクの一覧表(F3)。行のどこを押しても詳細へ。狭い画面では補助の列を隠す */
@@ -42,7 +43,7 @@ export function TaskTable({ tasks, empty = "タスクはありません" }: { ta
             <TableCell className="text-xs whitespace-nowrap max-sm:hidden">
               {t.running ? (
                 <Link to={paths.run(t.running.id)}>
-                  {t.running.role}
+                  <RoleName role={t.running.role} active />
                   {t.running.model && <span className="text-muted-foreground">({t.running.model})</span>}
                 </Link>
               ) : (
