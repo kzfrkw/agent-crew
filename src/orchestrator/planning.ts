@@ -152,6 +152,7 @@ export function planningPrompt(ctx: AppContext, task: Task, stage: Stage, mode: 
     ...ref("人のコメント・回答(最優先で従う)", humanNotesPath(ctx.home, task.id)),
     "",
     ...rubricSection(stageRubric(ctx, stage.key), mode),
+    ...(mode === "critique" && stage.key === "handoff" ? ticketsSection(ctx, task.id) : []),
     // ファイル名・書く場所・形式はこの入力の他の部分が正(10-3 で、指示に誤ったファイル名が混ざった)
     ...(instruction?.trim() ? ["## コーディネーターからの指示(ファイル名・書く場所・形式がこの入力の他の部分と食い違えば、他の部分に従う)", instruction.trim(), ""] : []),
     "## 今回やること",
@@ -160,6 +161,18 @@ export function planningPrompt(ctx: AppContext, task: Task, stage: Stage, mode: 
       : `- 「${stage.label}」の段の成果物(${stage.files.map((f) => join(dir, f)).join("、")})を批評し、成果物ディレクトリの \`critique.md\` に書いてください。成果物は変更しないでください`,
     "",
   ].join("\n");
+}
+
+/**
+ * 引き渡しの批評に渡すチケット。開発のタスクになるのは handoff.md ではなく構造化出力の tickets なので、批評はこれを見て判定する
+ * (10-3: 受け入れ条件が handoff.md に無く、HO2・HO3 が毎回不合格になった)
+ */
+function ticketsSection(ctx: AppContext, taskId: number): string[] {
+  const tickets = (listEvents(ctx.db, taskId, 2000).filter((e) => e.kind === "handoff").at(-1)?.payload as { tickets?: { title: string; body: string; acceptanceCriteria?: string[] }[] } | undefined)?.tickets ?? [];
+  return [
+    "## 引き渡すチケット(開発のタスクになるもの。まとめ担当の構造化出力のまま)",
+    ...(tickets.length ? tickets.flatMap((t, i) => [`### ${i + 1}. ${t.title}`, t.body.trim(), "受け入れ条件:", ...(t.acceptanceCriteria ?? []).map((c) => `  - ${c}`), ""]) : ["(チケットがありません)", ""]),
+  ];
 }
 
 /** 段のルーブリックの項目。批評担当はこのまま構造化出力の rubric で答え、書く役は満たすように書く */

@@ -111,6 +111,8 @@ describe("一周", () => {
     await runUntilIdle(ctx);
     const p = runner.calls.find((c) => c.role === "coordinator")!.prompt;
     expect(p).toMatch(/should.*持ち込ませない/);
+    // 後の段の批評で見つかった前の段の不足は、前の段に戻すか人に聞く(10-3)
+    expect(p).toMatch(/前の段の不足[^\n]*戻す/);
     expect(p).toMatch(/ファイル名/);
   });
 

@@ -71,6 +71,7 @@ const DEFAULT_PLANNING_FLOW = [
   "- 批評の should は記録だけ。人のコメントで求められたときを除き、同じ段でも後の段でも、書く役に直させない(後の段に持ち込ませない)",
   "- 書く役への指示(input)は、その段で特に見てほしいこと・直してほしいことだけを1〜3文で。ファイル名・書く場所・形式・frontmatter は書かない(ツールが渡す)。機能やチケットを足すよう指示しない",
   "- critic には指示が渡らない(批評はルーブリックで独立に行う)。critic の input は「批評」の一言でよい",
+  "- 前の段の不足(後の段の批評で、承認済みの段を含む前の段に足りないところが見つかったとき)は、後の段の書く役に補わせない。前の段の書く役に戻す(その段と後ろの段の承認は失効し、承認を求め直す)か、ask_human で人に聞く",
 ];
 
 function coordinatorPrompt(ctx: AppContext, task: Task, f: CoordinatorFacts, rejection?: string): string {

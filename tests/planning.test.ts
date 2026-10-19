@@ -220,6 +220,21 @@ describe("ルーブリック(10-1b。設計メモ v0.22)", () => {
     expect((evs[0]!.results as unknown[]).length).toBeGreaterThan(0);
   });
 
+  it("引き渡しの批評には、開発のタスクになるチケット(まとめ担当の構造化出力)を、受け入れ条件つきで渡す(10-3: handoff.md だけでは HO2・HO3 を確かめられなかった)", async () => {
+    const { ctx, t, runner } = await setup();
+    await runUntilIdle(ctx);
+    approveTask(ctx, t.id, "strategy");
+    await runUntilIdle(ctx);
+    approveTask(ctx, t.id, "scope");
+    await runUntilIdle(ctx);
+    const last = runner.calls.filter((c) => c.role === "critic").at(-1)!;
+    expect(last.prompt).toContain("- [must] HO1:");
+    expect(last.prompt).toContain("注文に状態を持たせる");
+    expect(last.prompt).toContain("GET /api/orders の各注文に status がある");
+    // ほかの段の批評には出さない
+    expect(runner.calls.filter((c) => c.role === "critic")[0]!.prompt).not.toContain("注文に状態を持たせる");
+  });
+
   it("差し戻しの理由の要点は、不合格の must の ID", async () => {
     const { ctx, t } = await setup({ critic: critic(["changes_requested", "approve"]) });
     await runUntilIdle(ctx);
