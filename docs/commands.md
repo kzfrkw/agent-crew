@@ -11,7 +11,7 @@
 - 型チェック: `npm run typecheck`(tsc --noEmit)。まとめて `npm run check`
 - CLI: `npx agent-crew --help`(または `./bin/agent-crew.js`)
 - 前提の検査: `npx agent-crew doctor`(`--json` 可。エラーがあれば終了コード1)。データディレクトリは `~/.agent-team`(`AGENT_CREW_HOME` で変更可)
-- 安全設定の実機検査: `npx agent-crew doctor --probe-sandbox`(claude -p を haiku で1回動かす。利用枠を少し使う。ランナーや安全設定を変えたら必ず実行する)
+- 安全設定の実機検査: `npx agent-crew doctor --probe-sandbox`(claude -p を haiku で2回動かす。worktree の方式と、人のリポジトリで直接作業する方式(v0.25)の両方を検査する。利用枠を少し使う。ランナーや安全設定を変えたら必ず実行する。`workspace: repo` を会社のリポジトリで使う前にも実行する)
 - 基本の流れ: `project add <path> --name <n>` → `project approve <n>` → `task create --project <n> --title ... --body-file ...` → `run` → `task approve <id> --kind plan` → `run` → `task approve <id> --kind final` → `run`。人の対応待ちは `task list`(★)と `task show <id>`
 - プロファイルのコマンドの手直し: `project set <n> --start "..." --test "..."`(役割に渡すコマンドの正本は DB。`profile.md` を手で直しても反映されない。`-` で「なし」。`project show` とプロジェクト画面で確認できる)
 - 報告(API を使わない書き戻し): `task report <id>` で Notion などに貼る Markdown を出す(概要・受け入れ条件・QA・デザインレビュー・PR の下書き)。取り込み元の URL は `task create --source-url` で持たせる。投稿は人が行う

@@ -250,4 +250,5 @@ Xcode 26.4、iOS 26.4 のシミュレータ、Flutter 3.41.6 で確認した。
 - `.git/hooks`・`.git/config`・`.git/config.worktree` への書き込みを、サンドボックスの `denyWrite` と、Edit / Write の拒否の両方で禁止する。書けると、エージェントが仕込んだフックが人の次の git 操作でサンドボックスの外で動き、`core.hooksPath` や remote を書き換えて push の止めを外せてしまう
 - 層2(pre-push フック)は、`GIT_CONFIG_COUNT=1`・`GIT_CONFIG_KEY_0=core.hooksPath`・`GIT_CONFIG_VALUE_0=<データディレクトリの hooks>` をエージェントの環境変数に入れて効かせる。人のリポジトリの設定(`.git/config`)は変えないので、人が普段行う push は止まらない。エージェントが環境変数を外して git を動かしても、層1(push の deny)と層4(github.com への通信の遮断)で止まる
 - 人の作業との衝突を避けるため、人の未コミットの変更があるときは始めず、同じプロジェクトのタスクは1つずつ。エージェントが動いている間、人はリポジトリを触らない
-- 未確認: サンドボックスで、書ける作業場所の中の一部(`.git/hooks`)だけを書けなくできることの実機の確認。会社のリポジトリで使う前に `doctor --probe-sandbox` で確かめる(この方式の検査は追加予定)
+- 実機の検査: `doctor --probe-sandbox` が、この方式も検査する(`probe-repo:*`)。検査用のリポジトリでタスクのブランチに切り替え、役割の起動と同じ守り(`inPlaceGuards`)で haiku を動かし、次をファイル・設定・remote の状態で判定する: リポジトリの中に書けてコミットできる、Bash から `.git/hooks/pre-commit` を置けない、Write ツールで `.git/hooks/post-checkout` を置けない(拒否が記録される)、`.git/config` を直接の追記でも `git config` でも書き換えられない、エージェントの git ではフックの場所がデータディレクトリの hooks になっている、エージェントの `git push` は remote に届かない、検査の後に人として(エージェントの環境変数なしで)push できる
+- 会社のリポジトリで `workspace: repo` を使う前に、`doctor --probe-sandbox` を実行して `probe-repo:*` がすべて ok であることを確かめる

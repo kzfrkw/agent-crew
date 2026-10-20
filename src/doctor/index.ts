@@ -7,7 +7,7 @@ import { openDb } from "../db/connection.ts";
 import { getRepoProtect, listProjects, listRepos } from "../db/store.ts";
 import type { Db } from "../db/connection.ts";
 import { runChecks, type CheckResult, type Probe } from "./checks.ts";
-import { runProbe } from "./probe.ts";
+import { runProbe, runRepoProbe } from "./probe.ts";
 
 function systemProbe(claudePath: string): Probe {
   return {
@@ -82,7 +82,9 @@ export function repoChecks(db: Db): CheckResult[] {
 export async function probeSandbox(): Promise<CheckResult[]> {
   const home = dataHome();
   const config = loadConfig(home);
-  return runProbe({ home, claudePath: config.claudePath, allowedDomains: config.sandbox.allowedDomains });
+  const o = { home, claudePath: config.claudePath, allowedDomains: config.sandbox.allowedDomains };
+  // worktree の方式と、人のリポジトリで直接作業する方式(v0.25)の両方を検査する
+  return [...(await runProbe(o)), ...(await runRepoProbe(o))];
 }
 
 const MARK = { ok: "✓", info: "i", warn: "!", error: "✗" } as const;

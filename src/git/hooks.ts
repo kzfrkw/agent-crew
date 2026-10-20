@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 /**
@@ -68,4 +68,19 @@ export function installAgentHooks(home: string): string {
   write("pre-push", PRE_PUSH);
   for (const name of DELEGATED_HOOKS) write(name, delegate(name, dir));
   return dir;
+}
+
+/**
+ * 作業場所が人のリポジトリそのもの(.git がディレクトリ。workspace: repo、v0.25)なら、worktree の代わりの守りを足す:
+ * .git/hooks と .git/config を書かせない(書けると人の次の git 操作でサンドボックスの外でコードが動く)、
+ * push を止めるフックはエージェントの git にだけ環境変数で効かせる(人のリポジトリの設定は変えない)
+ */
+export function inPlaceGuards(home: string, cwd: string): { denyWrite: string[]; env: Record<string, string> } | undefined {
+  const dotGit = join(cwd, ".git");
+  if (!existsSync(dotGit) || !statSync(dotGit).isDirectory()) return undefined;
+  const git = join(realpathSync(cwd), ".git");
+  return {
+    denyWrite: [join(git, "hooks"), join(git, "config"), join(git, "config.worktree")],
+    env: { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.hooksPath", GIT_CONFIG_VALUE_0: agentHooksDir(home) },
+  };
 }
