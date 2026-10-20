@@ -108,7 +108,7 @@ describe("プロジェクト把握担当と MCP の橋(フェーズ6)", () => {
     await registerProject(ctx, { name: "app", repoPath: repo });
     const call = runner.calls.find((c) => c.role === "profiler")!;
     const cfg = JSON.parse(readFileSync(call.mcpServers!["agent-crew"]!.args.at(-1)!, "utf8"));
-    expect(cfg).toMatchObject({ platform: "flutter", commands: { test: "flutter test", analyze: "flutter analyze" } });
+    expect(cfg).toMatchObject({ platform: "flutter", commands: { test: "flutter test", analyze: "flutter analyze --no-pub" } });
 
     const runner2 = new ScriptedRunner({ profiler: profiler("present") });
     const ctx2 = testContext(runner2);

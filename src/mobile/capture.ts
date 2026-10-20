@@ -125,7 +125,7 @@ export async function captureFlutterScreens(o: {
       const raw = join(tmp, `raw-${scheme}`);
       const r = await exec({
         cwd: o.worktree,
-        command: `flutter drive --driver=${DRIVER} --target=${SCREENS_TEST} -d ${lease.udid}`,
+        command: `flutter pub get --offline && flutter drive --no-pub --driver=${DRIVER} --target=${SCREENS_TEST} -d ${lease.udid}`,
         env: { AGENT_CREW_SHOTS_DIR: raw },
         writable: [o.worktree, o.outDir, raw, ...buildWritable()],
         tmpDir: join(tmp, `drive-${scheme}`),

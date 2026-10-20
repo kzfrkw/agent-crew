@@ -95,6 +95,16 @@ describe("Flutter の画面の撮影(フェーズ6)", () => {
     return { home, worktree, simctl, calls, drives, exec, outDir: join(home, "tasks", "1", "screens") };
   }
 
+  it("依存はオフラインで解決してから --no-pub で drive する(撮影のサンドボックスは localhost だけなので、pub.dev に接続しない)", async () => {
+    const s = setup();
+    await captureFlutterScreens({ home: s.home, taskId: 1, worktree: s.worktree, outDir: s.outDir, simctl: s.simctl, exec: s.exec, slots: 1 });
+    expect(s.drives.length).toBe(2);
+    for (const d of s.drives) {
+      expect(d.command).toMatch(/^flutter pub get --offline && flutter drive --no-pub /);
+      expect(d.command).toContain("--target=integration_test/screens_test.dart");
+    }
+  });
+
   it("貸し出したシミュレータで、ライト・ダークのそれぞれ flutter drive を動かし、画面の名前ごとに PNG を置く", async () => {
     const s = setup();
     const shots = await captureFlutterScreens({ home: s.home, taskId: 1, worktree: s.worktree, outDir: s.outDir, simctl: s.simctl, exec: s.exec, slots: 1 });
