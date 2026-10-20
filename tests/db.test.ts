@@ -138,3 +138,23 @@ describe("承認", () => {
     expect(listValidApprovals(db, task.id).map((a) => a.kind)).toEqual(["plan"]);
   });
 });
+
+describe("v10: task_repos.worktree_path の一意の制約を外す(人のリポジトリで直接作業する。v0.25)", () => {
+  it("v9 の DB の task_repos をそのまま引き継ぎ、同じ作業場所を別のタスクで登録できる", async () => {
+    const { DatabaseSync } = await import("node:sqlite");
+    const { MIGRATIONS } = await import("../src/db/schema.ts");
+    const path = join(mkdtempSync(join(tmpdir(), "agent-crew-db-")), "v9.db");
+    const old = new DatabaseSync(path);
+    for (const m of MIGRATIONS.slice(0, 9)) old.exec(m);
+    old.exec("PRAGMA user_version = 9");
+    old.exec("INSERT INTO projects (name, created_at, updated_at) VALUES ('p', 'now', 'now')");
+    old.exec("INSERT INTO repos (project_id, role, path, default_branch, created_at) VALUES (1, 'main', '/r', 'main', 'now')");
+    old.exec("INSERT INTO tasks (project_id, title, body, state, created_at, updated_at) VALUES (1, 'a', '', 'done', 'now', 'now'), (1, 'b', '', 'queued', 'now', 'now')");
+    old.exec("INSERT INTO task_repos VALUES (1, 1, '/r', 'agent-crew/1-a', 'abc', 'now')");
+    old.close();
+    const db = openDb(path);
+    expect(db.prepare("SELECT task_id, worktree_path, branch_name FROM task_repos").all()).toEqual([{ task_id: 1, worktree_path: "/r", branch_name: "agent-crew/1-a" }]);
+    db.exec("INSERT INTO task_repos VALUES (2, 1, '/r', 'agent-crew/2-b', 'def', 'now')");
+    expect(db.prepare("SELECT COUNT(*) AS n FROM task_repos").get()).toEqual({ n: 2 });
+  });
+});

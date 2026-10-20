@@ -111,6 +111,9 @@ function settingsAction(ops: Ops, projectId: number, body: unknown): { message: 
     if (k === "integrate") {
       if (v !== "pr" && v !== "main") throw new HttpError(400, "integrate は pr か main で指定してください");
       patch.integrate = v;
+    } else if (k === "workspace") {
+      if (v !== "worktree" && v !== "repo") throw new HttpError(400, "workspace は worktree か repo で指定してください");
+      patch.workspace = v;
     } else if (k === "autoApprovePlan" || k === "retrospective" || k === "coordinator" || k === "explain") {
       if (typeof v !== "boolean") throw new HttpError(400, `${k} は true か false で指定してください`);
       patch[k] = v;

@@ -301,12 +301,14 @@ describe("プロジェクトの設定(GUI から。v0.23)", () => {
     const { ctx, project } = await setup({}, { worker: true });
     const { getProjectSettings } = await import("../src/db/store.ts");
     const before = await call("GET", `/api/projects/${project.id}`);
-    expect(before.body.settings).toEqual({ integrate: "pr", autoApprovePlan: false, retrospective: true, coordinator: false, explain: true });
+    expect(before.body.settings).toEqual({ integrate: "pr", autoApprovePlan: false, retrospective: true, coordinator: false, explain: true, workspace: "worktree" });
     expect(before.body.operable).toBe(true);
     const r = await post(`/api/projects/${project.id}/settings`, { integrate: "main", coordinator: true });
     expect(r.status).toBe(200);
-    expect(r.body.settings).toEqual({ integrate: "main", autoApprovePlan: false, retrospective: true, coordinator: true, explain: true });
+    expect(r.body.settings).toEqual({ integrate: "main", autoApprovePlan: false, retrospective: true, coordinator: true, explain: true, workspace: "worktree" });
     expect((await post(`/api/projects/${project.id}/settings`, { explain: false })).body.settings.explain).toBe(false);
+    expect((await post(`/api/projects/${project.id}/settings`, { workspace: "repo" })).body.settings.workspace).toBe("repo");
+    expect((await post(`/api/projects/${project.id}/settings`, { workspace: "clone" })).status).toBe(400);
     expect(getProjectSettings(ctx.db, project.id)).toMatchObject({ integrate: "main", coordinator: true });
     // 書いていない項目は変えない
     await post(`/api/projects/${project.id}/settings`, { retrospective: false });

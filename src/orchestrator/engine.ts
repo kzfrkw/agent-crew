@@ -15,7 +15,7 @@ import {
   type Task,
 } from "../db/store.ts";
 import { installAgentHooks } from "../git/hooks.ts";
-import { branchNameFor, createWorktree, worktreePathFor } from "../git/worktree.ts";
+import { branchNameFor, createWorktree, hasTrackedChanges, switchToNewBranch, worktreePathFor } from "../git/worktree.ts";
 import type { AppContext } from "./context.ts";
 import { quotaBlock, QuotaError, type QuotaBlock } from "./usage.ts";
 import { releaseTaskWorktrees, sweepFinishedWorktrees } from "./cleanup-worktrees.ts";
@@ -120,7 +120,7 @@ export function runnableTasks(ctx: AppContext): Task[] {
         const prev = listChildren(ctx.db, t.parentId).find((c) => c.seq === (t.seq ?? 1) - 1);
         if (prev && prev.state !== "done") return false;
       }
-      if (waitsForPrevious(ctx, t)) return false;
+      if (waitsForPrevious(ctx, t) || waitsForCleanRepo(ctx, t)) return false;
       return getProject(ctx.db, t.projectId)?.profileStatus === "approved" && testGateOpen(ctx.db, t.id);
     }
     const role = roleForState(t.state);
@@ -137,10 +137,26 @@ export function runnableTasks(ctx: AppContext): Task[] {
  * 待っているタスクのうち、先に作られたものから始める。分割済みの親と企画のタスクは数えない
  */
 export function waitsForPrevious(ctx: AppContext, t: Task): boolean {
-  if (t.kind === "planning" || getProjectSettings(ctx.db, t.projectId).integrate !== "main") return false;
+  const s = getProjectSettings(ctx.db, t.projectId);
+  // 人のリポジトリで直接作業するプロジェクト(v0.25)も、作業場所が1つしかないので1つずつ
+  if (t.kind === "planning" || (s.integrate !== "main" && s.workspace !== "repo")) return false;
   return listTasks(ctx.db, { projectId: t.projectId }).some(
     (o) => o.id !== t.id && o.kind !== "planning" && o.state !== "split" && o.state !== "done" && o.state !== "cancelled" && (o.state !== "queued" || o.id < t.id),
   );
+}
+
+/**
+ * 人のリポジトリで直接作業するプロジェクト(v0.25)では、人の未コミットの変更(追跡しているファイル)があるあいだ始めない。
+ * 待っていることは1回だけ出来事に残す(.gitignore されたファイルや未追跡のファイルは見ない。そのまま使うため)
+ */
+function waitsForCleanRepo(ctx: AppContext, t: Task): boolean {
+  if (t.kind === "planning" || getProjectSettings(ctx.db, t.projectId).workspace !== "repo") return false;
+  const dirty = listRepos(ctx.db, t.projectId).filter((r) => hasTrackedChanges(r.path, ctx.gitEnv));
+  if (dirty.length === 0) return false;
+  if (listEvents(ctx.db, t.id, 1000).at(-1)?.kind !== "waiting_repo") {
+    addEvent(ctx.db, { taskId: t.id, kind: "waiting_repo", payload: { message: `人のリポジトリに未コミットの変更があるため、始めずに待っています: ${dirty.map((r) => r.path).join("、")}(コミットするか退避すると始まります)` } });
+  }
+  return true;
 }
 
 /** タスクのベース: 分割の2つ目以降の子は、前の子のブランチ。それ以外はリポジトリの既定ブランチ(8-2) */
@@ -157,8 +173,16 @@ export function ensureWorktrees(ctx: AppContext, task: Task, roles?: string[]): 
   const existing = new Set(listTaskRepos(ctx.db, task.id).map((tr) => tr.repoId));
   const branch = branchNameFor(task.id, task.title);
   const repos = listRepos(ctx.db, project.id).filter((r) => roles === undefined || roles.includes(r.role));
+  const inPlace = getProjectSettings(ctx.db, project.id).workspace === "repo";
   for (const repo of repos) {
     if (existing.has(repo.id)) continue;
+    // 人のリポジトリで直接作業する(v0.25): worktree を作らず、リポジトリでタスクのブランチに切り替える。作業場所はリポジトリそのもの
+    if (inPlace) {
+      const { baseSha, previous } = switchToNewBranch({ repoPath: repo.path, branch, base: baseRefFor(ctx, task, repo), env: ctx.gitEnv });
+      attachRepoToTask(ctx.db, { taskId: task.id, repoId: repo.id, worktreePath: repo.path, branchName: branch, baseSha });
+      addEvent(ctx.db, { taskId: task.id, kind: "workspace_repo", payload: { repoId: repo.id, path: repo.path, branch, previous } });
+      continue;
+    }
     const worktreePath = worktreePathFor(ctx.home, { project: project.name, taskId: task.id, repoRole: repo.role });
     const { baseSha } = createWorktree({ home: ctx.home, repoPath: repo.path, worktreePath, branch, base: baseRefFor(ctx, task, repo), env: ctx.gitEnv });
     attachRepoToTask(ctx.db, { taskId: task.id, repoId: repo.id, worktreePath, branchName: branch, baseSha });

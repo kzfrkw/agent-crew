@@ -36,6 +36,15 @@ export function ProjectSettings({ projectId, name, defaultBranch, settings, oper
     }
   };
   const disabled = !operable || busy;
+  const workspace = (value: ProjectSettingsView["workspace"], label: string, note: string) => (
+    <label className="flex cursor-pointer items-start gap-1.5">
+      <input type="radio" name={`workspace-${projectId}`} className="mt-0.5 accent-foreground" checked={current.workspace === value} disabled={disabled} onChange={() => void save({ workspace: value })} />
+      <span>
+        {label}
+        <span className="block text-subtle-foreground">{note}</span>
+      </span>
+    </label>
+  );
   const integrate = (value: ProjectSettingsView["integrate"], label: string, note: string) => (
     <label className="flex cursor-pointer items-start gap-1.5">
       <input type="radio" name={`integrate-${projectId}`} className="mt-0.5 accent-foreground" checked={current.integrate === value} disabled={disabled} onChange={() => void save({ integrate: value })} />
@@ -50,6 +59,11 @@ export function ProjectSettings({ projectId, name, defaultBranch, settings, oper
     <div className="rounded-lg border bg-card px-4 py-3 text-xs">
       <h3 className="mt-0 mb-2 text-xs font-semibold text-muted-foreground">設定</h3>
       <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+        <legend className="mb-1 p-0 text-muted-foreground">作業場所</legend>
+        {workspace("worktree", "worktree(タスクごとに別のフォルダ)", "人の作業場所とは別に作業する。タスクを並べて進められる")}
+        {workspace("repo", "リポジトリで直接", "人のリポジトリでタスクのブランチに切り替えて作業する。Xcode の設定・管理外のファイル・シンボリックリンクがそのまま使える。タスクは1つずつで、動いている間はリポジトリを触らない")}
+      </fieldset>
+      <fieldset className="m-0 mt-3 flex flex-col gap-2 border-0 border-t p-0 pt-3">
         <legend className="mb-1 p-0 text-muted-foreground">最終確認の後の取り込み方</legend>
         {integrate("pr", "PR を作る", "タスクごとにブランチと PR の下書きを残す。人が PR を作ってマージする")}
         {integrate("main", `${defaultBranch} に取り込む`, `ツールがローカルの ${defaultBranch} に fast-forward で取り込む。タスクは1つずつ進む。push は人が行う(新規開発向け)`)}
@@ -68,6 +82,7 @@ export function ProjectSettings({ projectId, name, defaultBranch, settings, oper
       {!operable && (
         <div className="mt-3 flex flex-col gap-1 border-t pt-3">
           <span className="text-muted-foreground">読み取り専用で起動しています。切り替えは CLI で行います</span>
+          <CommandLine command={`agent-crew project set ${name} --workspace ${current.workspace === "worktree" ? "repo" : "worktree"}`} />
           <CommandLine command={`agent-crew project set ${name} --integrate ${current.integrate === "pr" ? "main" : "pr"}`} />
           {FLAGS.map((f) => (
             <CommandLine key={f.key} command={`agent-crew project set ${name} ${f.option} ${current[f.key] ? "off" : "on"}`} />

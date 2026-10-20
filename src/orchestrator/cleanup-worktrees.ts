@@ -1,7 +1,8 @@
-import { existsSync, readdirSync, rmdirSync, rmSync, statSync } from "node:fs";
+import { existsSync, readdirSync, realpathSync, rmdirSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { addEvent, getRepo, listTaskRepos, listTasks } from "../db/store.ts";
-import { isDirty, removeWorktree } from "../git/worktree.ts";
+import { addEvent, getRepo, listEvents, listTaskRepos, listTasks } from "../db/store.ts";
+import { git } from "../git/git.ts";
+import { isDirty, removeWorktree, switchBack } from "../git/worktree.ts";
 import type { AppContext } from "./context.ts";
 
 /**
@@ -18,6 +19,11 @@ export function releaseTaskWorktrees(ctx: AppContext, taskId: number): { removed
   for (const tr of listTaskRepos(ctx.db, taskId)) {
     if (!existsSync(tr.worktreePath)) continue;
     const repo = getRepo(ctx.db, tr.repoId);
+    // 人のリポジトリで直接作業したタスク(v0.25)は、リポジトリを消さずに元のブランチに戻す(タスクのブランチは残す)
+    if (repo && realpathSync(tr.worktreePath) === realpathSync(repo.path)) {
+      restoreRepo(ctx, taskId, tr, repo);
+      continue;
+    }
     try {
       if (isDirty(tr.worktreePath, ctx.gitEnv)) {
         kept.push(tr.worktreePath);
@@ -34,6 +40,29 @@ export function releaseTaskWorktrees(ctx: AppContext, taskId: number): { removed
   }
   if (removed.length > 0) addEvent(ctx.db, { taskId, kind: "worktree_removed", payload: { paths: removed } });
   return { removed, kept };
+}
+
+/**
+ * 人のリポジトリを、タスクを始める前のブランチ(無ければ既定ブランチ)に戻す。1タスク・1リポジトリにつき1回だけ
+ * (起動のたびの片付けで、後から人がタスクのブランチを開き直しても触らないよう、出来事 workspace_restored に残す)。
+ * 人がもう別のブランチに切り替えていれば触らない。未コミットの変更があれば戻さずに警告する(次の片付けでもう一度試す)
+ */
+function restoreRepo(ctx: AppContext, taskId: number, tr: { repoId: number; branchName: string }, repo: { path: string; defaultBranch: string }): void {
+  const events = listEvents(ctx.db, taskId, 2000);
+  const mine = (kind: string) => events.find((e) => e.kind === kind && (e.payload as { repoId?: unknown }).repoId === tr.repoId)?.payload as { previous?: string | null } | undefined;
+  if (mine("workspace_restored")) return;
+  const to = mine("workspace_repo")?.previous ?? repo.defaultBranch;
+  const done = (payload: Record<string, unknown>) => addEvent(ctx.db, { taskId, kind: "workspace_restored", payload: { repoId: tr.repoId, path: repo.path, ...payload } });
+  try {
+    if (git(repo.path, ["branch", "--show-current"], ctx.gitEnv) !== tr.branchName) return done({ untouched: true });
+    const why = switchBack(repo.path, to, ctx.gitEnv);
+    if (!why) return done({ branch: to });
+    // 片付けのたびに同じ警告を重ねない(きれいになったら次の片付けで戻す)
+    const message = `${why}: ${repo.path}(タスクのブランチ ${tr.branchName} のまま。コミットするか退避すると、次の片付けで ${to} に戻します)`;
+    if ((events.at(-1)?.payload as { message?: unknown } | undefined)?.message !== message) addEvent(ctx.db, { taskId, kind: "warning", payload: { message } });
+  } catch (e) {
+    addEvent(ctx.db, { taskId, kind: "warning", payload: { message: `元のブランチ(${to})に戻せませんでした: ${repo.path}(${(e as Error).message.split("\n")[0]})` } });
+  }
 }
 
 /**

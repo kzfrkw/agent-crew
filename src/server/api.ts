@@ -344,7 +344,7 @@ function runDetail(home: string, db: Db, id: number): RunDetail | undefined {
 /** 画面に出すプロジェクトの設定(未設定は既定値で補う) */
 export function projectSettingsView(db: Db, projectId: number): ProjectSettingsView {
   const s = getProjectSettings(db, projectId);
-  return { integrate: s.integrate ?? "pr", autoApprovePlan: s.autoApprovePlan === true, retrospective: s.retrospective !== false, coordinator: s.coordinator === true, explain: s.explain !== false };
+  return { integrate: s.integrate ?? "pr", autoApprovePlan: s.autoApprovePlan === true, retrospective: s.retrospective !== false, coordinator: s.coordinator === true, explain: s.explain !== false, workspace: s.workspace ?? "worktree" };
 }
 
 function projectDetail(home: string, db: Db, id: number, operable: boolean): ProjectDetail | undefined {

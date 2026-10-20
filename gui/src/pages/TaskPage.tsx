@@ -201,7 +201,9 @@ function Banner({ d, onDone }: { d: TaskDetail; onDone: () => void }) {
             <AlertDescription className="text-foreground">
               <span>
                 {t.running.model && <span className="text-muted-foreground">{t.running.model} · </span>}
-                エージェントが作業中なので、worktree を触らないでください
+                {d.settings.workspace === "repo"
+                  ? `エージェントがリポジトリで直接作業しているので、終わるまでリポジトリ(Xcode を含む)を触らないでください`
+                  : "エージェントが作業中なので、worktree を触らないでください"}
               </span>
               {actions}
             </AlertDescription>

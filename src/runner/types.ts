@@ -41,6 +41,8 @@ export type RunSpec = {
   denyRead?: string[];
   /** Bash から追加で書ける場所(道具のキャッシュ。Flutter の SDK の bin/cache、~/.pub-cache など。フェーズ6) */
   extraWritable?: string[];
+  /** 書かせないパス(作業場所の中でも。人のリポジトリで直接作業するときの .git/hooks と .git/config。v0.25) */
+  denyWrite?: string[];
   /** 追加で許可する道具(MCP の道具。mcp__<サーバー>__<道具>) */
   extraAllowedTools?: string[];
   /** 追加で渡す環境変数(認証情報は渡せない) */

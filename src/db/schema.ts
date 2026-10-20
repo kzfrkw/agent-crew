@@ -145,4 +145,21 @@ export const MIGRATIONS: string[] = [
   `
   ALTER TABLE tasks ADD COLUMN flow TEXT NOT NULL DEFAULT 'fixed';
   `,
+  // v10(v0.25): 人のリポジトリで直接作業すると、タスクの作業場所がリポジトリのパスで重なるので、worktree_path の一意の制約を外す
+  // (SQLite は制約だけを外せないので作り直す。worktree のパスはタスクの番号を含むので、worktree の方式では今も重ならない)
+  `
+  CREATE TABLE task_repos_v10 (
+    task_id INTEGER NOT NULL REFERENCES tasks(id),
+    repo_id INTEGER NOT NULL REFERENCES repos(id),
+    worktree_path TEXT NOT NULL,
+    branch_name TEXT NOT NULL,
+    base_sha TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (task_id, repo_id)
+  );
+  INSERT INTO task_repos_v10 (task_id, repo_id, worktree_path, branch_name, base_sha, created_at)
+    SELECT task_id, repo_id, worktree_path, branch_name, base_sha, created_at FROM task_repos;
+  DROP TABLE task_repos;
+  ALTER TABLE task_repos_v10 RENAME TO task_repos;
+  `,
 ];

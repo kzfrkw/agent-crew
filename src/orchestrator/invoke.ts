@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { addArtifact, addEvent, finishRun, startRun } from "../db/store.ts";
@@ -12,6 +12,22 @@ import { protectedPathsFor } from "./projects.ts";
 import { TOOL_NAME, type ToolExecConfig } from "../toolexec/mcp-server.ts";
 import { findFlutterRoot, toolchainWritable } from "../toolexec/command.ts";
 import { homedir } from "node:os";
+import { agentHooksDir } from "../git/hooks.ts";
+
+/**
+ * 作業場所が人のリポジトリそのもの(.git がディレクトリ。workspace: repo、v0.25)なら、worktree の代わりの守りを足す:
+ * .git/hooks と .git/config を書かせない(書けると人の次の git 操作でサンドボックスの外でコードが動く)、
+ * push を止めるフックはエージェントの git にだけ環境変数で効かせる(人のリポジトリの設定は変えない)
+ */
+export function inPlaceGuards(home: string, cwd: string): { denyWrite: string[]; env: Record<string, string> } | undefined {
+  const dotGit = join(cwd, ".git");
+  if (!existsSync(dotGit) || !statSync(dotGit).isDirectory()) return undefined;
+  const git = join(realpathSync(cwd), ".git");
+  return {
+    denyWrite: [join(git, "hooks"), join(git, "config"), join(git, "config.worktree")],
+    env: { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.hooksPath", GIT_CONFIG_VALUE_0: agentHooksDir(home) },
+  };
+}
 
 /** Flutter の依存の準備(flutter pub get)に要る通信先 */
 const FLUTTER_DOMAINS = ["pub.dev", "storage.googleapis.com"];
@@ -62,6 +78,7 @@ export async function invokeRole(
   const prompt = bridge ? `${o.prompt}\n## テストと静的解析の実行\n- テスト・静的解析は Bash では実行せず、MCP の道具 \`${TOOL_NAME}\`(kind: ${bridge.kinds.join(" / ")})を使ってください。ツールがサンドボックスの中で代わりに実行し、終了コードと出力を返します(Bash の中ではこれらのコマンドは止まります)\n` : o.prompt;
 
   const webTools = role.tools.filter((t) => t === "WebSearch" || t === "WebFetch");
+  const inPlace = inPlaceGuards(ctx.home, o.cwd);
   let result: RunResult;
   let sawRejected = false;
   const startedAt = Date.now();
@@ -84,7 +101,8 @@ export async function invokeRole(
         timeoutSec: Math.min(role.timeoutSec, ctx.config.limits.runTimeoutSec),
         maxBudgetUsd: Math.min(role.maxBudgetUsd, ctx.config.limits.runMaxBudgetUsd),
         allowedDomains: o.toolCommands?.platform === "flutter" ? [...new Set([...ctx.config.sandbox.allowedDomains, ...FLUTTER_DOMAINS])] : ctx.config.sandbox.allowedDomains,
-        extraEnv: o.extraEnv,
+        extraEnv: inPlace ? { ...o.extraEnv, ...inPlace.env } : o.extraEnv,
+        ...(inPlace ? { denyWrite: inPlace.denyWrite } : {}),
         denyRead: protectedPathsFor(ctx, { taskId: o.taskId, projectId: o.projectId, cwd: o.cwd }),
         ...(bridge ? { mcpServers: bridge.servers } : {}),
         // MCP の橋の道具と、役割が使う Web の道具(調査担当だけ。フェーズ9)を許可する

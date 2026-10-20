@@ -163,3 +163,22 @@ export function fastForward(repoPath: string, branch: string, toSha: string, env
   const old = git(repoPath, ["rev-parse", "--verify", `refs/heads/${branch}`], env);
   git(repoPath, ["update-ref", `refs/heads/${branch}`, toSha, old], env);
 }
+
+/**
+ * 人のリポジトリで直接作業する(workspace: repo。v0.25)。base からタスクのブランチを作って切り替える。
+ * 切り替える前のブランチ(切り離された HEAD なら null)を返す(終わったら戻す)。未コミットの変更の点検は呼ぶ側で済ませる
+ */
+export function switchToNewBranch(o: { repoPath: string; branch: string; base: string; env?: Env }): { baseSha: string; previous: string | null } {
+  const baseSha = git(o.repoPath, ["rev-parse", "--verify", `${o.base}^{commit}`], o.env);
+  const previous = currentBranch(o.repoPath, o.env);
+  git(o.repoPath, ["switch", "-q", "-c", o.branch, baseSha], o.env);
+  return { baseSha, previous };
+}
+
+/** 人のリポジトリを元のブランチに戻す(未コミットの変更があれば戻さずに理由を返す) */
+export function switchBack(repoPath: string, to: string, env?: Env): string | null {
+  if (hasTrackedChanges(repoPath, env)) return "未コミットの変更があるため、元のブランチに戻していません";
+  if (currentBranch(repoPath, env) === to) return null;
+  git(repoPath, ["switch", "-q", to], env);
+  return null;
+}

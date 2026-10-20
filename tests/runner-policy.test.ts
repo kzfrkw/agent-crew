@@ -180,3 +180,14 @@ describe("シンボリックリンク経由のパス", () => {
     expect(s.permissions.allow).toContain("Write(//var/h/tasks/1/**)");
   });
 });
+
+describe("書かせない場所(denyWrite。人のリポジトリで直接作業するときの .git/hooks と .git/config。v0.25)", () => {
+  it("サンドボックスの書き込み禁止と、Edit / Write の拒否に入れる。作業場所に書ける役割でも書けない", () => {
+    const s = buildRunSettings({ ...base, write: "worktree", denyWrite: ["/w/.git/hooks", "/w/.git/config"] });
+    expect(s.sandbox.filesystem.denyWrite).toEqual(expect.arrayContaining(["/w/.git/hooks", "/w/.git/config"]));
+    expect(s.permissions.deny).toEqual(expect.arrayContaining(["Edit(//w/.git/hooks)", "Edit(//w/.git/hooks/**)", "Write(//w/.git/config)"]));
+  });
+  it("相対パスは拒否する", () => {
+    expect(() => buildRunSettings({ ...base, write: "worktree", denyWrite: [".git/hooks"] })).toThrow(/絶対パス/);
+  });
+});

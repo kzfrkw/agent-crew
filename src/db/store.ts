@@ -525,6 +525,11 @@ export type ProjectSettings = {
   integrate?: "pr" | "main";
   /** 最終確認の前に変更の解説(explain.md)を作る(v0.24。既定 on。false で作らない) */
   explain?: boolean;
+  /**
+   * 作業場所(v0.25)。worktree(既定)はタスクごとに worktree を作る。repo は人のリポジトリでタスクのブランチに切り替えて直接作業する
+   * (Xcode の設定、.gitignore されたファイル、シンボリックリンクがそのまま使える。タスクは1つずつ)
+   */
+  workspace?: "worktree" | "repo";
 };
 
 export function getProjectSettings(db: Db, projectId: number): ProjectSettings {

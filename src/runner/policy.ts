@@ -70,8 +70,13 @@ export function buildRunSettings(o: {
   extraWritable?: string[];
   /** 読ませないパス(絶対パス。7-4)。Read / Edit / Write の deny と、サンドボックスの資格情報の deny に入れる */
   denyRead?: string[];
+  /**
+   * 書かせないパス(絶対パス。v0.25)。作業場所の中でも書けない。人のリポジトリで直接作業するときの .git/hooks と .git/config
+   * (書けると、人の次の git 操作でサンドボックスの外でコードが動き、push の止めも外せてしまう)
+   */
+  denyWrite?: string[];
 }): RunSettings {
-  for (const p of [o.worktree, o.artifactsDir, ...(o.extraWritable ?? []), ...(o.denyRead ?? [])]) {
+  for (const p of [o.worktree, o.artifactsDir, ...(o.extraWritable ?? []), ...(o.denyRead ?? []), ...(o.denyWrite ?? [])]) {
     if (!isAbsolute(p)) throw new Error(`絶対パスが必要です: ${p}`);
   }
   const wt = withAlias(o.worktree, o.aliases?.worktree);
@@ -81,7 +86,11 @@ export function buildRunSettings(o: {
   return {
     disableAllHooks: true,
     permissions: {
-      deny: [...DENY, ...(o.denyRead ?? []).flatMap((p) => (["Read", "Edit", "Write"] as const).flatMap((t) => [`${t}(/${p})`, `${t}(/${p}/**)`]))],
+      deny: [
+        ...DENY,
+        ...(o.denyRead ?? []).flatMap((p) => (["Read", "Edit", "Write"] as const).flatMap((t) => [`${t}(/${p})`, `${t}(/${p}/**)`])),
+        ...(o.denyWrite ?? []).flatMap((p) => (["Edit", "Write"] as const).flatMap((t) => [`${t}(/${p})`, `${t}(/${p}/**)`])),
+      ],
       allow: ["Read", "Grep", "Glob", "Bash", ...writable.flatMap((p) => [under("Edit", p), under("Write", p)]), ...(o.extraAllow ?? [])],
     },
     sandbox: {
@@ -90,7 +99,7 @@ export function buildRunSettings(o: {
       allowUnsandboxedCommands: false,
       filesystem: {
         allowWrite: o.write === "none" ? [] : [o.artifactsDir, ...(o.extraWritable ?? [])],
-        denyWrite: bashCanWriteWorktree ? [] : [o.worktree],
+        denyWrite: [...(bashCanWriteWorktree ? [] : [o.worktree]), ...(o.denyWrite ?? [])],
       },
       network: o.localServer
         ? { allowedDomains: [...o.allowedDomains, "localhost", "127.0.0.1"], strictAllowlist: true, allowLocalBinding: true }

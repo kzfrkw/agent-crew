@@ -42,6 +42,7 @@ export class ClaudeRunner implements Runner {
       extraAllow: spec.extraAllowedTools,
       extraWritable: spec.extraWritable,
       denyRead: spec.denyRead,
+      denyWrite: spec.denyWrite,
     });
     writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
     let mcpConfigPath: string | undefined;

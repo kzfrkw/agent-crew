@@ -228,7 +228,7 @@ export type RunDetail = {
 };
 
 /** プロジェクトの設定(画面で切り替える。v0.23)。integrate は最終確認の後の取り込み方 */
-export type ProjectSettingsView = { integrate: "pr" | "main"; autoApprovePlan: boolean; retrospective: boolean; coordinator: boolean; explain: boolean };
+export type ProjectSettingsView = { integrate: "pr" | "main"; autoApprovePlan: boolean; retrospective: boolean; coordinator: boolean; explain: boolean; workspace: "worktree" | "repo" };
 
 export type ProjectDetail = {
   project: ProjectSummary;

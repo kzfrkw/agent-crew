@@ -14,7 +14,7 @@ const detail: ProjectDetail = {
   decisionsMd: null,
   runs: [],
   tasks: [],
-  settings: { integrate: "pr", autoApprovePlan: false, retrospective: true, coordinator: false, explain: true },
+  settings: { integrate: "pr", autoApprovePlan: false, retrospective: true, coordinator: false, explain: true, workspace: "worktree" },
   operable: true,
   glossaryMd: "- **ページング**: 一覧を一定件数ずつに分けて返すこと(#3)",
 };
@@ -125,6 +125,20 @@ describe("プロファイルの承認(フェーズ9: GUI から)", () => {
     fireEvent.click(screen.getByRole("button", { name: "作り直す" }));
     await waitFor(() => expect(posts).toHaveLength(1));
     expect(posts[0]!.body).toEqual({ action: "reprofile" });
+  });
+});
+
+describe("作業場所(v0.25)", () => {
+  it("作業場所を2択で出し、選ぶと設定を送る", async () => {
+    const fetchMock = vi.fn(async (_u: string, init?: RequestInit) =>
+      new Response(JSON.stringify(init?.method === "POST" ? { settings: { ...detail.settings, workspace: "repo" } } : detail), { status: 200, headers: { "content-type": "application/json" } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ProjectPage id={1} />);
+    expect(((await screen.findByRole("radio", { name: /worktree/ })) as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(screen.getByRole("radio", { name: /リポジトリで直接/ }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, i]) => i?.method === "POST")).toBe(true));
+    expect(JSON.parse(String(fetchMock.mock.calls.find(([, i]) => i?.method === "POST")![1]!.body))).toEqual({ workspace: "repo" });
   });
 });
 
