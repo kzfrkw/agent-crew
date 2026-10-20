@@ -12,6 +12,9 @@ import { Worker } from "../orchestrator/worker.ts";
 import { dataHome } from "../config/config.ts";
 import { getTask, listRepos, listTaskRepos } from "../db/store.ts";
 import { doctor, formatResults, probeSandbox } from "../doctor/index.ts";
+import { collectStats, formatStats } from "../orchestrator/stats.ts";
+import { mustProject } from "../orchestrator/projects.ts";
+import { join } from "node:path";
 
 const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as {
   version: string;
@@ -45,6 +48,28 @@ export function createProgram(): Command {
       const roles = applyRoleOverrides(loadRoles(), loadConfig().roles);
       for (const r of roles.values()) {
         console.log([r.name.padEnd(12), r.model.padEnd(8), r.permissions.write.padEnd(10), r.verdicts.join("/"), r.output ?? "-"].join(" "));
+      }
+    });
+
+  program
+    .command("stats")
+    .description("実際の使用での詰まりの集計(止まった理由の内訳、人の介入、差し戻し、待ち、役割ごとの時間と費用、週ごとの費用。設計メモ v0.26)")
+    .option("--project <name>", "プロジェクトで絞り込む")
+    .option("--since <YYYY-MM-DD>", "この日から(既定は全期間)")
+    .option("--json", "JSON で出す")
+    .action((o: { project?: string; since?: string; json?: boolean }) => {
+      if (o.since !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(o.since)) throw new Error("--since は YYYY-MM-DD で指定してください");
+      const home = dataHome();
+      const db = openAppDb(home);
+      try {
+        const projectId = o.project ? mustProject(db, o.project).id : undefined;
+        const stats = collectStats(db, { projectId, since: o.since });
+        if (o.json) return console.log(JSON.stringify(stats, null, 2));
+        const notesPath = join(home, "field-notes.md");
+        const notes = existsSync(notesPath) ? { path: notesPath, lines: readFileSync(notesPath, "utf8").split("\n").filter((l) => l.trim()).length } : null;
+        console.log(formatStats(stats, { projectName: o.project, notes }));
+      } finally {
+        db.close();
       }
     });
 
